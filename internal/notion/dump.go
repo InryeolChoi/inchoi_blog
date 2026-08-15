@@ -17,12 +17,25 @@ type Dump struct {
 	Blocks []Block `json:"blocks"`
 }
 
+// Parent는 페이지가 어디에 속해 있는지다.
+//
+// Type은 "page_id" | "database_id" | "block_id" | "workspace" 중 하나다.
+// 형제 순서를 어디서 얻을 수 있는지가 여기서 갈린다: 부모가 페이지나 블록이면
+// 그쪽 blocks 배열에 순서가 있지만, 데이터베이스면 노션 API가 순서를 주지 않는다.
+type Parent struct {
+	Type       string `json:"type"`
+	PageID     string `json:"page_id"`
+	DatabaseID string `json:"database_id"`
+	BlockID    string `json:"block_id"`
+}
+
 // Page는 노션 GET /v1/pages/{id} 응답 중 이관에 쓰는 부분이다.
 type Page struct {
 	ID             string                     `json:"id"`
 	CreatedTime    string                     `json:"created_time"`
 	LastEditedTime string                     `json:"last_edited_time"`
 	URL            string                     `json:"url"`
+	Parent         Parent                     `json:"parent"`
 	Properties     map[string]json.RawMessage `json:"properties"`
 }
 
@@ -159,5 +172,45 @@ func (d *Dump) ImageSources() map[string]string {
 		}
 	}
 	walk(d.Blocks)
+	return out
+}
+
+// ChildPageSibling은 하위 페이지 하나가 형제들 사이에서 몇 번째인지다.
+type ChildPageSibling struct {
+	PageID string
+	// ContainerID는 이 하위 페이지를 담고 있는 페이지 또는 블록의 id다.
+	ContainerID string
+	// Index는 같은 컨테이너 안의 child_page들 사이에서 0부터 세는 순번이다.
+	Index int
+}
+
+// ChildPageOrder는 이 덤프에 담긴 하위 페이지들의 형제 순서를 돌려준다.
+//
+// 노션 API는 블록을 화면에 보이는 순서 그대로 배열로 준다. 그래서 어떤 페이지의
+// blocks 배열에서 child_page 블록이 나오는 차례가 곧 하위 페이지의 순서다.
+// child_page 아닌 블록(문단, 이미지 등)은 세지 않는다.
+func (d *Dump) ChildPageOrder() []ChildPageSibling {
+	var out []ChildPageSibling
+
+	var walk func(blocks []Block, containerID string)
+	walk = func(blocks []Block, containerID string) {
+		idx := 0
+		for _, b := range blocks {
+			if b.Type == "child_page" {
+				out = append(out, ChildPageSibling{
+					PageID:      b.ID, // child_page 블록의 id가 곧 그 하위 페이지의 id다
+					ContainerID: containerID,
+					Index:       idx,
+				})
+				idx++
+			}
+			// 토글이나 단 안에 하위 페이지가 들어 있을 수 있다. 그 경우 형제 범위는
+			// 그 블록 안이므로 컨테이너를 바꿔서 따로 센다.
+			if len(b.Children) > 0 {
+				walk(b.Children, b.ID)
+			}
+		}
+	}
+	walk(d.Blocks, d.Page.ID)
 	return out
 }

@@ -59,7 +59,34 @@ go run ./cmd/import -db blog.db                # 변환 + DB 이관 (몇 번 돌
   반쯤 들어간 DB를 손으로 정리하는 것보다 통째로 다시 도는 게 낫다.
 - 지금은 `slug`가 페이지 ID 그대로다. `parent_id`/`published_at`은 NULL.
 - 이미지 437개를 BLOB으로 들고 있어서 `blog.db`가 74MB다.
-- **아직 안 한 것**: 첨부파일 12개, 글 계층(`parent_id`), `published` 지정.
+- **아직 안 한 것**: 첨부파일 12개, 글 계층(`parent_id`), `published` 지정,
+  최상위 17건과 동시 생성 72건의 수동 순서 지정.
+
+## 형제 순서 (sort_order)
+
+`cmd/sortorder`가 채운다. **출처에 따라 신뢰도가 다르다.**
+
+| 출처 | 건수 | 신뢰도 |
+|---|---:|---|
+| `child_page` 배열 위치 | 555 | 정확. 노션 API가 블록을 화면 순서대로 준다 |
+| `created_time` 순위 | 667 | 차선. 쌍 기준 79.9%만 정해짐 |
+| 근거 없음 → 0 | 89 | 전부 같은 분에 생성된 72건 + 최상위 17건 |
+
+- **노션 API는 데이터베이스 행의 화면 순서를 노출하지 않는다.** 뷰의 수동 정렬은
+  API에 없고, `sorts`로는 속성·타임스탬프 정렬만 지정할 수 있다. 실제로 3개 DB를
+  쿼리해 확인했다 — 반환 순서가 화면 순서가 아니었다. **재수집해도 안 나온다.**
+- **`created_time`은 분 단위다** (초가 항상 `00`). 한 번에 만든 페이지들이 같은 값을
+  가진다. 그런 건 `DenseRank`가 **같은 순위**를 줘서 "순서 미정"으로 남긴다.
+  억지로 다른 값을 주면 없는 순서를 지어내는 것이다.
+- 검증해보니 **시각이 다르면 98.3%가 논리적 순서와 일치**한다(제목에 번호가 있는
+  DB 18개, 347쌍 중 341쌍). 틀리는 게 아니라 자주 침묵하는 신호다.
+
+```sh
+go run ./cmd/sortorder -db blog.db -only childpage          # 555건만
+go run ./cmd/sortorder -db blog.db -only created            # 667건만
+go run ./cmd/sortorder -db blog.db                          # 전체 미리보기
+go run ./cmd/sortorder -db blog.db -only created -apply     # 반영
+```
 
 ## 카테고리
 
