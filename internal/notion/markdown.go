@@ -2,6 +2,7 @@ package notion
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -269,7 +270,7 @@ func (c *converter) renderBlock(b Block, path string, number int) (string, bool)
 		if strings.TrimSpace(body.Expression) == "" {
 			return "", false
 		}
-		return "$$\n" + body.Expression + "\n$$", false
+		return "$$\n" + normalizeBlockMath(body.Expression) + "\n$$", false
 
 	case "divider":
 		return "---", false
@@ -649,6 +650,30 @@ func (c *converter) mediaLink(b Block, path, kind string) (string, bool) {
 	return fmt.Sprintf("[%s](%s)", label, url), false
 }
 
+// blankLines는 빈 줄(개행이 둘 이상 연달아 오는 것)을 찾는다.
+var blankLines = regexp.MustCompile(`\n[ \t]*\n[\s]*`)
+
+// normalizeInlineMath는 인라인 수식을 한 줄로 편다.
+//
+// LaTeX는 수식 모드에서 공백의 종류와 길이를 구분하지 않는다(줄바꿈도 공백일 뿐이고,
+// 진짜 줄바꿈은 \\로 쓴다). 그래서 한 줄로 펴도 수식의 의미는 그대로다.
+//
+// 반면 마크다운에서는 빈 줄이 문단을 끊는다. 개행이 든 수식을 그대로 두면 여는 $와
+// 닫는 $가 서로 다른 문단으로 갈라져서 수식이 렌더링되지 않고 $가 글자로 보인다.
+// 리스트 안에서는 이어지는 줄에 들여쓰기까지 끼어들어 수식 문자열이 더 변형된다.
+func normalizeInlineMath(expr string) string {
+	return strings.Join(strings.Fields(expr), " ")
+}
+
+// normalizeBlockMath는 블록 수식에서 빈 줄만 없앤다.
+//
+// 여러 줄 배치는 align 환경 등에서 읽기 좋으므로 그대로 두되, 빈 줄은 지운다.
+// $$ ... $$ 안의 빈 줄은 마크다운 파서가 문단 경계로 볼 수 있어서 수식 블록이
+// 중간에 끊길 위험이 있다.
+func normalizeBlockMath(expr string) string {
+	return strings.TrimSpace(blankLines.ReplaceAllString(expr, "\n"))
+}
+
 // renderRichText는 rich_text 배열을 인라인 마크다운으로 바꾼다.
 func renderRichText(rts []RichText) string {
 	var sb strings.Builder
@@ -660,7 +685,7 @@ func renderRichText(rts []RichText) string {
 
 func renderRichTextOne(rt RichText) string {
 	if rt.Type == "equation" && rt.Equation != nil {
-		return "$" + rt.Equation.Expression + "$"
+		return "$" + normalizeInlineMath(rt.Equation.Expression) + "$"
 	}
 
 	text := rt.PlainText

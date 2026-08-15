@@ -673,3 +673,79 @@ func TestCaptionWithFormattingIsNotReportedLost(t *testing.T) {
 		t.Errorf("캡션의 코드 서식이 결과에 없다:\n%s", md)
 	}
 }
+
+// TestInlineEquationWithNewlinesStaysOnOneLine은 개행이 든 인라인 수식이
+// 한 줄로 펴지는지 본다. 여러 줄로 두면 마크다운에서 빈 줄이 문단을 끊어
+// 여는 $와 닫는 $가 갈라지고, 수식이 렌더링되지 않고 $가 글자로 보인다.
+func TestInlineEquationWithNewlinesStaysOnOneLine(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"equation","equation":{"expression":"A = (A \\cap B) \\cup (A \\cap B^c)\n\n"},"plain_text":"x","annotations":{}}
+	  ]}}
+	]`))
+
+	got := strings.TrimSpace(md)
+	if strings.Contains(got, "\n") {
+		t.Errorf("인라인 수식이 여러 줄로 나뉘었다: %q", got)
+	}
+	want := `$A = (A \cap B) \cup (A \cap B^c)$`
+	if got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
+// TestInlineEquationInListKeepsLatexIntact는 리스트 안의 인라인 수식에
+// 들여쓰기가 끼어들어 LaTeX 문자열이 변형되지 않는지 본다.
+func TestInlineEquationInListKeepsLatexIntact(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"bulleted_list_item","has_children":true,
+	   "bulleted_list_item":{"rich_text":[{"type":"text","plain_text":"항목","annotations":{}}]},
+	   "children":[
+	     {"id":"b2","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[
+	       {"type":"equation","equation":{"expression":"A \\to B\\; then\\; \nB^{c} \\to A^{c}"},"plain_text":"x","annotations":{}}]}}
+	   ]}
+	]`))
+
+	want := `$A \to B\; then\; B^{c} \to A^{c}$`
+	if !strings.Contains(md, want) {
+		t.Errorf("LaTeX에 들여쓰기가 끼어들었다:\n%s", md)
+	}
+}
+
+// TestBlockEquationDropsBlankLines는 블록 수식 안의 빈 줄이 사라지는지 본다.
+// $$ 안의 빈 줄은 마크다운 파서가 문단 경계로 볼 수 있다.
+func TestBlockEquationDropsBlankLines(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"equation","equation":{"expression":"\\begin {align*}\n\n\\because A \\\\\n\n&1 = P(S)\n\\end {align*}\n"}}
+	]`))
+
+	got := strings.TrimSpace(md)
+	if strings.Contains(got, "\n\n") {
+		t.Errorf("블록 수식 안에 빈 줄이 남았다: %q", got)
+	}
+	// 줄 구분 자체는 유지돼야 한다 (align 환경 가독성).
+	if !strings.Contains(got, "\\begin {align*}\n\\because A") {
+		t.Errorf("여러 줄 배치가 깨졌다: %q", got)
+	}
+	// LaTeX의 진짜 줄바꿈인 \\ 는 그대로 남아야 한다.
+	if !strings.Contains(got, `\\`) {
+		t.Errorf(`LaTeX 줄바꿈 \\ 가 사라졌다: %q`, got)
+	}
+}
+
+// TestBlockEquationKeepsBackslashesAndBraces는 이스케이프가 끼어들지 않는지 본다.
+func TestBlockEquationKeepsBackslashesAndBraces(t *testing.T) {
+	expr := `\sum_{i=1}^{k}\;(A \cap B_{i}) \mid \{x\}`
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"equation","equation":{"expression":"\\sum_{i=1}^{k}\\;(A \\cap B_{i}) \\mid \\{x\\}"}}
+	]`))
+
+	if !strings.Contains(md, expr) {
+		t.Errorf("LaTeX가 변형됐다:\ngot  %q\nwant %q", strings.TrimSpace(md), expr)
+	}
+	for _, bad := range []string{`\\_`, `\\{`, `\\|`} {
+		if strings.Contains(md, bad) {
+			t.Errorf("이스케이프가 추가됐다 (%s):\n%s", bad, md)
+		}
+	}
+}
