@@ -20,9 +20,11 @@
 
 ```
 cmd/blog/       서버. 시작할 때 마이그레이션을 적용하고 HTTP를 연다.
-cmd/import/     노션 이관 CLI. 아직 뼈대만 있고 변환/INSERT는 미구현.
+cmd/import/     노션 이관 CLI. 지금은 마크다운 파일로만 출력하고 DB에는 넣지 않는다.
 internal/db/    연결(Open)과 마이그레이션 러너(Migrate)
+internal/notion/ 덤프 파싱과 마크다운 변환기
 migrations/     번호순 SQL. 001_init.sql 형식.
+out/            (gitignore) 변환 결과 검토용
 embed.go        루트 패키지. migrations/를 embed해서 MigrationsFS()로 노출.
 scripts/        노션 이관용 일회용 Node 스크립트 (런타임과 무관)
   notion-workspace-audit.mjs   워크스페이스 구조 조사 → notion-audit-raw.json
@@ -39,7 +41,26 @@ scripts/        노션 이관용 일회용 Node 스크립트 (런타임과 무�
 go test ./...                                  # 전체 테스트
 go run ./cmd/blog -db blog.db -addr :8080      # 서버
 CGO_ENABLED=0 go build -o blog ./cmd/blog      # 단일 바이너리
+
+go run ./cmd/import -pages <id>,<id> -v        # 특정 페이지만 변환 (리포트 전체 출력)
+go run ./cmd/import -limit 20                  # 앞 20개만 변환
+go run ./cmd/import                            # 전체 1311개 (확인 후에만)
 ```
+
+## 노션 이관
+
+- 변환기는 미지원 블록을 조용히 버리지 않는다. 렌더러가 없는 타입은 **warn**,
+  의도적으로 다르게 옮기는 것(단 레이아웃 평탄화, 목차 제거 등)은 **note**로 남긴다.
+  새 블록 타입을 지원할 때 이 원칙을 깨지 마라.
+- 검증은 결과 문자열을 다시 세어서 한다(렌더링 중에 센 값을 믿지 않는다).
+  조립 단계에서 내용이 사라져도 잡히게 하려는 것이다.
+- **노션은 목록 번호를 저장하지 않는다.** 렌더링할 때 매긴다. 그래서 중간에 다른
+  블록이 끼면 이어지는 목록인지 새 목록인지 데이터만으로는 알 수 없다. 지금은
+  1부터 다시 매기고 그 사실을 note로 남긴다.
+- 이미지 블록 490개 중 **23개는 로컬 파일이 없다**(전부 외부 URL). 이건 warn으로
+  뜨고 외부 URL을 그대로 쓴다. 링크가 깨질 수 있다.
+- `file`/`video` 블록의 노션 호스팅 URL은 서명이 붙은 임시 주소라 만료된다.
+  덤프 스크립트는 이미지만 받아뒀다. 첨부파일이 필요하면 따로 받아와야 한다.
 
 ## 마이그레이션
 
