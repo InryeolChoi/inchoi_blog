@@ -5,7 +5,7 @@
 # notion migration scratch data (large, disposable, regenerable via scripts/)
 scripts/dump/
 scripts/notion-audit-raw.json
-scripts/migration-candidates.csv
+scripts/notion-page-status.csv
 
 # node
 node_modules/
