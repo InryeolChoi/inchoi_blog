@@ -549,24 +549,90 @@ func TestTrailingNewlineInParagraphCollapsed(t *testing.T) {
 	}
 }
 
-// TestNumberingRestartIsRecorded는 번호 목록이 끊겼다 다시 시작될 때
-// 그 사실이 리포트에 남는지 본다. 노션은 번호를 저장하지 않아서 이어지는
-// 목록이었는지 새 목록이었는지 데이터만으로는 알 수 없다.
-func TestNumberingRestartIsRecorded(t *testing.T) {
-	_, rep := convertJSON(t, blocksJSON(`[
-	  {"id":"b1","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"하나","annotations":{}}]}},
-	  {"id":"b2","type":"code","code":{"language":"c","rich_text":[{"type":"text","plain_text":"x","annotations":{}}]}},
-	  {"id":"b3","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"둘일까 하나일까","annotations":{}}]}}
+// TestNumberingContinuesAcrossCodeBlock은 코드 블록이 끼어도 번호가 이어지는지 본다.
+// 노션 원본에서 이렇게 보이는 것을 확인했다(85fc2ef1 페이지).
+func TestNumberingContinuesAcrossCodeBlock(t *testing.T) {
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"페이지 테이블을 2개 만든다.","annotations":{}}]}},
+	  {"id":"b2","type":"code","code":{"language":"text","rich_text":[{"type":"text","plain_text":"x","annotations":{}}]}},
+	  {"id":"b3","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"페이지 테이블을 3개 만든다.","annotations":{}}]}}
 	]`))
 
-	var found bool
+	if !strings.Contains(md, "1. 페이지 테이블을 2개 만든다.") {
+		t.Errorf("첫 항목이 1이 아니다:\n%s", md)
+	}
+	if !strings.Contains(md, "2. 페이지 테이블을 3개 만든다.") {
+		t.Errorf("코드 블록 뒤 항목의 번호가 이어지지 않았다:\n%s", md)
+	}
+
+	var noted bool
 	for _, iss := range rep.Issues {
-		if iss.BlockType == "numbered_list_item" && strings.Contains(iss.Message, "1부터 다시") {
-			found = true
+		if iss.BlockType == "numbered_list_item" && strings.Contains(iss.Message, "이었다") {
+			noted = true
 		}
 	}
-	if !found {
-		t.Errorf("번호 재시작이 기록되지 않았다: %+v", rep.Issues)
+	if !noted {
+		t.Errorf("번호를 이어붙인 사실이 기록되지 않았다: %+v", rep.Issues)
+	}
+}
+
+// TestNumberingContinuesAcrossImageAndEquation은 그림과 수식도 목록을 끊지 않는지 본다.
+func TestNumberingContinuesAcrossImageAndEquation(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"하나","annotations":{}}]}},
+	  {"id":"b2","type":"image","image":{"type":"file","caption":[],"local":{"sha256":"abc"}}},
+	  {"id":"b3","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"둘","annotations":{}}]}},
+	  {"id":"b4","type":"equation","equation":{"expression":"x^2"}},
+	  {"id":"b5","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"셋","annotations":{}}]}}
+	]`))
+
+	for _, want := range []string{"1. 하나", "2. 둘", "3. 셋"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("%q가 없다:\n%s", want, md)
+		}
+	}
+}
+
+// TestNumberingContinuesAcrossEmptyParagraph은 여백용 빈 문단이
+// 목록을 끊지 않는지 본다. 노션에서 줄 간격 용도로 흔히 쓰인다.
+func TestNumberingContinuesAcrossEmptyParagraph(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"하나","annotations":{}}]}},
+	  {"id":"b2","type":"paragraph","paragraph":{"rich_text":[]}},
+	  {"id":"b3","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"둘","annotations":{}}]}}
+	]`))
+
+	if !strings.Contains(md, "2. 둘") {
+		t.Errorf("빈 문단이 목록을 끊었다:\n%s", md)
+	}
+}
+
+// TestNumberingRestartsAfterHeading은 제목이 끼면 새 목록으로 보는지 본다.
+// 제목은 새 절이므로 그 아래 목록은 1부터 시작해야 한다.
+func TestNumberingRestartsAfterHeading(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"앞 목록","annotations":{}}]}},
+	  {"id":"b2","type":"heading_2","heading_2":{"rich_text":[{"type":"text","plain_text":"새 절","annotations":{}}]}},
+	  {"id":"b3","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"새 목록","annotations":{}}]}}
+	]`))
+
+	if !strings.Contains(md, "1. 새 목록") {
+		t.Errorf("제목 뒤인데 번호가 1부터 시작하지 않았다:\n%s", md)
+	}
+}
+
+// TestNumberingRestartsAfterLeadInParagraph은 내용이 있는 문단이 끼면
+// 새 목록으로 보는지 본다. 이런 문단은 대개 "알고리즘은 다음과 같이 작동한다" 같은
+// 새 목록의 도입문이다.
+func TestNumberingRestartsAfterLeadInParagraph(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"연결 리스트 상의 다음 원소 포인터","annotations":{}}]}},
+	  {"id":"b2","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"알고리즘은 다음과 같이 작동한다.","annotations":{}}]}},
+	  {"id":"b3","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"type":"text","plain_text":"페이지 번호를 해싱한다.","annotations":{}}]}}
+	]`))
+
+	if !strings.Contains(md, "1. 페이지 번호를 해싱한다.") {
+		t.Errorf("도입 문단 뒤인데 번호가 1부터 시작하지 않았다:\n%s", md)
 	}
 }
 

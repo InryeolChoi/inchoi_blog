@@ -111,24 +111,30 @@ func (c *converter) note(b Block, path, format string, args ...any) {
 // renderBlocks는 형제 블록들을 차례로 렌더링한다. path는 이슈 위치 표시용이다.
 func (c *converter) renderBlocks(blocks []Block, path string) []chunk {
 	var out []chunk
-	numbering := 0       // 연속된 numbered_list_item의 번호
-	sawNumbered := false // 이 형제 그룹에서 번호 목록이 이미 나온 적 있는지
+	lastNumber := 0      // 직전 numbered_list_item에 매긴 번호 (0이면 아직 없음)
+	softRun := true      // 직전 번호 항목 이후 끼어든 블록이 전부 목록을 안 끊는 종류인지
+	interrupted := false // 직전 번호 항목과 지금 사이에 다른 블록이 있었는지
 
 	for i, b := range blocks {
 		blockPath := fmt.Sprintf("%s[%d]:%s", path, i, b.Type)
 
+		numbering := 0
 		if b.Type == "numbered_list_item" {
-			numbering++
-			// 노션은 번호를 저장하지 않고 렌더링할 때 매긴다. 다른 블록이 끼어들면
-			// 그게 목록의 끝인지(1부터 다시) 중간에 낀 설명인지(이어서) 알 수 없다.
-			// 여기서는 1부터 다시 매기는 쪽을 택했고, 그 사실을 남겨둔다.
-			if numbering == 1 && sawNumbered {
-				c.note(b, blockPath, "다른 블록이 끼어든 뒤라 번호를 1부터 다시 매겼다. "+
-					"이어지는 목록이었다면 노션 원본과 번호가 달라진다")
+			numbering = numberFor(lastNumber, softRun)
+			if interrupted && numbering > 1 {
+				c.note(b, blockPath, "중간에 다른 블록이 끼었지만 같은 목록으로 보고 번호를 %d로 이었다",
+					numbering)
 			}
-			sawNumbered = true
+			lastNumber = numbering
+			softRun = true
+			interrupted = false
 		} else {
-			numbering = 0
+			if lastNumber > 0 {
+				interrupted = true
+			}
+			if !isSoftInterrupt(b) {
+				softRun = false
+			}
 		}
 
 		// table_row는 table이 직접 처리한다. 여기서 만났다면 부모 없이 떠 있는 것이다.
@@ -147,6 +153,53 @@ func (c *converter) renderBlocks(blocks []Block, path string) []chunk {
 		out = append(out, chunk{text: text, list: isList})
 	}
 	return out
+}
+
+// numberFor는 번호 목록 항목에 매길 번호를 정한다.
+//
+// 노션은 목록 번호를 저장하지 않고 렌더링할 때 매긴다. 그래서 중간에 다른 블록이
+// 끼면 목록이 끝난 건지 이어지는 건지 데이터만으로는 알 수 없고, 무엇이 끼었는지로
+// 판단할 수밖에 없다.
+func numberFor(lastNumber int, softRun bool) int {
+	if lastNumber > 0 && softRun {
+		return lastNumber + 1
+	}
+	return 1
+}
+
+// softInterruptTypes는 사이에 끼어도 번호 목록을 끊지 않는 블록들이다.
+//
+// 항목에 딸린 예시나 그림에 해당하는 것들만 넣었다. 이런 블록은 목록 항목을 보충할 뿐
+// 새 목록을 시작하지 않는다.
+//
+// 반대로 제목과 (내용이 있는) 문단은 목록을 끊는다. 문단은 대개 "알고리즘은 다음과
+// 같이 작동한다" 같은 새 목록의 도입문이고, 제목은 아예 새 절이기 때문이다.
+var softInterruptTypes = map[string]bool{
+	"code":         true,
+	"image":        true,
+	"equation":     true,
+	"table":        true,
+	"video":        true,
+	"file":         true,
+	"embed":        true,
+	"bookmark":     true,
+	"link_preview": true,
+}
+
+// isSoftInterrupt는 이 블록이 번호 목록을 끊지 않는지 본다.
+// 내용이 빈 문단은 노션에서 여백으로 흔히 쓰이므로 끊지 않는 것으로 본다.
+func isSoftInterrupt(b Block) bool {
+	if softInterruptTypes[b.Type] {
+		return true
+	}
+	if b.Type != "paragraph" {
+		return false
+	}
+	var body struct {
+		RichText []RichText `json:"rich_text"`
+	}
+	_ = b.decodeBody(&body)
+	return strings.TrimSpace(PlainText(body.RichText)) == "" && len(b.Children) == 0
 }
 
 // renderBlock은 블록 하나를 렌더링한다. 두 번째 반환값은 리스트 항목인지 여부다.
