@@ -648,3 +648,28 @@ func TestUninterruptedNumberingIsNotFlagged(t *testing.T) {
 		t.Errorf("멀쩡한 목록에 알림이 붙었다: %+v", rep.Issues)
 	}
 }
+
+// TestCaptionWithFormattingIsNotReportedLost는 서식이 들어간 캡션을
+// 유실로 잘못 잡지 않는지 본다. 렌더링된 캡션에는 백틱이나 별표가 끼어들어서
+// 서식 없는 원문으로 대조하면 멀쩡한 캡션이 사라진 것처럼 보인다.
+func TestCaptionWithFormattingIsNotReportedLost(t *testing.T) {
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"code","code":{"language":"sql","rich_text":[
+	    {"type":"text","plain_text":"SELECT 1","annotations":{}}],
+	   "caption":[
+	    {"type":"text","plain_text":"salary가 NULL일 경우 ","annotations":{}},
+	    {"type":"text","plain_text":"N/A","annotations":{"code":true}},
+	    {"type":"text","plain_text":"를 반환","annotations":{}}]}}
+	]`))
+
+	if rep.SourceCaptions != 1 {
+		t.Fatalf("원본 캡션 수가 틀렸다: %d", rep.SourceCaptions)
+	}
+	if !rep.CaptionsMatch() {
+		t.Errorf("서식 있는 캡션을 유실로 잡았다: 원본 %d → 결과 %d\n%s",
+			rep.SourceCaptions, rep.OutputCaptions, md)
+	}
+	if !strings.Contains(md, "`N/A`") {
+		t.Errorf("캡션의 코드 서식이 결과에 없다:\n%s", md)
+	}
+}

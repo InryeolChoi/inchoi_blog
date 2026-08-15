@@ -16,9 +16,31 @@ const (
 	SevNote Severity = "note"
 )
 
+// Kind는 이슈의 종류다. 집계할 때 메시지 문자열을 뒤지지 않으려고 둔다.
+type Kind string
+
+const (
+	KindUnknownBlock     Kind = "unknown-block"     // 변환기가 모르는 타입
+	KindUnsupportedBlock Kind = "unsupported-block" // 노션이 API로 안 주는 블록
+	KindExternalImage    Kind = "external-image"    // 로컬 파일 없이 외부 URL로 남은 이미지
+	KindMissingImage     Kind = "missing-image"     // 로컬 파일도 URL도 없는 이미지
+	KindExpiringURL      Kind = "expiring-url"      // 노션 호스팅 파일(URL 만료됨)
+	KindMissingURL       Kind = "missing-url"       // URL이 없는 링크/미디어 블록
+	KindOrphanTableRow   Kind = "orphan-table-row"  // 표 밖의 table_row
+	KindBadTable         Kind = "bad-table"         // 행이 없거나 이상한 표
+	KindTableNoHeader    Kind = "table-no-header"   // 헤더 없는 표에 빈 헤더를 넣음
+	KindFlattenedColumns Kind = "flattened-columns" // 단 레이아웃을 세로로 폄
+	KindDroppedTOC       Kind = "dropped-toc"       // 목차 블록 제거
+	KindChildLink        Kind = "child-link"        // 하위 페이지/DB 링크 (slug 재작성 필요)
+	KindSyncedCopy       Kind = "synced-copy"       // 사본 synced_block 건너뜀
+	KindEmbedAsLink      Kind = "embed-as-link"     // 임베드를 링크로 바꿈
+	KindNumberContinued  Kind = "number-continued"  // 끊긴 번호 목록을 이어감
+)
+
 // Issue는 블록 하나에서 발견한 문제다.
 type Issue struct {
 	Severity  Severity
+	Kind      Kind
 	BlockType string
 	BlockID   string
 	// Path는 블록 위치다. 예: "blocks[3] > toggle > blocks[1]"
@@ -49,7 +71,34 @@ type Report struct {
 	// BlockTypes는 원본에 등장한 블록 타입별 개수다.
 	BlockTypes map[string]int
 
+	// NumberingContinued/NumberingRestarted는 번호 목록이 다른 블록에 끊겼을 때
+	// 번호를 이어간 횟수와 1부터 다시 매긴 횟수다.
+	NumberingContinued int
+	NumberingRestarted int
+
 	Issues []Issue
+}
+
+// CountKind는 특정 종류의 이슈 수를 센다.
+func (r Report) CountKind(kind Kind) int {
+	n := 0
+	for _, iss := range r.Issues {
+		if iss.Kind == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// IssuesOfKind는 특정 종류의 이슈를 돌려준다.
+func (r Report) IssuesOfKind(kind Kind) []Issue {
+	var out []Issue
+	for _, iss := range r.Issues {
+		if iss.Kind == kind {
+			out = append(out, iss)
+		}
+	}
+	return out
 }
 
 // imageRefPattern이 아니라 결과 문자열을 직접 세는 이유는 마크다운 이미지 문법이

@@ -78,9 +78,12 @@ func (c *converter) surveySource(blocks []Block) {
 			for _, cell := range body.Cells {
 				c.report.SourceTextLen += len([]rune(PlainText(cell)))
 			}
-			if caption := PlainText(body.Caption); caption != "" {
+			if PlainText(body.Caption) != "" {
 				c.report.SourceCaptions++
-				c.captions = append(c.captions, caption)
+				// 결과에서 찾을 때는 렌더링된 형태로 찾아야 한다. 캡션 안에 인라인
+				// 코드나 굵게 같은 서식이 있으면 결과에는 백틱이나 별표가 끼어들어서,
+				// 서식 없는 원문으로 찾으면 멀쩡한 캡션도 유실로 잡힌다.
+				c.captions = append(c.captions, renderRichText(body.Caption))
 			}
 		}
 
@@ -88,9 +91,10 @@ func (c *converter) surveySource(blocks []Block) {
 	}
 }
 
-func (c *converter) warn(b Block, path, format string, args ...any) {
+func (c *converter) warn(b Block, path string, kind Kind, format string, args ...any) {
 	c.report.Issues = append(c.report.Issues, Issue{
 		Severity:  SevWarn,
+		Kind:      kind,
 		BlockType: b.Type,
 		BlockID:   b.ID,
 		Path:      path,
@@ -98,9 +102,10 @@ func (c *converter) warn(b Block, path, format string, args ...any) {
 	})
 }
 
-func (c *converter) note(b Block, path, format string, args ...any) {
+func (c *converter) note(b Block, path string, kind Kind, format string, args ...any) {
 	c.report.Issues = append(c.report.Issues, Issue{
 		Severity:  SevNote,
+		Kind:      kind,
 		BlockType: b.Type,
 		BlockID:   b.ID,
 		Path:      path,
@@ -121,9 +126,16 @@ func (c *converter) renderBlocks(blocks []Block, path string) []chunk {
 		numbering := 0
 		if b.Type == "numbered_list_item" {
 			numbering = numberFor(lastNumber, softRun)
-			if interrupted && numbering > 1 {
-				c.note(b, blockPath, "중간에 다른 블록이 끼었지만 같은 목록으로 보고 번호를 %d로 이었다",
-					numbering)
+			if interrupted {
+				if numbering > 1 {
+					c.report.NumberingContinued++
+					c.note(b, blockPath, KindNumberContinued,
+						"중간에 다른 블록이 끼었지만 같은 목록으로 보고 번호를 %d로 이었다", numbering)
+				} else {
+					// 제목이나 도입 문단이 끼었다는 뜻이다. 새 목록으로 보는 게 맞아서
+					// 이슈로는 남기지 않고 집계만 한다(덤프 전체에서 400건이 넘는다).
+					c.report.NumberingRestarted++
+				}
 			}
 			lastNumber = numbering
 			softRun = true
@@ -139,7 +151,7 @@ func (c *converter) renderBlocks(blocks []Block, path string) []chunk {
 
 		// table_row는 table이 직접 처리한다. 여기서 만났다면 부모 없이 떠 있는 것이다.
 		if b.Type == "table_row" {
-			c.warn(b, blockPath, "table 밖의 table_row다. 표 밖에서는 옮길 방법이 없어 건너뛴다")
+			c.warn(b, blockPath, KindOrphanTableRow, "table 밖의 table_row다. 표 밖에서는 옮길 방법이 없어 건너뛴다")
 			continue
 		}
 
@@ -273,7 +285,7 @@ func (c *converter) renderBlock(b Block, path string, number int) (string, bool)
 
 	case "column_list":
 		// 마크다운에는 단 개념이 없다. 단을 위에서 아래로 이어붙인다. 내용은 남는다.
-		c.note(b, path, "여러 단 레이아웃을 세로로 폈다 (내용은 유지)")
+		c.note(b, path, KindFlattenedColumns, "여러 단 레이아웃을 세로로 폈다 (내용은 유지)")
 		return joinChunks(c.renderBlocks(b.Children, path)), false
 
 	case "column":
@@ -284,7 +296,7 @@ func (c *converter) renderBlock(b Block, path string, number int) (string, bool)
 
 	case "table_of_contents":
 		// 목차는 본문에서 빼고 렌더링할 때 제목으로 다시 만든다. 원본 내용이 아니다.
-		c.note(b, path, "목차 블록은 옮기지 않는다 (렌더링 시 제목에서 다시 생성)")
+		c.note(b, path, KindDroppedTOC, "목차 블록은 옮기지 않는다 (렌더링 시 제목에서 다시 생성)")
 		return "", false
 
 	case "child_page":
@@ -295,7 +307,7 @@ func (c *converter) renderBlock(b Block, path string, number int) (string, bool)
 			Title string `json:"title"`
 		}
 		_ = b.decodeBody(&body)
-		c.note(b, path, "인라인 데이터베이스다. 하위 글 목록으로 다시 엮어야 한다")
+		c.note(b, path, KindChildLink, "인라인 데이터베이스다. 하위 글 목록으로 다시 엮어야 한다")
 		title := body.Title
 		if title == "" {
 			title = "(제목 없는 데이터베이스)"
@@ -313,7 +325,7 @@ func (c *converter) renderBlock(b Block, path string, number int) (string, bool)
 			target = body.DatabaseID
 		}
 		if target == "" {
-			c.warn(b, path, "가리키는 대상이 없는 link_to_page다")
+			c.warn(b, path, KindMissingURL, "가리키는 대상이 없는 link_to_page다")
 			return "", false
 		}
 		return fmt.Sprintf("[페이지 링크](%s%s)", PageURLPrefix, target), false
@@ -332,12 +344,12 @@ func (c *converter) renderBlock(b Block, path string, number int) (string, bool)
 			BlockType string `json:"block_type"`
 		}
 		_ = b.decodeBody(&body)
-		c.warn(b, path, "노션이 API로 못 주는 블록이다 (원래 타입: %s). 원본을 직접 봐야 한다",
+		c.warn(b, path, KindUnsupportedBlock, "노션이 API로 못 주는 블록이다 (원래 타입: %s). 원본을 직접 봐야 한다",
 			orDefault(body.BlockType, "알 수 없음"))
 		return "", false
 
 	default:
-		c.warn(b, path, "변환기가 모르는 블록 타입이다. 내용이 빠졌다")
+		c.warn(b, path, KindUnknownBlock, "변환기가 모르는 블록 타입이다. 내용이 빠졌다")
 		return "", false
 	}
 }
@@ -470,10 +482,10 @@ func (c *converter) image(b Block, path string) string {
 		url = body.File.URL
 	}
 	if url == "" {
-		c.warn(b, path, "이미지 블록에 로컬 파일도 URL도 없다. 이미지가 빠졌다")
+		c.warn(b, path, KindMissingImage, "이미지 블록에 로컬 파일도 URL도 없다. 이미지가 빠졌다")
 		return ""
 	}
-	c.warn(b, path, "로컬로 받아둔 파일이 없어 외부 URL을 그대로 쓴다 (링크가 깨질 수 있다): %s",
+	c.warn(b, path, KindExternalImage, "로컬로 받아둔 파일이 없어 외부 URL을 그대로 쓴다 (링크가 깨질 수 있다): %s",
 		truncate(url, 80))
 	return fmt.Sprintf("![%s](%s)", caption, url)
 }
@@ -489,7 +501,7 @@ func (c *converter) table(b Block, path string) string {
 	rows := make([][]string, 0, len(b.Children))
 	for _, child := range b.Children {
 		if child.Type != "table_row" {
-			c.warn(child, path+">children", "표 안에 table_row가 아닌 블록이 있다. 건너뛴다")
+			c.warn(child, path+">children", KindBadTable, "표 안에 table_row가 아닌 블록이 있다. 건너뛴다")
 			continue
 		}
 		var rowBody struct {
@@ -507,7 +519,7 @@ func (c *converter) table(b Block, path string) string {
 	}
 
 	if len(rows) == 0 {
-		c.warn(b, path, "행이 없는 표다")
+		c.warn(b, path, KindBadTable, "행이 없는 표다")
 		return ""
 	}
 
@@ -536,7 +548,7 @@ func (c *converter) table(b Block, path string) string {
 	} else {
 		// 마크다운 표는 헤더 행이 필수다. 노션에 헤더가 없으면 빈 헤더를 넣는다.
 		writeRow(make([]string, width))
-		c.note(b, path, "노션 표에 헤더 행이 없어 빈 헤더를 넣었다")
+		c.note(b, path, KindTableNoHeader, "노션 표에 헤더 행이 없어 빈 헤더를 넣었다")
 	}
 
 	sb.WriteString("|")
@@ -562,7 +574,7 @@ func (c *converter) syncedBlock(b Block, path string) string {
 
 	if body.SyncedFrom != nil && body.SyncedFrom.BlockID != "" {
 		// 사본이다. 원본 블록이 다른 페이지에 있으므로 여기서 펼치면 내용이 중복된다.
-		c.note(b, path, "다른 블록(%s)을 비추는 사본이다. 원본 쪽에서만 옮긴다",
+		c.note(b, path, KindSyncedCopy, "다른 블록(%s)을 비추는 사본이다. 원본 쪽에서만 옮긴다",
 			body.SyncedFrom.BlockID)
 		return ""
 	}
@@ -577,7 +589,7 @@ func (c *converter) childLink(b Block, path, titleField string) (string, bool) {
 	if title == "" {
 		title = "(제목 없음)"
 	}
-	c.note(b, path, "하위 페이지 링크다. 이관 후 slug로 다시 써야 한다")
+	c.note(b, path, KindChildLink, "하위 페이지 링크다. 이관 후 slug로 다시 써야 한다")
 	return fmt.Sprintf("[%s](%s%s)", title, PageURLPrefix, b.ID), false
 }
 
@@ -590,7 +602,7 @@ func (c *converter) linkBlock(b Block, path string) string {
 	_ = b.decodeBody(&body)
 
 	if body.URL == "" {
-		c.warn(b, path, "URL이 없는 %s 블록이다", b.Type)
+		c.warn(b, path, KindMissingURL, "URL이 없는 %s 블록이다", b.Type)
 		return ""
 	}
 	label := renderRichText(body.Caption)
@@ -598,7 +610,7 @@ func (c *converter) linkBlock(b Block, path string) string {
 		label = body.URL
 	}
 	if b.Type == "embed" {
-		c.note(b, path, "임베드를 링크로 바꿨다 (내장 표시는 사라진다)")
+		c.note(b, path, KindEmbedAsLink, "임베드를 링크로 바꿨다 (내장 표시는 사라진다)")
 	}
 	return fmt.Sprintf("[%s](%s)", label, body.URL)
 }
@@ -620,14 +632,14 @@ func (c *converter) mediaLink(b Block, path, kind string) (string, bool) {
 		url = body.File.URL
 	}
 	if url == "" {
-		c.warn(b, path, "%s 블록에 URL이 없다", kind)
+		c.warn(b, path, KindMissingURL, "%s 블록에 URL이 없다", kind)
 		return "", false
 	}
 
 	if body.Type == "file" {
 		// 노션이 호스팅하는 파일의 URL은 서명이 붙은 임시 주소라 곧 만료된다.
 		// 덤프 스크립트는 이미지만 받아뒀고 이 파일들은 받지 않았다.
-		c.warn(b, path, "%s이 노션 호스팅 파일이다. URL이 만료되므로 따로 받아와야 한다", kind)
+		c.warn(b, path, KindExpiringURL, "%s이 노션 호스팅 파일이다. URL이 만료되므로 따로 받아와야 한다", kind)
 	}
 
 	label := renderRichText(body.Caption)
