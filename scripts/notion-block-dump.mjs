@@ -213,6 +213,24 @@ async function fetchBlocksRecursive(blockId, visited) {
 
 // ---------- 페이지 목록 확보 ----------
 async function getPageIds() {
+  // --pages-file <경로>: 줄바꿈으로 구분된 page id 목록만 덤프한다.
+  // 나중에 접근 권한이 열린 페이지들만 골라 받을 때 쓴다. search를 다시 돌리지 않고,
+  // 기존 덤프 파일은 아래 메인 루프의 existsSync 검사가 그대로 건너뛴다.
+  const flagIdx = process.argv.indexOf("--pages-file");
+  if (flagIdx !== -1) {
+    const listPath = process.argv[flagIdx + 1];
+    if (!listPath) {
+      console.error("--pages-file 뒤에 목록 파일 경로가 필요해.");
+      process.exit(1);
+    }
+    const ids = readFileSync(listPath, "utf-8")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    console.log(`${listPath}에서 페이지 ${ids.length}개 로드 (search 호출 안 함)`);
+    return ids;
+  }
+
   if (existsSync(AUDIT_RAW_PATH)) {
     const raw = JSON.parse(readFileSync(AUDIT_RAW_PATH, "utf-8"));
     const pageIds = raw.objects.filter((o) => o.object === "page").map((o) => o.id);

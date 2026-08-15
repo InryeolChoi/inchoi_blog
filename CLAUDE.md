@@ -31,7 +31,7 @@ scripts/        노션 이관용 일회용 Node 스크립트 (런타임과 무�
   notion-workspace-audit.mjs   워크스페이스 구조 조사 → notion-audit-raw.json
   notion-block-dump.mjs        페이지 블록 원본 덤프 → dump/
   notion-page-status.mjs       덤프 분석해서 초기 status 결정 → notion-page-status.csv
-  dump/                        (gitignore) 페이지 JSON 1311개 + images/ 437개, 124MB
+  dump/                        (gitignore) 페이지 JSON 1408개 + images/ 446개
 .env                           (gitignore) NOTION_TOKEN
 ```
 
@@ -45,22 +45,22 @@ CGO_ENABLED=0 go build -o blog ./cmd/blog      # 단일 바이너리
 
 go run ./cmd/import -pages <id>,<id> -v        # 특정 페이지만 변환 (리포트 전체 출력)
 go run ./cmd/import -limit 20                  # 앞 20개만 변환
-go run ./cmd/import                            # 전체 1311개, out/에만 (DB는 안 건드림)
+go run ./cmd/import                            # 전체 1408개, out/에만 (DB는 안 건드림)
 go run ./cmd/import -db blog.db                # 변환 + DB 이관 (몇 번 돌려도 안전)
 ```
 
 ## DB 이관 현황
 
-전체 1311개가 들어가 있다. `-db`를 줄 때만 DB를 건드린다.
+전체 1408개가 들어가 있다. `-db`를 줄 때만 DB를 건드린다.
 
 - **글은 `notion_page_id`, 이미지는 `sha256`이 멱등 키다.** 다시 돌리면 갱신만 되고
   행이 늘지 않는다. `created_at`은 처음 넣을 때 값을 유지하고 `updated_at`만 바뀐다.
 - 전부 **한 트랜잭션**에서 처리한다. 중간에 실패하면 아무것도 안 들어간다.
   반쯤 들어간 DB를 손으로 정리하는 것보다 통째로 다시 도는 게 낫다.
 - 지금은 `slug`가 페이지 ID 그대로다. `parent_id`/`published_at`은 NULL.
-- 이미지 437개를 BLOB으로 들고 있어서 `blog.db`가 74MB다.
-- **아직 안 한 것**: 첨부파일 12개, 글 계층(`parent_id`), `published` 지정,
-  최상위 17건과 동시 생성 72건의 수동 순서 지정.
+- 이미지 446개를 BLOB으로 들고 있어서 `blog.db`가 74MB다.
+- **아직 안 한 것**: 첨부파일, 글 계층(`parent_id`), `published` 지정,
+  최상위 19건과 동시 생성 85건의 수동 순서 지정.
 
 ## 형제 순서 (sort_order)
 
@@ -68,9 +68,9 @@ go run ./cmd/import -db blog.db                # 변환 + DB 이관 (몇 번 돌
 
 | 출처 | 건수 | 신뢰도 |
 |---|---:|---|
-| `child_page` 배열 위치 | 555 | 정확. 노션 API가 블록을 화면 순서대로 준다 |
-| `created_time` 순위 | 667 | 차선. 쌍 기준 79.9%만 정해짐 |
-| 근거 없음 → 0 | 89 | 전부 같은 분에 생성된 72건 + 최상위 17건 |
+| `child_page` 배열 위치 | 596 | 정확. 노션 API가 블록을 화면 순서대로 준다 |
+| `created_time` 순위 | 708 | 차선. 쌍 기준 85.8%만 정해짐 |
+| 근거 없음 → 0 | 104 | 전부 같은 분에 생성된 85건 + 최상위 19건 |
 
 - **노션 API는 데이터베이스 행의 화면 순서를 노출하지 않는다.** 뷰의 수동 정렬은
   API에 없고, `sorts`로는 속성·타임스탬프 정렬만 지정할 수 있다. 실제로 3개 DB를
@@ -82,25 +82,25 @@ go run ./cmd/import -db blog.db                # 변환 + DB 이관 (몇 번 돌
   DB 18개, 347쌍 중 341쌍). 틀리는 게 아니라 자주 침묵하는 신호다.
 
 ```sh
-go run ./cmd/sortorder -db blog.db -only childpage          # 555건만
-go run ./cmd/sortorder -db blog.db -only created            # 667건만
+go run ./cmd/sortorder -db blog.db -only childpage          # child_page 출처만
+go run ./cmd/sortorder -db blog.db -only created            # created_time 출처만
 go run ./cmd/sortorder -db blog.db                          # 전체 미리보기
 go run ./cmd/sortorder -db blog.db -only created -apply     # 반영
 ```
 
 ## 카테고리
 
-`cmd/categorize`가 `posts.original_path`를 쪼개서 만든다. 1단계 17개, 2단계 59개.
+`cmd/categorize`가 `posts.original_path`를 쪼개서 만든다. 1단계 19개, 2단계 67개.
 
 ```
 original_path: "운영체제 > part 4 : 메모리 관리 > 공룡책 9장 > 3. 페이징"
                └ 1단계 ┘  └───── 2단계 ──────┘  └ 버림 ┘   └ 글 제목 ┘
 ```
 
-- **경로의 마지막 요소는 글 제목 자신이다** (1311건 전부). 카테고리로 쓰면 안 된다.
+- **경로의 마지막 요소는 글 제목 자신이다** (1408건 전부). 카테고리로 쓰면 안 된다.
   그래서 항상 마지막을 뺀 뒤 앞에서 두 개만 쓴다.
-- 조상이 하나뿐인 글 98건은 **1단계 카테고리에 직접** 붙는다.
-- 조상이 없는 글 17건(경로가 제목뿐)만 `category_id`가 NULL이다.
+- 조상이 하나뿐인 글은 **1단계 카테고리에 직접** 붙는다.
+- 조상이 없는 글 19건(경로가 제목뿐)만 `category_id`가 NULL이다.
 - slug는 소문자 + 공백/`:`/`/`/`.`→하이픈, 나머지 기호는 버린다. **한글은 그대로 둔다**
   (로마자로 옮기면 원래 이름을 알아볼 수 없다). `"part 4 : 메모리 관리"` → `part-4-메모리-관리`
 - 같은 2단계 이름이 서로 다른 부모 밑에 나오면 **에러로 멈춘다.** 지금 덤프에는 없다.
@@ -119,8 +119,8 @@ go run ./cmd/categorize -db blog.db -apply   # 실제로 반영
 
 | 형태 | 어디서 오나 | 개수 |
 |---|---|---|
-| `](/p/{페이지ID})` | child_page, child_database, link_to_page 블록 | 680 |
-| `](/{32자리 16진수})` | 본문 인라인 링크(rich_text의 href) | 82 |
+| `](/p/{페이지ID})` | child_page, child_database, link_to_page 블록 | 729 |
+| `](/{32자리 16진수})` | 본문 인라인 링크(rich_text의 href) | 87 |
 
 두 번째 형태는 `/p/` 접두사가 없고 **하이픈도 없다**. `#조각`이 붙어 있으면
 페이지 안의 특정 블록을 가리키며, 재작성할 때 조각은 그대로 둔다.
@@ -132,8 +132,7 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
 ```
 
 - 대응하는 글이 없는 링크는 **바꾸지 않고 노션 형태로 남긴다.** 경로만 slug 모양으로
-  바꾸면 깨진 링크가 멀쩡해 보인다. 현재 133개(인라인 데이터베이스 111 + 덤프에
-  없는 페이지 22)가 여기 해당한다.
+  바꾸면 깨진 링크가 멀쩡해 보인다. 현재 146개(`/p/` 119 + 인라인 27)가 여기 해당한다.
 - **`import -db`를 다시 돌리면 본문을 덮어써서 이 재작성이 사라진다.** import가
   경고를 찍는다. 그 뒤에는 relink를 다시 돌려야 한다.
 - **slug를 바꾸면 링크도 같이 바꿔야 한다.** 지금은 slug가 페이지 ID라서 relink가
@@ -155,8 +154,8 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
   - 제목이나 내용이 있는 문단이 끼면 → **1부터 다시.** 문단은 대개 "알고리즘은
     다음과 같이 작동한다" 같은 새 목록의 도입문이고, 제목은 아예 새 절이다.
   - 덤프 전체 506건의 끊김 중 94건이 이어가는 쪽, 412건이 재시작하는 쪽이다.
-- 이미지 블록 490개 중 **23개는 로컬 파일이 없다**(전부 외부 URL). 이건 warn으로
-  뜨고 외부 URL을 그대로 쓴다. 링크가 깨질 수 있다.
+- 이미지 블록 500개 중 **24개는 원본 URL이 비어 있다**(노션 쪽에서 이미 깨진 것).
+  주석만 남긴다. 별도로 10개는 다운로드가 실패해 외부 URL을 그대로 쓴다.
 - **수식은 마크다운의 빈 줄과 충돌한다.** 노션 수식에는 개행과 빈 줄이 들어 있는데,
   마크다운에서 빈 줄은 문단을 끊는다. 그대로 두면 여는 `$`와 닫는 `$`가 다른 문단으로
   갈라져서 수식이 렌더링되지 않고 `$`가 글자로 보인다. 그래서:
@@ -197,12 +196,12 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
 
 ## 데이터 현황
 
-- 노션 페이지 **1311개** 덤프 완료. 이미지 **437개** 로컬 저장 완료
+- 노션 페이지 **1408개** 덤프 완료. 이미지 **446개** 로컬 저장 완료
   (`scripts/dump/images/{sha256}.{ext}`, 내용 해시 기준 dedup).
 - **전부 이관 대상이다.** 일부만 골라 옮기는 게 아니다. 공개 여부는 삭제가 아니라
   `status` 컬럼으로 가린다.
-- `notion-page-status.csv`가 계산해둔 초기 status: **`draft` 375개**(블록 5개 미만인
-  stub이거나 제목 없음), **`unlisted` 936개**(그 외 전부). `published`는 나중에 수동 지정한다.
+- `notion-page-status.csv`가 계산해둔 초기 status: **`draft` 405개**(블록 5개 미만인
+  stub이거나 제목 없음), **`unlisted` 1003개**(그 외 전부). `published`는 나중에 수동 지정한다.
 - **CSV의 제목 필드에 콤마가 들어간 행이 있다.** `cut -d,`나 `split(",")`로 파싱하면
   컬럼이 밀려서 status 자리에 `true`/`false`나 날짜가 들어온다. 실제로 이것 때문에
   한동안 375/936을 365/918로 잘못 알고 있었다. 반드시 CSV 파서를 쓸 것.
@@ -235,3 +234,29 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
   - 마이그레이션 러너는 외부 라이브러리(golang-migrate 등) 없이 `internal/db`에
     직접 구현했다. 이 프로젝트의 규칙(down 금지, 적용된 파일 수정 금지)을
     러너가 강제해야 하는데 범용 도구는 그 반대를 기본값으로 삼는다.
+
+## 나중에 접근 권한이 열린 페이지 받기
+
+integration에 페이지를 새로 연결하면 그 트리가 통째로 새로 보인다. 2026-08-16에
+`웹 프로그래밍`(77) + `리눅스 & 쉘`(20) = **97개**가 이렇게 들어왔다.
+
+```sh
+# 1) 받을 page id 목록을 만든다 (search 결과에서 기존 덤프에 없는 것만)
+# 2) 목록만 덤프한다. 기존 파일은 existsSync 검사가 건너뛴다.
+node --env-file=.env scripts/notion-block-dump.mjs --pages-file <목록파일>
+# 3) audit 인벤토리에 새 객체를 덧붙이고 status CSV를 다시 만든다
+node --env-file=.env scripts/notion-page-status.mjs
+# 4) 신규만 변환·이관한 뒤 나머지는 전부 다시 돌린다 (전부 멱등)
+go run ./cmd/import -pages "<쉼표구분 id>" -db blog.db
+go run ./cmd/relink -db blog.db -apply
+go run ./cmd/categorize -db blog.db -apply
+go run ./cmd/sortorder -db blog.db -apply
+```
+
+- `--pages-file`은 `notion-block-dump.mjs`에 나중에 붙인 옵션이다. 없으면
+  `notion-audit-raw.json`(옛 목록)을 쓰므로 새 페이지를 못 받는다.
+- **`notion-page-status.mjs`는 `notion-audit-raw.json`에 의존한다.** 새 페이지가
+  거기 없으면 제목이 `(제목 없음)`, 경로가 자기 제목만으로 나온다. 새 객체를
+  먼저 덧붙여야 한다.
+- 전체 audit 재실행은 모든 페이지의 블록을 다시 읽어서 비싸다. `search`로 새
+  객체만 추가하면 몇 초면 된다.

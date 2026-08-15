@@ -109,7 +109,7 @@ func main() {
 	fmt.Println(rule)
 	fmt.Printf("\nposts  %d건\nimages %d건\n→ %s\n", res.posts, res.images, *dbPath)
 	if res.overwrote > 0 {
-		fmt.Printf("\n!! 이미 있던 글 %d건의 본문을 덮어썼다.\n", res.overwrote)
+		fmt.Printf("\n!! 이번에 넣은 글 중 %d건은 이미 있던 글이라 본문을 덮어썼다.\n", res.overwrote)
 		fmt.Println("   본문은 변환기가 만든 것으로 돌아갔으므로, 링크를 slug로 바꿔뒀다면")
 		fmt.Println("   `go run ./cmd/relink -db <db> -apply` 를 다시 돌려야 한다.")
 	}
@@ -516,11 +516,17 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 		fmt.Printf("마이그레이션 적용: %s\n", name)
 	}
 
-	// 이미 글이 있으면 이번 실행이 본문을 덮어쓴다는 뜻이다. relink로 고쳐둔
-	// 링크도 같이 되돌아가므로 나중에 알려준다.
-	var existing int
-	if err := sqlDB.QueryRow(`SELECT count(*) FROM posts`).Scan(&existing); err != nil {
-		return nil, fmt.Errorf("기존 글 수 조회: %w", err)
+	// 이번에 넣을 페이지 중 이미 DB에 있는 것만 센다. 그것들만 본문이 덮어써지고,
+	// relink로 고쳐둔 링크가 같이 되돌아간다. 전체 글 수를 세면 신규만 넣는
+	// 경우에도 경고가 떠서, 진짜 덮어쓴 때와 구분이 안 된다.
+	existing := 0
+	for _, cp := range converted {
+		var n int
+		if err := sqlDB.QueryRow(
+			`SELECT count(*) FROM posts WHERE notion_page_id = ?`, cp.pageID).Scan(&n); err != nil {
+			return nil, fmt.Errorf("기존 글 확인(%s): %w", cp.pageID, err)
+		}
+		existing += n
 	}
 
 	tx, err := sqlDB.Begin()
