@@ -108,6 +108,11 @@ func main() {
 	fmt.Println("DB 이관")
 	fmt.Println(rule)
 	fmt.Printf("\nposts  %d건\nimages %d건\n→ %s\n", res.posts, res.images, *dbPath)
+	if res.overwrote > 0 {
+		fmt.Printf("\n!! 이미 있던 글 %d건의 본문을 덮어썼다.\n", res.overwrote)
+		fmt.Println("   본문은 변환기가 만든 것으로 돌아갔으므로, 링크를 slug로 바꿔뒀다면")
+		fmt.Println("   `go run ./cmd/relink -db <db> -apply` 를 다시 돌려야 한다.")
+	}
 	if len(res.skipped) > 0 {
 		fmt.Printf("\n!! status CSV에 없어서 건너뛴 페이지 %d개:\n", len(res.skipped))
 		for _, id := range res.skipped {
@@ -481,9 +486,10 @@ func parseNotionTime(s string) *time.Time {
 
 // importResult는 DB 이관 결과 요약이다.
 type importResult struct {
-	posts   int
-	images  int
-	skipped []string // status CSV에 없어서 건너뛴 페이지
+	posts     int
+	images    int
+	overwrote int      // 이번 실행 전에 이미 있던 글 수
+	skipped   []string // status CSV에 없어서 건너뛴 페이지
 }
 
 // runImport는 변환된 글과 이미지 파일을 DB에 넣는다.
@@ -510,6 +516,13 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 		fmt.Printf("마이그레이션 적용: %s\n", name)
 	}
 
+	// 이미 글이 있으면 이번 실행이 본문을 덮어쓴다는 뜻이다. relink로 고쳐둔
+	// 링크도 같이 되돌아가므로 나중에 알려준다.
+	var existing int
+	if err := sqlDB.QueryRow(`SELECT count(*) FROM posts`).Scan(&existing); err != nil {
+		return nil, fmt.Errorf("기존 글 수 조회: %w", err)
+	}
+
 	tx, err := sqlDB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("트랜잭션 시작: %w", err)
@@ -517,7 +530,7 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 	defer tx.Rollback()
 
 	now := time.Now().UTC()
-	res := &importResult{}
+	res := &importResult{overwrote: existing}
 
 	for _, cp := range converted {
 		m, ok := meta[cp.pageID]
