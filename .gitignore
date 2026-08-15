@@ -7,6 +7,10 @@ scripts/dump/
 scripts/notion-audit-raw.json
 scripts/notion-page-status.csv
 
+# go build artifacts (cmd/ 이름과 같은 바이너리가 루트에 떨어진다)
+/blog
+/import
+
 # node
 node_modules/
 
