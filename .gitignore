@@ -1,0 +1,19 @@
+# environment
+.env
+.env.*
+
+# notion migration scratch data (large, disposable, regenerable via scripts/)
+scripts/dump/
+scripts/notion-audit-raw.json
+scripts/migration-candidates.csv
+
+# node
+node_modules/
+
+# sqlite
+*.db
+*.db-wal
+*.db-shm
+
+# macOS
+.DS_Store
