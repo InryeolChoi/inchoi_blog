@@ -35,6 +35,7 @@ const (
 	KindSyncedCopy       Kind = "synced-copy"       // 사본 synced_block 건너뜀
 	KindEmbedAsLink      Kind = "embed-as-link"     // 임베드를 링크로 바꿈
 	KindNumberContinued  Kind = "number-continued"  // 끊긴 번호 목록을 이어감
+	KindEmptyBlock       Kind = "empty-block"       // 원본에서 이미 비어 있던 블록
 )
 
 // Issue는 블록 하나에서 발견한 문제다.

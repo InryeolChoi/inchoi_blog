@@ -1,6 +1,6 @@
-// import는 노션 덤프를 마크다운으로 변환하는 CLI다.
+// import는 노션 덤프를 마크다운으로 변환하고, 원하면 DB에 넣는 CLI다.
 //
-// 지금은 변환 결과를 파일로만 쓴다. DB에는 아직 아무것도 넣지 않는다.
+// -db를 주지 않으면 변환 결과를 out/에만 쓰고 DB는 건드리지 않는다.
 //
 // 덤프 디렉토리는 읽기 전용으로만 다룬다. 재수집에 43분이 걸리므로 이 프로그램은
 // 어떤 경우에도 덤프에 쓰거나 지우지 않는다.
@@ -13,9 +13,22 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/inryeol/blog"
+	"github.com/inryeol/blog/internal/db"
+	"github.com/inryeol/blog/internal/importer"
 	"github.com/inryeol/blog/internal/notion"
 )
+
+// convertedPage는 변환 결과 한 건이다. out/에 쓴 것과 DB에 넣는 것이 같은
+// 문자열이어야 해서, 파일을 다시 읽지 않고 이 값을 그대로 쓴다.
+type convertedPage struct {
+	pageID    string
+	markdown  string
+	createdAt *time.Time
+	imageURLs map[string]string
+}
 
 // failure는 변환 자체가 실패한 페이지다.
 type failure struct {
@@ -29,6 +42,8 @@ func main() {
 	pages := flag.String("pages", "", "변환할 page id 목록 (쉼표 구분). 비우면 전체")
 	limit := flag.Int("limit", 0, "변환할 최대 페이지 수 (0이면 제한 없음)")
 	verbose := flag.Bool("v", false, "페이지별 리포트를 모두 출력")
+	dbPath := flag.String("db", "", "SQLite 파일 경로. 지정하면 DB에도 넣는다 (비우면 마크다운만)")
+	statusCSV := flag.String("status", "scripts/notion-page-status.csv", "페이지별 status가 든 CSV")
 	flag.Parse()
 
 	files, err := selectFiles(*dumpDir, *pages, *limit)
@@ -47,6 +62,7 @@ func main() {
 	}
 
 	reports := make([]notion.Report, 0, len(files))
+	converted := make([]convertedPage, 0, len(files))
 	var failures []failure
 
 	for _, path := range files {
@@ -64,6 +80,12 @@ func main() {
 			continue
 		}
 		reports = append(reports, report)
+		converted = append(converted, convertedPage{
+			pageID:    dump.Page.ID,
+			markdown:  md,
+			createdAt: parseNotionTime(dump.Page.CreatedTime),
+			imageURLs: dump.ImageSources(),
+		})
 
 		if *verbose {
 			fmt.Print(report.String())
@@ -72,6 +94,26 @@ func main() {
 	}
 
 	printFullReport(reports, failures, *outDir)
+
+	if *dbPath == "" {
+		return
+	}
+	res, err := runImport(*dbPath, *statusCSV, *dumpDir, converted)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\nDB 이관 실패: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println()
+	fmt.Println(rule)
+	fmt.Println("DB 이관")
+	fmt.Println(rule)
+	fmt.Printf("\nposts  %d건\nimages %d건\n→ %s\n", res.posts, res.images, *dbPath)
+	if len(res.skipped) > 0 {
+		fmt.Printf("\n!! status CSV에 없어서 건너뛴 페이지 %d개:\n", len(res.skipped))
+		for _, id := range res.skipped {
+			fmt.Printf("   %s\n", id)
+		}
+	}
 }
 
 // selectFiles는 변환할 덤프 파일 경로를 고른다.
@@ -420,4 +462,125 @@ func sortedKeysByCount[T any](m map[string][]T) []string {
 		return keys[i] < keys[j]
 	})
 	return keys
+}
+
+// parseNotionTime은 노션의 ISO8601 시각을 파싱한다. 형식이 다르면 nil을 준다.
+func parseNotionTime(s string) *time.Time {
+	if s == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return nil
+	}
+	t = t.UTC()
+	return &t
+}
+
+// ---------- DB 이관 ----------
+
+// importResult는 DB 이관 결과 요약이다.
+type importResult struct {
+	posts   int
+	images  int
+	skipped []string // status CSV에 없어서 건너뛴 페이지
+}
+
+// runImport는 변환된 글과 이미지 파일을 DB에 넣는다.
+//
+// 전부 한 트랜잭션에서 처리한다. 중간에 실패하면 아무것도 들어가지 않는다.
+// 반쯤 들어간 DB를 손으로 정리하는 것보다 통째로 다시 도는 게 낫다.
+func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*importResult, error) {
+	meta, err := importer.LoadPageMeta(statusCSV)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	defer sqlDB.Close()
+
+	applied, err := db.Migrate(sqlDB, blog.MigrationsFS())
+	if err != nil {
+		return nil, fmt.Errorf("마이그레이션: %w", err)
+	}
+	for _, name := range applied {
+		fmt.Printf("마이그레이션 적용: %s\n", name)
+	}
+
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("트랜잭션 시작: %w", err)
+	}
+	defer tx.Rollback()
+
+	now := time.Now().UTC()
+	res := &importResult{}
+
+	for _, cp := range converted {
+		m, ok := meta[cp.pageID]
+		if !ok {
+			// status를 모르는 채로 기본값을 찍으면 나중에 무엇이 추정값인지 알 수 없다.
+			res.skipped = append(res.skipped, cp.pageID)
+			continue
+		}
+		post := importer.Post{
+			Slug:              cp.pageID, // 지금은 페이지 ID 그대로. 나중에 제목 기반으로 다시 쓴다.
+			Title:             m.Title,
+			Body:              cp.markdown,
+			Status:            m.Status,
+			Source:            "notion",
+			NotionPageID:      cp.pageID,
+			OriginalPath:      m.FullPath,
+			OriginalCreatedAt: cp.createdAt,
+		}
+		if err := importer.UpsertPost(tx, post, now); err != nil {
+			return nil, err
+		}
+		res.posts++
+	}
+
+	imageURLs := map[string]string{}
+	for _, cp := range converted {
+		for sha, url := range cp.imageURLs {
+			imageURLs[sha] = url
+		}
+	}
+
+	imageDir := filepath.Join(dumpDir, "images")
+	entries, err := os.ReadDir(imageDir)
+	if err != nil {
+		return nil, fmt.Errorf("이미지 디렉토리 읽기(%s): %w", imageDir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		mime, ok := importer.MIMEForFile(name)
+		if !ok {
+			return nil, fmt.Errorf("확장자를 모르는 이미지 파일이다: %s", name)
+		}
+		data, err := os.ReadFile(filepath.Join(imageDir, name))
+		if err != nil {
+			return nil, fmt.Errorf("이미지 읽기(%s): %w", name, err)
+		}
+		sha := strings.TrimSuffix(name, filepath.Ext(name))
+		if err := importer.UpsertImage(tx, importer.Image{
+			SHA256:      sha,
+			Data:        data,
+			MIME:        mime,
+			OriginalURL: imageURLs[sha],
+		}, now); err != nil {
+			return nil, err
+		}
+		res.images++
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("커밋: %w", err)
+	}
+	return res, nil
 }

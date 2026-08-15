@@ -124,3 +124,40 @@ func LoadDump(path string) (*Dump, error) {
 	}
 	return &d, nil
 }
+
+// ImageSources는 저장된 이미지의 sha256 → 노션 원본 URL 대응을 모은다.
+//
+// 노션이 호스팅하는 파일 URL(file.url)은 서명이 붙은 임시 주소라 곧 만료된다.
+// 그래도 어디서 온 이미지인지 기록으로 남겨둔다.
+func (d *Dump) ImageSources() map[string]string {
+	out := map[string]string{}
+	var walk func(blocks []Block)
+	walk = func(blocks []Block) {
+		for _, b := range blocks {
+			if b.Type == "image" {
+				var body struct {
+					Local *struct {
+						SHA256 string `json:"sha256"`
+					} `json:"local"`
+					File     *struct{ URL string } `json:"file"`
+					External *struct{ URL string } `json:"external"`
+				}
+				if err := b.decodeBody(&body); err == nil &&
+					body.Local != nil && body.Local.SHA256 != "" {
+					url := ""
+					if body.External != nil {
+						url = body.External.URL
+					} else if body.File != nil {
+						url = body.File.URL
+					}
+					if url != "" {
+						out[body.Local.SHA256] = url
+					}
+				}
+			}
+			walk(b.Children)
+		}
+	}
+	walk(d.Blocks)
+	return out
+}

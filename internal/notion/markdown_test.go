@@ -749,3 +749,49 @@ func TestBlockEquationKeepsBackslashesAndBraces(t *testing.T) {
 		}
 	}
 }
+
+// TestEmptyImageLeavesComment는 노션에서 이미 비어 있던 이미지 자리에
+// 주석이 남는지 본다. 빈 참조 ![]()를 남기면 렌더링이 깨지고,
+// 아무것도 안 남기면 원본 대조 때 흔적이 사라진다.
+func TestEmptyImageLeavesComment(t *testing.T) {
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"앞","annotations":{}}]}},
+	  {"id":"b2","type":"image","image":{"type":"external","caption":[],"external":{"url":""},"local":null}},
+	  {"id":"b3","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"뒤","annotations":{}}]}}
+	]`))
+
+	if !strings.Contains(md, EmptyImageMarker) {
+		t.Errorf("빈 이미지 자리에 주석이 없다:\n%s", md)
+	}
+	if strings.Contains(md, "![](") || strings.Contains(md, "![]()") {
+		t.Errorf("빈 이미지 참조가 남았다:\n%s", md)
+	}
+	// 주석은 이미지 참조로 세면 안 된다.
+	if rep.OutputImages != 0 {
+		t.Errorf("주석을 이미지 참조로 세었다: %d", rep.OutputImages)
+	}
+	if rep.SourceImages != 1 {
+		t.Errorf("원본 이미지 수가 틀렸다: %d", rep.SourceImages)
+	}
+	// 앞뒤 문단이 그대로 있어야 한다.
+	if !strings.Contains(md, "앞") || !strings.Contains(md, "뒤") {
+		t.Errorf("주변 내용이 사라졌다:\n%s", md)
+	}
+}
+
+// TestEmptyEquationLeavesComment는 빈 수식 블록 자리에 주석이 남는지 본다.
+func TestEmptyEquationLeavesComment(t *testing.T) {
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"equation","equation":{"expression":"   "}}
+	]`))
+
+	if !strings.Contains(md, EmptyEquationMarker) {
+		t.Errorf("빈 수식 자리에 주석이 없다:\n%s", md)
+	}
+	if strings.Contains(md, "$$") {
+		t.Errorf("빈 수식 구분자가 남았다:\n%s", md)
+	}
+	if rep.CountKind(KindEmptyBlock) != 1 {
+		t.Errorf("빈 블록이 기록되지 않았다: %+v", rep.Issues)
+	}
+}

@@ -23,6 +23,7 @@ cmd/blog/       서버. 시작할 때 마이그레이션을 적용하고 HTTP를
 cmd/import/     노션 이관 CLI. 지금은 마크다운 파일로만 출력하고 DB에는 넣지 않는다.
 internal/db/    연결(Open)과 마이그레이션 러너(Migrate)
 internal/notion/ 덤프 파싱과 마크다운 변환기
+internal/importer/ 변환 결과를 DB에 넣기 (posts/images upsert)
 migrations/     번호순 SQL. 001_init.sql 형식.
 out/            (gitignore) 변환 결과 검토용
 embed.go        루트 패키지. migrations/를 embed해서 MigrationsFS()로 노출.
@@ -44,8 +45,22 @@ CGO_ENABLED=0 go build -o blog ./cmd/blog      # 단일 바이너리
 
 go run ./cmd/import -pages <id>,<id> -v        # 특정 페이지만 변환 (리포트 전체 출력)
 go run ./cmd/import -limit 20                  # 앞 20개만 변환
-go run ./cmd/import                            # 전체 1311개 (확인 후에만)
+go run ./cmd/import                            # 전체 1311개, out/에만 (DB는 안 건드림)
+go run ./cmd/import -db blog.db                # 변환 + DB 이관 (몇 번 돌려도 안전)
 ```
+
+## DB 이관 현황
+
+전체 1311개가 들어가 있다. `-db`를 줄 때만 DB를 건드린다.
+
+- **글은 `notion_page_id`, 이미지는 `sha256`이 멱등 키다.** 다시 돌리면 갱신만 되고
+  행이 늘지 않는다. `created_at`은 처음 넣을 때 값을 유지하고 `updated_at`만 바뀐다.
+- 전부 **한 트랜잭션**에서 처리한다. 중간에 실패하면 아무것도 안 들어간다.
+  반쯤 들어간 DB를 손으로 정리하는 것보다 통째로 다시 도는 게 낫다.
+- 지금은 `slug`가 페이지 ID 그대로다. `parent_id`/`category_id`/`published_at`은 NULL.
+- 이미지 437개를 BLOB으로 들고 있어서 `blog.db`가 74MB다.
+- **아직 안 한 것**: 하위 페이지 링크 666개의 slug 재작성, 첨부파일 12개,
+  카테고리/부모 관계 지정, `published` 지정.
 
 ## 노션 이관
 
@@ -108,9 +123,11 @@ go run ./cmd/import                            # 전체 1311개 (확인 후에�
   (`scripts/dump/images/{sha256}.{ext}`, 내용 해시 기준 dedup).
 - **전부 이관 대상이다.** 일부만 골라 옮기는 게 아니다. 공개 여부는 삭제가 아니라
   `status` 컬럼으로 가린다.
-- `notion-page-status.csv`가 계산해둔 초기 status: `draft` 365개(블록 5개 미만인
-  stub이거나 제목 없음), `unlisted` 918개(그 외 전부). `published`는 나중에 수동 지정한다.
-- CSV의 제목 필드에 콤마가 들어간 행이 있다. 단순 `cut -d,`로 파싱하면 컬럼이 밀린다.
+- `notion-page-status.csv`가 계산해둔 초기 status: **`draft` 375개**(블록 5개 미만인
+  stub이거나 제목 없음), **`unlisted` 936개**(그 외 전부). `published`는 나중에 수동 지정한다.
+- **CSV의 제목 필드에 콤마가 들어간 행이 있다.** `cut -d,`나 `split(",")`로 파싱하면
+  컬럼이 밀려서 status 자리에 `true`/`false`나 날짜가 들어온다. 실제로 이것 때문에
+  한동안 375/936을 365/918로 잘못 알고 있었다. 반드시 CSV 파서를 쓸 것.
 
 ## 지켜야 할 것
 

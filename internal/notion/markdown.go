@@ -14,6 +14,13 @@ const ImageURLPrefix = "/img/"
 // 전체 이관이 끝나고 slug가 정해지면 이 링크들을 slug로 다시 쓴다.
 const PageURLPrefix = "/p/"
 
+// 노션에서 이미 비어 있던 블록 자리에 남기는 표시다. 렌더링에는 안 보이지만
+// 원본과 대조할 때 "여기에 뭔가 있었다"는 사실이 남는다.
+const (
+	EmptyImageMarker    = "<!-- 원본에 비어있던 이미지 -->"
+	EmptyEquationMarker = "<!-- 원본에 비어있던 수식 -->"
+)
+
 // chunk는 렌더링된 블록 하나다. list가 true면 앞 chunk와 빈 줄 없이 붙인다.
 type chunk struct {
 	text string
@@ -268,7 +275,10 @@ func (c *converter) renderBlock(b Block, path string, number int) (string, bool)
 		}
 		_ = b.decodeBody(&body)
 		if strings.TrimSpace(body.Expression) == "" {
-			return "", false
+			// 노션에 빈 수식 블록이 남아 있는 경우다. 아무것도 안 남기면 나중에
+			// 원본을 볼 때 여기에 무언가 있었다는 사실조차 알 수 없다.
+			c.note(b, path, KindEmptyBlock, "원본에 비어있던 수식 블록이다. 자리만 주석으로 남긴다")
+			return EmptyEquationMarker, false
 		}
 		return "$$\n" + normalizeBlockMath(body.Expression) + "\n$$", false
 
@@ -483,8 +493,11 @@ func (c *converter) image(b Block, path string) string {
 		url = body.File.URL
 	}
 	if url == "" {
-		c.warn(b, path, KindMissingImage, "이미지 블록에 로컬 파일도 URL도 없다. 이미지가 빠졌다")
-		return ""
+		// 노션 쪽에서 이미 깨진 이미지다(external.url이 빈 문자열). 가리킬 곳이 없어서
+		// 빈 참조를 남기면 렌더링만 깨진다. 자리만 주석으로 표시한다.
+		c.warn(b, path, KindMissingImage,
+			"원본에 URL이 비어 있는 이미지다. 주석만 남긴다 (노션 원본을 확인해야 한다)")
+		return EmptyImageMarker
 	}
 	c.warn(b, path, KindExternalImage, "로컬로 받아둔 파일이 없어 외부 URL을 그대로 쓴다 (링크가 깨질 수 있다): %s",
 		truncate(url, 80))
