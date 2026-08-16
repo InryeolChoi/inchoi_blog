@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/inryeol/blog/internal/curation"
 	"github.com/inryeol/blog/internal/db"
 	"github.com/inryeol/blog/internal/importer"
 )
@@ -48,6 +49,16 @@ type plan struct {
 	// coverByCategory는 카테고리 이름 → 그 카테고리의 표지 글 page id다.
 	// 표지 글은 노션 최상위 페이지 자신이고, 카테고리당 하나뿐이다.
 	coverByCategory map[string]string
+	// movedPosts는 사람이 slug로 직접 지정한 글이다 (internal/curation).
+	// 경로 처리를 거치지 않으므로 assignByPageID에는 들어가지 않는다.
+	movedPosts []movedPost
+}
+
+// movedPost는 사람이 카테고리를 직접 정한 글 하나다.
+type movedPost struct {
+	pageID string
+	title  string
+	slug   string // 붙일 카테고리 slug
 }
 
 // coverCategories는 표지 글이 있는 카테고리 이름을 정렬해 돌려준다.
@@ -110,6 +121,11 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 	l2Posts := map[string]int{}
 	l2Parent := map[string]string{}
 
+	// 사람이 옮기기로 한 글은 경로 처리에서 아예 뺀다. 그래야 그 글의 경로가
+	// 카테고리를 만드는 데 쓰이지 않고, 한 카테고리의 글이 전부 빠지면 그
+	// 카테고리 자체가 계획에서 사라진다.
+	moveBySlug := curation.PostMoveBySlug()
+
 	// 조상이 없는 글은 카테고리 이름이 다 모인 뒤에 다시 본다.
 	// 노션 최상위 페이지 자신이 여기 해당하는데, 그 제목이 곧 카테고리 이름이다.
 	type orphan struct{ pageID, title string }
@@ -120,6 +136,22 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 		var path sql.NullString
 		if err := rows.Scan(&pageID, &title, &path); err != nil {
 			return nil, fmt.Errorf("posts 스캔: %w", err)
+		}
+
+		if slug, ok := moveBySlug[pageID]; ok {
+			p.movedPosts = append(p.movedPosts, movedPost{pageID: pageID, title: title, slug: slug})
+			// 옮긴 글이라도 그 조상 1단계 분류는 계획에 남긴다(직접 붙는 글 0건으로).
+			// 그 분류의 존재 근거가 이 글들뿐일 수 있는데, 그러면 분류가 통째로
+			// 사라지면서 자기 표지 글까지 카테고리를 잃는다. 실제로 "최인렬
+			// (Inryeol Choi)"가 그랬다 — 그 밑의 글이 이 6건뿐이었다.
+			//
+			// 2단계는 일부러 안 만든다. 없애려고 옮기는 층이 그거다.
+			if a := importer.AssignCategory(pageID, path.String); a.Level1 != "" {
+				if _, seen := l1Posts[a.Level1]; !seen {
+					l1Posts[a.Level1] = 0
+				}
+			}
+			continue
 		}
 
 		a := importer.AssignCategory(pageID, path.String)
@@ -254,6 +286,14 @@ func printPlan(p *plan) {
 		}
 	}
 
+	if len(p.movedPosts) > 0 {
+		fmt.Printf("\n■ 사람이 카테고리를 직접 정한 글 %d건 (internal/curation)\n", len(p.movedPosts))
+		fmt.Println("  경로 처리에서 뺀다. 이 글들의 경로는 카테고리를 만드는 데 쓰이지 않는다.")
+		for _, mp := range p.movedPosts {
+			fmt.Printf("      %-14s → /%s\n", mp.title, mp.slug)
+		}
+	}
+
 	if len(p.noCategory) > 0 {
 		fmt.Printf("\n■ 카테고리가 없는 글 %d건\n", len(p.noCategory))
 		fmt.Println("  조상도 없고 같은 이름의 카테고리도 없다. category_id를 NULL로 둔다.")
@@ -276,6 +316,11 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 	// original_path가 알려주는 건 "19개 노션 최상위 + 그 아래 66개"까지다. 그 19개를
 	// 다시 더 큰 분류(dev, cs-theory 등) 밑으로 묶는 건 cmd/regroup이 하는 별개의
 	// 수작업 층이다. 여기서 parent_id를 NULL로 덮으면 그 묶음이 매번 풀린다.
+	//
+	// 2단계도 마찬가지로 true를 준다. 처음 INSERT할 때는 경로가 알려준 부모를 그대로
+	// 쓰지만, 그 뒤에 사람이 옮긴 것(regroup의 moves)은 존중한다. 경로를 다시 읽어
+	// 덮으면 옮긴 게 매번 풀린다. 덤프는 고정이라 경로가 나중에 달라지지 않으므로
+	// 잃는 것도 없다.
 	upsert := func(n node, parentID any, order int, keepParent bool) error {
 		// source_name이 멱등 키다. slug가 아니다.
 		//
@@ -321,7 +366,7 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 		if !ok {
 			return 0, fmt.Errorf("2단계 %q의 부모 %q를 못 찾았다", n.name, n.parent)
 		}
-		if err := upsert(n, parentID, i, false); err != nil {
+		if err := upsert(n, parentID, i, true); err != nil {
 			return 0, err
 		}
 	}
@@ -354,6 +399,33 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 		changed++
 	}
 
+	// 사람이 slug로 직접 정한 글. 경로에서 나온 이름이 아니라 slug로 찾는다.
+	for _, mp := range p.movedPosts {
+		var want int64
+		switch err := tx.QueryRow(`SELECT id FROM categories WHERE slug = ?`, mp.slug).Scan(&want); err {
+		case nil:
+		case sql.ErrNoRows:
+			return 0, fmt.Errorf("글 %q를 붙일 카테고리가 없다: slug %q", mp.title, mp.slug)
+		default:
+			return 0, fmt.Errorf("카테고리 조회(%s): %w", mp.slug, err)
+		}
+
+		var current sql.NullInt64
+		if err := tx.QueryRow(
+			`SELECT category_id FROM posts WHERE notion_page_id = ?`, mp.pageID).Scan(&current); err != nil {
+			return 0, fmt.Errorf("현재 category_id 조회(%s): %w", mp.pageID, err)
+		}
+		if current.Valid && current.Int64 == want {
+			continue
+		}
+		if _, err := tx.Exec(
+			`UPDATE posts SET category_id = ?, updated_at = datetime('now') WHERE notion_page_id = ?`,
+			want, mp.pageID); err != nil {
+			return 0, fmt.Errorf("posts 갱신(%s): %w", mp.pageID, err)
+		}
+		changed++
+	}
+
 	// 표지 글을 카테고리 쪽에 이어둔다. 값이 이미 맞으면 건드리지 않는다.
 	for catName, pageID := range p.coverByCategory {
 		var want sql.NullInt64
@@ -371,6 +443,22 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 		if current.Valid && current.Int64 == want.Int64 {
 			continue
 		}
+
+		// 그 글이 이미 다른 카테고리의 표지면 사람이 옮긴 것이다(regroup의 covers).
+		// 그대로 둔다. cover_post_id는 UNIQUE라 여기서 덮으려 들면 제약에 걸려
+		// categorize 전체가 실패한다.
+		var otherCat sql.NullString
+		err = tx.QueryRow(
+			`SELECT coalesce(name, '') FROM categories WHERE cover_post_id = ?`, want.Int64).Scan(&otherCat)
+		switch {
+		case err == nil:
+			fmt.Printf("  표지 %q는 이미 %q에 붙어 있다. 사람이 옮긴 것으로 보고 건드리지 않는다.\n",
+				catName, otherCat.String)
+			continue
+		case err != sql.ErrNoRows:
+			return 0, fmt.Errorf("표지 중복 검사(%s): %w", catName, err)
+		}
+
 		if _, err := tx.Exec(
 			`UPDATE categories SET cover_post_id = ? WHERE source_name = ?`, want.Int64, catName); err != nil {
 			return 0, fmt.Errorf("표지 글 연결(%s): %w", catName, err)
@@ -419,9 +507,14 @@ func verify(sqlDB *sql.DB, p *plan) error {
 		return fmt.Errorf("계획한 카테고리가 DB에 없다")
 	}
 
-	// 하위 카테고리가 계획한 부모를 가리키는지
+	// 하위 카테고리가 계획한 부모를 가리키는지.
+	// 사람이 일부러 옮긴 것(internal/curation)은 뺀다. 경로와 다른 게 정상이다.
+	moved := curation.MovedSourceNames()
 	wrongParent := 0
 	for _, n := range p.level2 {
+		if moved[n.name] {
+			continue
+		}
 		var parentSource sql.NullString
 		err := sqlDB.QueryRow(`
 			SELECT pp.source_name FROM categories c
@@ -518,9 +611,12 @@ func verify(sqlDB *sql.DB, p *plan) error {
 	if err != nil {
 		return fmt.Errorf("표지 글 참조 검사: %w", err)
 	}
-	fmt.Printf("표지 글이 이어진 카테고리: %d개 (계획 %d개)%s\n",
-		coverCount, len(p.coverByCategory), mark(coverCount == len(p.coverByCategory)))
-	if coverCount != len(p.coverByCategory) {
+	// 사람이 붙인 표지(internal/curation)는 categorize의 계획 밖이다. 그 글이 원래
+	// 어느 카테고리의 표지였다면 regroup이 옛 자리를 비웠으므로 총수는 그대로다.
+	wantCovers := len(p.coverByCategory)
+	fmt.Printf("표지 글이 이어진 카테고리: %d개 (계획 %d개 + 사람이 정한 %d개)%s\n",
+		coverCount, wantCovers, len(curation.Covers), mark(coverCount == wantCovers))
+	if coverCount != wantCovers {
 		return fmt.Errorf("표지 글 수가 계획과 다르다")
 	}
 	fmt.Printf("없는 글을 가리키는 표지: %d개%s\n", coverBad, mark(coverBad == 0))
@@ -528,12 +624,16 @@ func verify(sqlDB *sql.DB, p *plan) error {
 		return fmt.Errorf("cover_post_id가 깨졌다")
 	}
 
-	// 표지 글이 자기 카테고리에 속해 있는지
+	// 표지 글이 자기 카테고리에 속해 있는지.
+	// 사람이 붙인 표지는 뺀다. 그 글은 원래 카테고리에 속한 채로 다른 분류의
+	// 표지가 되는 것이라(소개 ← 최인렬 페이지) 어긋나는 게 정상이다.
 	var coverMismatch int
 	err = sqlDB.QueryRow(`
 		SELECT count(*) FROM categories c
 		JOIN posts p ON p.id = c.cover_post_id
-		WHERE p.category_id IS NOT c.id`).Scan(&coverMismatch)
+		WHERE p.category_id IS NOT c.id
+		  AND p.notion_page_id NOT IN (`+placeholders(len(curation.Covers))+`)`,
+		coverPageIDArgs()...).Scan(&coverMismatch)
 	if err != nil {
 		return fmt.Errorf("표지 글 소속 검사: %w", err)
 	}
@@ -584,4 +684,22 @@ func mark(ok bool) string {
 		return " ✓"
 	}
 	return " ✗"
+}
+
+// placeholders는 IN 절에 넣을 ? 목록을 만든다. n이 0이면 아무것도 안 맞는
+// NULL을 준다 (빈 IN ()은 SQLite 문법 오류다).
+func placeholders(n int) string {
+	if n == 0 {
+		return "NULL"
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+// coverPageIDArgs는 사람이 표지로 지정한 글의 notion_page_id를 인자로 만든다.
+func coverPageIDArgs() []any {
+	out := make([]any, 0, len(curation.Covers))
+	for _, c := range curation.Covers {
+		out = append(out, c.NotionPageID)
+	}
+	return out
 }

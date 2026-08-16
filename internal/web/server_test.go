@@ -56,6 +56,17 @@ func testServer(t *testing.T) http.Handler {
 	post(2, "list-post", "리스트", "# 리스트\n\n식은 $x_1 + y_2$ 이다.\n\n$$\n\\sum_{i=1}^{n} i\n$$\n", 3)
 	exec(`UPDATE categories SET cover_post_id = 1 WHERE id = 2`)
 
+	// 노션 계층이 카테고리 3단계보다 깊었던 모습을 재현한다.
+	// "묶음"은 python 카테고리 안에 있지만 부모는 한 단계 위 카테고리의 표지 글이고,
+	// "리스트"는 그 묶음 밑에 들어간다. 실제 수리통계1이 이 모양이다.
+	post(3, "section-post", "묶음", "묶음 본문", 3)
+	exec(`UPDATE posts SET parent_id = 1 WHERE id = 3`)
+	exec(`UPDATE posts SET parent_id = 3 WHERE id = 2`)
+
+	// status 뱃지는 draft만 찍는다. 양쪽을 다 보려면 draft 글이 하나 있어야 한다.
+	post(4, "draft-post", "초안", "초안 본문", 3)
+	exec(`UPDATE posts SET status = 'draft' WHERE id = 4`)
+
 	exec(`INSERT INTO images (sha256, data, mime, created_at) VALUES (?, ?, 'image/png', ?)`,
 		strings.Repeat("ab", 32), []byte{0x89, 0x50, 0x4e, 0x47}, now)
 
@@ -83,8 +94,8 @@ func TestIndexListsTopCategories(t *testing.T) {
 	if !strings.Contains(body, `href="/dev"`) {
 		t.Errorf("최상위 카테고리 링크가 없다:\n%s", body)
 	}
-	// 하위 글까지 세야 한다 (dev 아래 글 2건)
-	if !strings.Contains(body, "글 2건") {
+	// 하위 글까지 세야 한다 (dev 아래 글 4건)
+	if !strings.Contains(body, "글 4건") {
 		t.Errorf("하위 글 수가 안 세졌다:\n%s", body)
 	}
 }
@@ -312,5 +323,123 @@ func TestTrailLinksAreNotDoubleEncoded(t *testing.T) {
 	deep := "/cs-theory/" + url.PathEscape("운영체제") + "/part-2"
 	if !strings.Contains(strings.ToLower(body), strings.ToLower(deep)) {
 		t.Errorf("3단계 경로 링크(%s)가 없다:\n%s", deep, body)
+	}
+}
+
+// TestCategoryPageNestsPostsByParent는 카테고리 목록이 parent_id 계층대로
+// 중첩되는지 본다. 평평하게 나열되면 원래 몇 단계였는지 알 수 없다.
+func TestCategoryPageNestsPostsByParent(t *testing.T) {
+	rec := get(t, testServer(t), "/dev/language/python")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d", rec.Code)
+	}
+	body := rec.Body.String()
+
+	// 부모가 이 카테고리 밖(언어 표지 글)이라 "묶음"이 뿌리로 올라오고,
+	// "리스트"는 그 밑에 중첩된 목록으로 들어가야 한다.
+	sec := strings.Index(body, `href="/p/section-post"`)
+	list := strings.Index(body, `href="/p/list-post"`)
+	if sec < 0 || list < 0 {
+		t.Fatalf("두 글이 다 보여야 한다:\n%s", body)
+	}
+	if sec > list {
+		t.Errorf("묶음이 리스트보다 먼저 나와야 한다:\n%s", body)
+	}
+
+	// 두 링크 사이에 안쪽 <ul>이 열려야 중첩이다.
+	between := body[sec:list]
+	if !strings.Contains(between, "<ul") {
+		t.Errorf("리스트가 묶음 안에 중첩되지 않았다:\n%s", between)
+	}
+}
+
+// TestPostShowsAncestorsAndChildren은 글 상세가 상위 글 사슬과 하위 글을
+// 보여주는지 본다.
+func TestPostShowsAncestorsAndChildren(t *testing.T) {
+	h := testServer(t)
+
+	// 잎: 상위 사슬이 빵부스러기에 이어져야 한다.
+	body := get(t, h, "/p/list-post").Body.String()
+	for _, want := range []string{`href="/p/cover-language"`, `href="/p/section-post"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("상위 글 링크 %s 가 없다:\n%s", want, body)
+		}
+	}
+
+	// 중간 노드: 하위 글이 보여야 한다. 자기 본문이 없어도 사슬에서 빠지지 않는다.
+	body = get(t, h, "/p/section-post").Body.String()
+	if !strings.Contains(body, "하위 글") || !strings.Contains(body, `href="/p/list-post"`) {
+		t.Errorf("하위 글 목록이 없다:\n%s", body)
+	}
+}
+
+// TestNestPostsKeepsEveryPost는 parent_id가 서로를 가리키며 도는 경우에도
+// 글이 목록에서 사라지지 않는지 본다. posts.parent_id에는 categories와 달리
+// 깊이/순환을 막는 트리거가 없다.
+func TestNestPostsKeepsEveryPost(t *testing.T) {
+	ref := func(id int64) sql.NullInt64 { return sql.NullInt64{Int64: id, Valid: true} }
+	flat := []PostSummary{
+		{ID: 1, Title: "뿌리"},
+		{ID: 2, Title: "자식", ParentID: ref(1)},
+		{ID: 3, Title: "바깥 부모를 가리킴", ParentID: ref(99)},
+		{ID: 4, Title: "순환 A", ParentID: ref(5)},
+		{ID: 5, Title: "순환 B", ParentID: ref(4)},
+	}
+
+	seen := map[int64]bool{}
+	var walk func(ps []PostSummary)
+	walk = func(ps []PostSummary) {
+		for _, p := range ps {
+			if seen[p.ID] {
+				t.Fatalf("글 %d가 두 번 나온다", p.ID)
+			}
+			seen[p.ID] = true
+			walk(p.Children)
+		}
+	}
+	walk(nestPosts(flat))
+
+	if len(seen) != len(flat) {
+		t.Errorf("글 %d건 중 %d건만 나왔다: %v", len(flat), len(seen), seen)
+	}
+}
+
+// TestStatusBadgeOnlyForDraft는 목록과 상세에서 unlisted 뱃지를 감추는지 본다.
+// 1408건 중 1003건이 unlisted라 전부 찍으면 목록이 그 글자로 덮인다.
+func TestStatusBadgeOnlyForDraft(t *testing.T) {
+	h := testServer(t)
+
+	// 픽스처의 글은 전부 unlisted다. 어디에도 그 글자가 보이면 안 된다.
+	for _, path := range []string{"/dev/language/python", "/p/list-post"} {
+		if body := get(t, h, path).Body.String(); strings.Contains(body, "unlisted") {
+			t.Errorf("%s 에 unlisted 뱃지가 남아 있다:\n%s", path, body)
+		}
+	}
+
+	// draft는 손봐야 할 신호라 계속 보여야 한다.
+	for _, path := range []string{"/dev/language/python", "/p/draft-post"} {
+		if body := get(t, h, path).Body.String(); !strings.Contains(body, "draft") {
+			t.Errorf("%s 에 draft 뱃지가 없다:\n%s", path, body)
+		}
+	}
+}
+
+// TestCategoryShowsCoverBody는 표지 글이 있는 카테고리를 열면 그 본문이 바로
+// 나오는지 본다. 소개처럼 목록이 아니라 글 자체가 알맹이인 분류가 있다.
+func TestCategoryShowsCoverBody(t *testing.T) {
+	h := testServer(t)
+
+	// language에는 표지 글 "언어"가 붙어 있다.
+	body := get(t, h, "/dev/language").Body.String()
+	if !strings.Contains(body, "표지 본문") {
+		t.Errorf("표지 글 본문이 카테고리 페이지에 안 나온다:\n%s", body)
+	}
+	if !strings.Contains(body, `href="/p/cover-language"`) {
+		t.Errorf("표지 글로 가는 링크가 없다:\n%s", body)
+	}
+
+	// 표지가 없는 카테고리는 <article>을 그리지 않는다.
+	if body := get(t, h, "/dev/tools").Body.String(); strings.Contains(body, "<article>") {
+		t.Errorf("표지가 없는데 본문 영역이 그려졌다:\n%s", body)
 	}
 }

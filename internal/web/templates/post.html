@@ -1,10 +1,15 @@
 {{define "content"}}
 <h1>{{.Post.Title}}</h1>
 <p class="status">
-  {{.Post.Status}}
-  {{if .Post.OriginalPath.Valid}} · {{.Post.OriginalPath.String}}{{end}}
+  {{if eq .Post.Status "draft"}}{{.Post.Status}} · {{end}}
+  {{- if .Post.OriginalPath.Valid}}{{.Post.OriginalPath.String}}{{end}}
 </p>
 <article>
 {{.Body}}
 </article>
+
+{{with .Post.Children}}
+<h2>하위 글</h2>
+{{template "posttree" .}}
+{{end}}
 {{end}}

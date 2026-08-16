@@ -165,6 +165,24 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 표지 글이 있으면 본문을 목록 위에 펼친다. 소개처럼 목록이 아니라 글 자체가
+	// 그 분류의 알맹이인 경우가 있다. 한 번 더 눌러 들어가게 하지 않는다.
+	var coverBody template.HTML
+	var coverPost *Post
+	if current.CoverPostSlug != "" {
+		coverPost, err = s.store.PostBySlug(current.CoverPostSlug)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		if coverPost != nil {
+			if coverBody, err = s.md.Render(coverPost.Body); err != nil {
+				s.fail(w, err)
+				return
+			}
+		}
+	}
+
 	crumbList, basePath := crumbs(trail)
 	s.render(w, "category.html", pageData{
 		Title:      current.Name,
@@ -172,6 +190,8 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		BasePath:   basePath,
 		Categories: children,
 		Posts:      posts,
+		Post:       coverPost,
+		Body:       coverBody,
 	})
 }
 
@@ -192,7 +212,13 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 카테고리 경로 뒤에 상위 글 사슬을 이어붙인다. 노션 계층이 카테고리 3단계보다
+	// 깊었던 글은 카테고리만으로는 어디쯤인지 알 수 없다.
 	crumbList, _ := crumbs(post.Trail)
+	for _, a := range post.Ancestors {
+		crumbList = append(crumbList, Crumb{Name: a.Title, URL: "/p/" + url.PathEscape(a.Slug)})
+	}
+
 	s.render(w, "post.html", pageData{
 		Title: post.Title,
 		Trail: crumbList,

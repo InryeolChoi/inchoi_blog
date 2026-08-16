@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/inryeol/blog/internal/curation"
 	"github.com/inryeol/blog/internal/db"
 )
 
@@ -259,6 +260,30 @@ func checkPlan(cat *catalog) error {
 		sort.Strings(tooDeep)
 		return fmt.Errorf("손자까지 있어 3단계 안에 못 넣는 카테고리: %s", strings.Join(tooDeep, ", "))
 	}
+
+	// moves가 가리키는 양쪽이 다 있는지, 그리고 옮겨도 3단계를 넘지 않는지.
+	for _, mv := range curation.Moves {
+		c, ok := cat.bySource[mv.SourceName]
+		if !ok {
+			return fmt.Errorf("옮기려는 카테고리가 없다: source_name %q", mv.SourceName)
+		}
+		if _, ok := cat.bySlug[mv.ToSlug]; !ok {
+			return fmt.Errorf("%q를 옮길 부모 카테고리가 없다: slug %q", mv.SourceName, mv.ToSlug)
+		}
+		if !newSlugs[mv.ToSlug] {
+			return fmt.Errorf("%q의 새 부모 %q가 최상위 분류가 아니다", mv.SourceName, mv.ToSlug)
+		}
+		if c.grandchildren > 0 {
+			return fmt.Errorf("%q는 손자까지 있어 옮기면 4단계가 된다", mv.SourceName)
+		}
+	}
+
+	// covers가 가리키는 카테고리가 있는지. 글은 DB를 봐야 알 수 있어 여기선 안 본다.
+	for _, cv := range curation.Covers {
+		if _, ok := cat.bySlug[cv.Slug]; !ok {
+			return fmt.Errorf("표지를 붙일 카테고리가 없다: slug %q", cv.Slug)
+		}
+	}
 	return nil
 }
 
@@ -297,6 +322,48 @@ func printPlan(cat *catalog) {
 	fmt.Printf("2단계로 내릴 것  : %d개\n", totalMembers)
 	fmt.Printf("3단계가 될 것    : %d개 (딸려 내려가는 하위 카테고리)\n", totalChildren)
 	fmt.Printf("이름 변경        : %d개\n", len(renames))
+
+	if len(curation.Moves) > 0 {
+		fmt.Printf("\n■ 사람이 정한 카테고리 이동 %d건\n", len(curation.Moves))
+		for _, mv := range curation.Moves {
+			c := cat.bySource[mv.SourceName]
+			from := "(최상위)"
+			if c.parentID.Valid {
+				for _, x := range cat.byName {
+					if x.id == c.parentID.Int64 {
+						from = x.name
+						break
+					}
+				}
+			}
+			fmt.Printf("      %s : %s → /%s   [글 %d건]\n", c.name, from, mv.ToSlug, c.posts)
+			fmt.Printf("          %s\n", mv.Why)
+		}
+	}
+
+	if len(curation.Covers) > 0 {
+		fmt.Printf("\n■ 사람이 만든 분류의 표지 글 %d건\n", len(curation.Covers))
+		for _, cv := range curation.Covers {
+			fmt.Printf("      /%s ← %s\n", cv.Slug, cv.NotionPageID)
+			fmt.Printf("          %s\n", cv.Why)
+		}
+	}
+
+	if len(curation.DropCategories) > 0 {
+		fmt.Printf("\n■ 없앨 카테고리 %d개\n", len(curation.DropCategories))
+		for _, dc := range curation.DropCategories {
+			c, ok := cat.bySource[dc.SourceName]
+			if !ok {
+				fmt.Printf("      %s   (이미 없다)\n", dc.SourceName)
+				continue
+			}
+			fmt.Printf("      %s   [글 %d건, 하위 분류 %d개]\n", c.name, c.posts, c.children)
+			fmt.Printf("          %s\n", dc.Why)
+			if c.posts > 0 || c.children > 0 {
+				fmt.Println("          ← 딸린 게 있어 지우지 않는다. 먼저 categorize를 돌려라")
+			}
+		}
+	}
 }
 
 func applyGroups(sqlDB *sql.DB, cat *catalog) error {
@@ -363,10 +430,99 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 		}
 	}
 
+	// 4) 사람이 정한 개별 이동. groups가 끝난 뒤에 해야 새 부모 id가 다 있다.
+	handMoved := 0
+	for _, mv := range curation.Moves {
+		c, ok := cat.bySource[mv.SourceName]
+		if !ok {
+			return fmt.Errorf("옮기려는 카테고리가 없다: source_name %q", mv.SourceName)
+		}
+		parentID, ok := groupID[mv.ToSlug]
+		if !ok {
+			return fmt.Errorf("%q의 새 부모 %q를 못 찾았다", mv.SourceName, mv.ToSlug)
+		}
+		if c.parentID.Valid && c.parentID.Int64 == parentID {
+			continue // 이미 그 밑에 있다
+		}
+		if _, err := tx.Exec(
+			`UPDATE categories SET parent_id = ? WHERE id = ?`, parentID, c.id); err != nil {
+			return fmt.Errorf("%q를 %q 밑으로 이동: %w", mv.SourceName, mv.ToSlug, err)
+		}
+		handMoved++
+	}
+
+	// 5) 사람이 만든 분류의 표지 글. notion_page_id가 멱등 키다.
+	coverSet := 0
+	for _, cv := range curation.Covers {
+		var postID int64
+		switch err := tx.QueryRow(
+			`SELECT id FROM posts WHERE notion_page_id = ?`, cv.NotionPageID).Scan(&postID); err {
+		case nil:
+		case sql.ErrNoRows:
+			return fmt.Errorf("표지로 쓸 글이 없다: notion_page_id %s", cv.NotionPageID)
+		default:
+			return fmt.Errorf("표지 글 조회(%s): %w", cv.NotionPageID, err)
+		}
+
+		// cover_post_id는 UNIQUE다. 한 글은 한 카테고리의 표지만 될 수 있다.
+		// 그 글이 노션 최상위 페이지라면 categorize가 이미 자기 카테고리에 붙여뒀다.
+		// 새로 만드는 게 아니라 옮기는 것이므로 옛 자리를 먼저 비운다.
+		if _, err := tx.Exec(
+			`UPDATE categories SET cover_post_id = NULL
+			 WHERE cover_post_id = ? AND slug <> ?`, postID, cv.Slug); err != nil {
+			return fmt.Errorf("옛 표지 자리 비우기(%s): %w", cv.Slug, err)
+		}
+
+		res, err := tx.Exec(`
+			UPDATE categories SET cover_post_id = ?
+			WHERE slug = ? AND (cover_post_id IS NULL OR cover_post_id <> ?)`,
+			postID, cv.Slug, postID)
+		if err != nil {
+			return fmt.Errorf("표지 지정(%s): %w", cv.Slug, err)
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			coverSet++
+		}
+	}
+
+	// 6) 사람이 없애기로 한 카테고리. 글도 자식도 없을 때만 지운다.
+	//    딸린 게 남아 있으면 조용히 잃지 않도록 에러로 멈춘다.
+	dropped := 0
+	for _, dc := range curation.DropCategories {
+		var id int64
+		switch err := tx.QueryRow(
+			`SELECT id FROM categories WHERE source_name = ?`, dc.SourceName).Scan(&id); err {
+		case nil:
+		case sql.ErrNoRows:
+			continue // 이미 지워졌다
+		default:
+			return fmt.Errorf("지울 카테고리 조회(%s): %w", dc.SourceName, err)
+		}
+
+		var posts, kids int
+		if err := tx.QueryRow(
+			`SELECT (SELECT count(*) FROM posts p WHERE p.category_id = c.id),
+			        (SELECT count(*) FROM categories k WHERE k.parent_id = c.id)
+			 FROM categories c WHERE c.id = ?`, id).Scan(&posts, &kids); err != nil {
+			return fmt.Errorf("딸린 것 조회(%s): %w", dc.SourceName, err)
+		}
+		if posts > 0 || kids > 0 {
+			return fmt.Errorf(
+				"카테고리 %q를 지우려는데 글 %d건, 하위 분류 %d개가 남아 있다. "+
+					"먼저 curation.PostMoves로 옮겨라", dc.SourceName, posts, kids)
+		}
+		if _, err := tx.Exec(`DELETE FROM categories WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("카테고리 삭제(%s): %w", dc.SourceName, err)
+		}
+		dropped++
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("커밋: %w", err)
 	}
 	fmt.Printf("\n최상위 분류 %d개 확보, %d개 카테고리를 옮겼다.\n", len(groups), moved)
+	fmt.Printf("사람이 정한 개별 이동 %d건, 표지 지정 %d건, 카테고리 삭제 %d개.\n",
+		handMoved, coverSet, dropped)
 	return nil
 }
 
@@ -439,6 +595,50 @@ func verify(sqlDB *sql.DB) error {
 	fmt.Printf("없는 카테고리를 가리키는 글: %d건%s\n", badRef, mark(badRef == 0))
 	if badRef != 0 {
 		return fmt.Errorf("category_id가 깨졌다")
+	}
+
+	// moves가 실제로 반영됐는지
+	for _, mv := range curation.Moves {
+		var parentSlug string
+		err := sqlDB.QueryRow(`
+			SELECT coalesce((SELECT p.slug FROM categories p WHERE p.id = c.parent_id), '')
+			FROM categories c WHERE c.source_name = ?`, mv.SourceName).Scan(&parentSlug)
+		if err != nil {
+			return fmt.Errorf("이동 검증(%s): %w", mv.SourceName, err)
+		}
+		fmt.Printf("%s의 부모: /%s%s\n", mv.SourceName, parentSlug, mark(parentSlug == mv.ToSlug))
+		if parentSlug != mv.ToSlug {
+			return fmt.Errorf("%q가 /%s 밑에 있어야 하는데 /%s 밑에 있다", mv.SourceName, mv.ToSlug, parentSlug)
+		}
+	}
+
+	// covers가 실제로 반영됐는지
+	for _, cv := range curation.Covers {
+		var ok bool
+		err := sqlDB.QueryRow(`
+			SELECT c.cover_post_id IS NOT NULL AND c.cover_post_id = p.id
+			FROM categories c JOIN posts p ON p.notion_page_id = ?
+			WHERE c.slug = ?`, cv.NotionPageID, cv.Slug).Scan(&ok)
+		if err != nil {
+			return fmt.Errorf("표지 검증(%s): %w", cv.Slug, err)
+		}
+		fmt.Printf("/%s의 표지 글 지정%s\n", cv.Slug, mark(ok))
+		if !ok {
+			return fmt.Errorf("/%s에 표지 글이 안 붙었다", cv.Slug)
+		}
+	}
+
+	// 없애기로 한 카테고리가 실제로 사라졌는지
+	for _, dc := range curation.DropCategories {
+		var n int
+		if err := sqlDB.QueryRow(
+			`SELECT count(*) FROM categories WHERE source_name = ?`, dc.SourceName).Scan(&n); err != nil {
+			return fmt.Errorf("삭제 검증(%s): %w", dc.SourceName, err)
+		}
+		fmt.Printf("카테고리 %q 삭제됨%s\n", dc.SourceName, mark(n == 0))
+		if n != 0 {
+			return fmt.Errorf("카테고리 %q가 아직 있다", dc.SourceName)
+		}
 	}
 	return nil
 }

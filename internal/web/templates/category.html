@@ -1,6 +1,14 @@
 {{define "content"}}
 <h1>{{.Title}}</h1>
 
+{{/* 표지 글이 있으면 본문을 여기 펼친다. 목록보다 이게 알맹이인 분류가 있다. */}}
+{{if .Post}}
+<article>
+{{.Body}}
+</article>
+<p class="status"><a href="/p/{{.Post.Slug}}">이 글만 따로 보기</a></p>
+{{end}}
+
 {{if .Categories}}
 <h2>하위 분류</h2>
 <ul class="list">
@@ -15,15 +23,7 @@
 
 {{if .Posts}}
 <h2>글</h2>
-<ul class="list">
-  {{range .Posts}}
-  <li>
-    <a href="/p/{{.Slug}}">{{.Title}}</a>
-    {{if .IsCover}}<span class="cover">표지</span>{{end}}
-    <span class="status">{{.Status}}</span>
-  </li>
-  {{end}}
-</ul>
+{{template "posttree" .Posts}}
 {{end}}
 
 {{if and (not .Categories) (not .Posts)}}
