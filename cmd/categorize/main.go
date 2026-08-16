@@ -45,8 +45,19 @@ type plan struct {
 	// assignByPageID는 글 → 붙을 카테고리 이름. 빈 문자열이면 카테고리 없음.
 	assignByPageID map[string]string
 	noCategory     []string // 경로가 제목뿐이고 같은 이름의 카테고리도 없는 글
-	// coverPosts는 자기 카테고리에 붙인 최상위 페이지(표지 글)의 카테고리 이름이다.
-	coverPosts []string
+	// coverByCategory는 카테고리 이름 → 그 카테고리의 표지 글 page id다.
+	// 표지 글은 노션 최상위 페이지 자신이고, 카테고리당 하나뿐이다.
+	coverByCategory map[string]string
+}
+
+// coverCategories는 표지 글이 있는 카테고리 이름을 정렬해 돌려준다.
+func (p *plan) coverCategories() []string {
+	out := make([]string, 0, len(p.coverByCategory))
+	for name := range p.coverByCategory {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func main() {
@@ -94,7 +105,7 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 	}
 	defer rows.Close()
 
-	p := &plan{assignByPageID: map[string]string{}}
+	p := &plan{assignByPageID: map[string]string{}, coverByCategory: map[string]string{}}
 	l1Posts := map[string]int{}
 	l2Posts := map[string]int{}
 	l2Parent := map[string]string{}
@@ -147,15 +158,19 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 	// 여기서는 category_id만 이어둔다.
 	for _, o := range orphans {
 		if _, ok := l1Posts[o.title]; ok {
+			if prev, dup := p.coverByCategory[o.title]; dup {
+				// 같은 이름의 최상위 페이지가 둘이면 어느 쪽이 표지인지 알 수 없다.
+				return nil, fmt.Errorf(
+					"카테고리 %q의 표지 글 후보가 둘이다: %s, %s", o.title, prev, o.pageID)
+			}
 			l1Posts[o.title]++
 			p.assignByPageID[o.pageID] = o.title
-			p.coverPosts = append(p.coverPosts, o.title)
+			p.coverByCategory[o.title] = o.pageID
 			continue
 		}
 		p.noCategory = append(p.noCategory, o.pageID)
 		p.assignByPageID[o.pageID] = ""
 	}
-	sort.Strings(p.coverPosts)
 
 	for name, n := range l1Posts {
 		p.level1 = append(p.level1, node{name: name, slug: importer.Slugify(name), posts: n})
@@ -230,11 +245,11 @@ func printPlan(p *plan) {
 		}
 	}
 
-	if len(p.coverPosts) > 0 {
-		fmt.Printf("\n■ 자기 카테고리에 붙는 표지 글 %d건\n", len(p.coverPosts))
+	if len(p.coverByCategory) > 0 {
+		fmt.Printf("\n■ 자기 카테고리에 붙는 표지 글 %d건\n", len(p.coverByCategory))
 		fmt.Println("  노션 최상위 페이지 자신이다. 경로가 제목뿐이지만 그 제목이 카테고리 이름이라")
-		fmt.Println("  같은 이름의 카테고리에 붙인다. (스키마에 \"표지 글\" 표시 자리는 아직 없다)")
-		for _, name := range p.coverPosts {
+		fmt.Println("  같은 이름의 카테고리에 붙이고, categories.cover_post_id로도 이어둔다.")
+		for _, name := range p.coverCategories() {
 			fmt.Printf("      %s\n", name)
 		}
 	}
@@ -335,6 +350,30 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 			`UPDATE posts SET category_id = ?, updated_at = datetime('now') WHERE notion_page_id = ?`,
 			want, pageID); err != nil {
 			return 0, fmt.Errorf("posts 갱신(%s): %w", pageID, err)
+		}
+		changed++
+	}
+
+	// 표지 글을 카테고리 쪽에 이어둔다. 값이 이미 맞으면 건드리지 않는다.
+	for catName, pageID := range p.coverByCategory {
+		var want sql.NullInt64
+		err := tx.QueryRow(`SELECT id FROM posts WHERE notion_page_id = ?`, pageID).Scan(&want.Int64)
+		if err != nil {
+			return 0, fmt.Errorf("표지 글 조회(%s): %w", pageID, err)
+		}
+		want.Valid = true
+
+		var current sql.NullInt64
+		err = tx.QueryRow(`SELECT cover_post_id FROM categories WHERE source_name = ?`, catName).Scan(&current)
+		if err != nil {
+			return 0, fmt.Errorf("현재 표지 글 조회(%s): %w", catName, err)
+		}
+		if current.Valid && current.Int64 == want.Int64 {
+			continue
+		}
+		if _, err := tx.Exec(
+			`UPDATE categories SET cover_post_id = ? WHERE source_name = ?`, want.Int64, catName); err != nil {
+			return 0, fmt.Errorf("표지 글 연결(%s): %w", catName, err)
 		}
 		changed++
 	}
@@ -464,6 +503,43 @@ func verify(sqlDB *sql.DB, p *plan) error {
 	fmt.Printf("조상이 있는데 NULL인 글: %d건%s\n", badNull, mark(badNull == 0))
 	if badNull != 0 {
 		return fmt.Errorf("카테고리가 붙었어야 할 글이 NULL이다")
+	}
+
+	// 표지 글이 제대로 이어졌는지
+	var coverCount, coverBad int
+	if err := sqlDB.QueryRow(
+		`SELECT count(*) FROM categories WHERE cover_post_id IS NOT NULL`).Scan(&coverCount); err != nil {
+		return fmt.Errorf("표지 글 수 조회: %w", err)
+	}
+	err = sqlDB.QueryRow(`
+		SELECT count(*) FROM categories c
+		WHERE c.cover_post_id IS NOT NULL
+		  AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.id = c.cover_post_id)`).Scan(&coverBad)
+	if err != nil {
+		return fmt.Errorf("표지 글 참조 검사: %w", err)
+	}
+	fmt.Printf("표지 글이 이어진 카테고리: %d개 (계획 %d개)%s\n",
+		coverCount, len(p.coverByCategory), mark(coverCount == len(p.coverByCategory)))
+	if coverCount != len(p.coverByCategory) {
+		return fmt.Errorf("표지 글 수가 계획과 다르다")
+	}
+	fmt.Printf("없는 글을 가리키는 표지: %d개%s\n", coverBad, mark(coverBad == 0))
+	if coverBad != 0 {
+		return fmt.Errorf("cover_post_id가 깨졌다")
+	}
+
+	// 표지 글이 자기 카테고리에 속해 있는지
+	var coverMismatch int
+	err = sqlDB.QueryRow(`
+		SELECT count(*) FROM categories c
+		JOIN posts p ON p.id = c.cover_post_id
+		WHERE p.category_id IS NOT c.id`).Scan(&coverMismatch)
+	if err != nil {
+		return fmt.Errorf("표지 글 소속 검사: %w", err)
+	}
+	fmt.Printf("자기 카테고리에 속하지 않은 표지 글: %d개%s\n", coverMismatch, mark(coverMismatch == 0))
+	if coverMismatch != 0 {
+		return fmt.Errorf("표지 글이 다른 카테고리에 속해 있다")
 	}
 
 	// 다시 돌려도 안 바뀌어야 한다

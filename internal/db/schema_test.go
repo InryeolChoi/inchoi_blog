@@ -367,3 +367,115 @@ func TestCategorySourceNameAllowsMultipleNulls(t *testing.T) {
 		t.Errorf("NULL인 카테고리가 %d개다. 3개여야 한다", n)
 	}
 }
+
+// ---------- 004: cover_post_id ----------
+
+// coverFixture는 카테고리 하나와 그 안의 글 하나를 만든다.
+func coverFixture(t *testing.T, sqlDB *sql.DB) (catID, postID int64) {
+	t.Helper()
+	catID = insertCategory(t, sqlDB, "운영체제", nil)
+	now := time.Now().UTC()
+	res, err := sqlDB.Exec(`
+		INSERT INTO posts (slug, title, body, status, source, category_id, created_at, updated_at)
+		VALUES ('os', '운영체제', '', 'unlisted', 'notion', ?, ?, ?)`, catID, now, now)
+	if err != nil {
+		t.Fatalf("INSERT post: %v", err)
+	}
+	postID, err = res.LastInsertId()
+	if err != nil {
+		t.Fatalf("LastInsertId: %v", err)
+	}
+	return catID, postID
+}
+
+func TestCategoryCoverPostRoundTrip(t *testing.T) {
+	sqlDB := migratedDB(t)
+	catID, postID := coverFixture(t, sqlDB)
+
+	if _, err := sqlDB.Exec(
+		`UPDATE categories SET cover_post_id = ? WHERE id = ?`, postID, catID); err != nil {
+		t.Fatalf("표지 글 연결: %v", err)
+	}
+
+	var got int64
+	if err := sqlDB.QueryRow(
+		`SELECT cover_post_id FROM categories WHERE id = ?`, catID).Scan(&got); err != nil {
+		t.Fatalf("조회: %v", err)
+	}
+	if got != postID {
+		t.Errorf("cover_post_id = %d, want %d", got, postID)
+	}
+}
+
+// TestCategoryCoverPostForeignKey는 없는 글을 표지로 지정하지 못하는지 본다.
+func TestCategoryCoverPostForeignKey(t *testing.T) {
+	sqlDB := migratedDB(t)
+	catID, _ := coverFixture(t, sqlDB)
+
+	if _, err := sqlDB.Exec(
+		`UPDATE categories SET cover_post_id = 999999 WHERE id = ?`, catID); err == nil {
+		t.Error("없는 글을 표지로 지정하는 게 통과했다")
+	}
+}
+
+// TestCategoryCoverPostClearedOnDelete는 표지 글을 지우면 연결만 풀리고
+// 카테고리는 남는지 본다 (ON DELETE SET NULL).
+func TestCategoryCoverPostClearedOnDelete(t *testing.T) {
+	sqlDB := migratedDB(t)
+	catID, postID := coverFixture(t, sqlDB)
+
+	if _, err := sqlDB.Exec(
+		`UPDATE categories SET cover_post_id = ? WHERE id = ?`, postID, catID); err != nil {
+		t.Fatalf("표지 글 연결: %v", err)
+	}
+	// 글이 그 카테고리에 속해 있으면 category_id 외래키가 삭제를 막지 않는지 함께 본다.
+	if _, err := sqlDB.Exec(`DELETE FROM posts WHERE id = ?`, postID); err != nil {
+		t.Fatalf("글 삭제: %v", err)
+	}
+
+	var cover sql.NullInt64
+	var cnt int
+	if err := sqlDB.QueryRow(
+		`SELECT count(*), max(cover_post_id) FROM categories WHERE id = ?`, catID).Scan(&cnt, &cover); err != nil {
+		t.Fatalf("조회: %v", err)
+	}
+	if cnt != 1 {
+		t.Fatalf("카테고리가 사라졌다")
+	}
+	if cover.Valid {
+		t.Errorf("표지 연결이 안 풀렸다: %d", cover.Int64)
+	}
+}
+
+// TestCategoryCoverPostIsUnique는 한 글이 두 카테고리의 표지가 되지 못하는지 본다.
+func TestCategoryCoverPostIsUnique(t *testing.T) {
+	sqlDB := migratedDB(t)
+	catA, postID := coverFixture(t, sqlDB)
+	catB := insertCategory(t, sqlDB, "네트워크", nil)
+
+	if _, err := sqlDB.Exec(
+		`UPDATE categories SET cover_post_id = ? WHERE id = ?`, postID, catA); err != nil {
+		t.Fatalf("첫 연결: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`UPDATE categories SET cover_post_id = ? WHERE id = ?`, postID, catB); err == nil {
+		t.Error("같은 글이 두 카테고리의 표지가 됐다")
+	}
+}
+
+// TestCategoryCoverPostAllowsMultipleNulls는 표지가 없는 카테고리가
+// 여럿 있어도 되는지 본다.
+func TestCategoryCoverPostAllowsMultipleNulls(t *testing.T) {
+	sqlDB := migratedDB(t)
+	for _, name := range []string{"a", "b", "c"} {
+		insertCategory(t, sqlDB, name, nil)
+	}
+	var n int
+	if err := sqlDB.QueryRow(
+		`SELECT count(*) FROM categories WHERE cover_post_id IS NULL`).Scan(&n); err != nil {
+		t.Fatalf("조회: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("표지 없는 카테고리가 %d개다. 3개여야 한다", n)
+	}
+}
