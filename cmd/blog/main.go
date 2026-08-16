@@ -1,18 +1,21 @@
 // blog는 블로그 서버다. 시작할 때 스키마 마이그레이션을 적용하고 HTTP를 연다.
+//
+// 지금은 읽기 전용 공개 페이지만 있다. 인증도 접근 제어도 없고
+// status(draft/unlisted/published)를 가리지 않는다. 로컬 확인용이다.
 package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/inryeol/blog"
 	"github.com/inryeol/blog/internal/db"
+	"github.com/inryeol/blog/internal/web"
 )
 
 func main() {
-	addr := flag.String("addr", ":8080", "HTTP 리스닝 주소")
+	addr := flag.String("addr", "127.0.0.1:8080", "HTTP 리스닝 주소")
 	dbPath := flag.String("db", "blog.db", "SQLite 파일 경로")
 	flag.Parse()
 
@@ -30,23 +33,13 @@ func main() {
 		log.Printf("마이그레이션 적용: %s", name)
 	}
 
-	// TODO: html/template + embed.FS로 실제 페이지를 렌더링한다. 지금은 연결 확인용.
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		var published, total int
-		err := sqlDB.QueryRowContext(r.Context(),
-			`SELECT count(*) FILTER (WHERE status = 'published'), count(*) FROM posts`,
-		).Scan(&published, &total)
-		if err != nil {
-			log.Printf("글 수 조회: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintf(w, "blog: 발행 %d건 / 전체 %d건\n", published, total)
-	})
+	srv, err := web.New(sqlDB)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	log.Printf("%s 에서 대기 중 (db: %s)", *addr, *dbPath)
-	if err := http.ListenAndServe(*addr, mux); err != nil {
+	log.Printf("http://%s 에서 대기 중 (db: %s)", *addr, *dbPath)
+	if err := http.ListenAndServe(*addr, srv.Handler()); err != nil {
 		log.Fatal(err)
 	}
 }

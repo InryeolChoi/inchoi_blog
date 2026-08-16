@@ -1,0 +1,56 @@
+// Package markdown은 글 본문(마크다운)을 HTML로 바꾼다.
+//
+// goldmark를 쓴다. CommonMark 명세를 그대로 따르고, 순수 Go라 cgo 없이 빌드되며,
+// 파서와 렌더러를 확장할 수 있다. 확장이 필요한 이유는 수식 때문이다 — math.go 참고.
+// gomarkdown이나 blackfriday는 CommonMark 준수도가 낮고 확장 지점이 마땅치 않다.
+package markdown
+
+import (
+	"bytes"
+	"html/template"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
+)
+
+// Renderer는 마크다운을 HTML로 바꾼다. 여러 고루틴에서 같이 써도 된다.
+type Renderer struct {
+	md goldmark.Markdown
+}
+
+// New는 이 프로젝트의 본문에 맞춘 렌더러를 만든다.
+func New() *Renderer {
+	return &Renderer{
+		md: goldmark.New(
+			goldmark.WithExtensions(
+				// 변환기가 표, ~~취소선~~, - [x] 체크박스를 만들어낸다. 전부 GFM 확장이다.
+				extension.GFM,
+				&mathExtension{},
+			),
+			goldmark.WithParserOptions(
+				// 제목에 id를 달아 목차와 앵커 링크에 쓴다.
+				parser.WithAutoHeadingID(),
+			),
+			goldmark.WithRendererOptions(
+				// 변환기가 <details>, <u>, <br>, 빈 블록 주석을 그대로 넣는다.
+				// 이건 우리가 만든 것이라 통과시킨다.
+				//
+				// 다만 본문은 결국 사람이 웹에서 고칠 것이므로, 신뢰할 수 없는 입력이
+				// 들어오기 시작하면 여기서 HTML을 막고 허용 목록을 두거나
+				// 정제 단계를 넣어야 한다.
+				html.WithUnsafe(),
+			),
+		),
+	}
+}
+
+// Render는 마크다운을 HTML로 바꾼다.
+func (r *Renderer) Render(source string) (template.HTML, error) {
+	var buf bytes.Buffer
+	if err := r.md.Convert([]byte(source), &buf); err != nil {
+		return "", err
+	}
+	return template.HTML(buf.String()), nil
+}

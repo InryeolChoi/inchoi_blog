@@ -1,0 +1,13 @@
+{{define "content"}}
+<h1>카테고리</h1>
+<ul class="list">
+  {{range .Categories}}
+  <li>
+    <a href="/{{.Slug}}">{{.Name}}</a>
+    <span class="count">글 {{.PostCount}}건</span>
+  </li>
+  {{else}}
+  <li>카테고리가 없다.</li>
+  {{end}}
+</ul>
+{{end}}

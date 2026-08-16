@@ -2,7 +2,10 @@ module github.com/inryeol/blog
 
 go 1.26.6
 
-require modernc.org/sqlite v1.56.0
+require (
+	github.com/yuin/goldmark v1.8.5
+	modernc.org/sqlite v1.56.0
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
