@@ -44,7 +44,9 @@ type plan struct {
 	level2 []node
 	// assignByPageID는 글 → 붙을 카테고리 이름. 빈 문자열이면 카테고리 없음.
 	assignByPageID map[string]string
-	noCategory     []string // 경로가 제목뿐이라 카테고리가 없는 글
+	noCategory     []string // 경로가 제목뿐이고 같은 이름의 카테고리도 없는 글
+	// coverPosts는 자기 카테고리에 붙인 최상위 페이지(표지 글)의 카테고리 이름이다.
+	coverPosts []string
 }
 
 func main() {
@@ -86,7 +88,7 @@ func main() {
 }
 
 func buildPlan(sqlDB *sql.DB) (*plan, error) {
-	rows, err := sqlDB.Query(`SELECT notion_page_id, original_path FROM posts`)
+	rows, err := sqlDB.Query(`SELECT notion_page_id, title, original_path FROM posts`)
 	if err != nil {
 		return nil, fmt.Errorf("posts 조회: %w", err)
 	}
@@ -97,17 +99,21 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 	l2Posts := map[string]int{}
 	l2Parent := map[string]string{}
 
+	// 조상이 없는 글은 카테고리 이름이 다 모인 뒤에 다시 본다.
+	// 노션 최상위 페이지 자신이 여기 해당하는데, 그 제목이 곧 카테고리 이름이다.
+	type orphan struct{ pageID, title string }
+	var orphans []orphan
+
 	for rows.Next() {
-		var pageID string
+		var pageID, title string
 		var path sql.NullString
-		if err := rows.Scan(&pageID, &path); err != nil {
+		if err := rows.Scan(&pageID, &title, &path); err != nil {
 			return nil, fmt.Errorf("posts 스캔: %w", err)
 		}
 
 		a := importer.AssignCategory(pageID, path.String)
 		if a.Level1 == "" {
-			p.noCategory = append(p.noCategory, pageID)
-			p.assignByPageID[pageID] = ""
+			orphans = append(orphans, orphan{pageID, title})
 			continue
 		}
 
@@ -132,6 +138,24 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("posts 조회: %w", err)
 	}
+
+	// 노션 최상위 페이지는 경로가 자기 제목뿐이라 조상이 없다. 하지만 그 제목은
+	// 하위 글들의 경로에서 상위 카테고리 이름으로 이미 등장한다. 제목이 그 이름과
+	// 맞으면 자기 카테고리의 표지 글로 붙인다.
+	//
+	// 지금 스키마에는 "표지 글"을 표시할 자리가 없다. 그건 나중에 컬럼을 더할 일이고,
+	// 여기서는 category_id만 이어둔다.
+	for _, o := range orphans {
+		if _, ok := l1Posts[o.title]; ok {
+			l1Posts[o.title]++
+			p.assignByPageID[o.pageID] = o.title
+			p.coverPosts = append(p.coverPosts, o.title)
+			continue
+		}
+		p.noCategory = append(p.noCategory, o.pageID)
+		p.assignByPageID[o.pageID] = ""
+	}
+	sort.Strings(p.coverPosts)
 
 	for name, n := range l1Posts {
 		p.level1 = append(p.level1, node{name: name, slug: importer.Slugify(name), posts: n})
@@ -206,9 +230,18 @@ func printPlan(p *plan) {
 		}
 	}
 
+	if len(p.coverPosts) > 0 {
+		fmt.Printf("\n■ 자기 카테고리에 붙는 표지 글 %d건\n", len(p.coverPosts))
+		fmt.Println("  노션 최상위 페이지 자신이다. 경로가 제목뿐이지만 그 제목이 카테고리 이름이라")
+		fmt.Println("  같은 이름의 카테고리에 붙인다. (스키마에 \"표지 글\" 표시 자리는 아직 없다)")
+		for _, name := range p.coverPosts {
+			fmt.Printf("      %s\n", name)
+		}
+	}
+
 	if len(p.noCategory) > 0 {
 		fmt.Printf("\n■ 카테고리가 없는 글 %d건\n", len(p.noCategory))
-		fmt.Println("  original_path가 글 제목뿐이라 조상이 없다. category_id를 NULL로 둔다.")
+		fmt.Println("  조상도 없고 같은 이름의 카테고리도 없다. category_id를 NULL로 둔다.")
 	}
 }
 
