@@ -99,34 +99,6 @@ func TestNotionPageIDUniqueAllowsMultipleNulls(t *testing.T) {
 	}
 }
 
-// TestCategoryDepthLimit는 카테고리가 2단계를 넘지 못하게 막는 트리거를 확인한다.
-func TestCategoryDepthLimit(t *testing.T) {
-	sqlDB := migratedDB(t)
-
-	if _, err := sqlDB.Exec(`INSERT INTO categories (id, parent_id, name, slug) VALUES (1, NULL, '개발', 'dev')`); err != nil {
-		t.Fatalf("1단계 카테고리: %v", err)
-	}
-	if _, err := sqlDB.Exec(`INSERT INTO categories (id, parent_id, name, slug) VALUES (2, 1, 'Go', 'go')`); err != nil {
-		t.Fatalf("2단계 카테고리: %v", err)
-	}
-
-	_, err := sqlDB.Exec(`INSERT INTO categories (id, parent_id, name, slug) VALUES (3, 2, '동시성', 'concurrency')`)
-	if err == nil {
-		t.Fatal("3단계 카테고리가 통과했다")
-	}
-	if !strings.Contains(err.Error(), "2단계") {
-		t.Errorf("에러 메시지가 기대와 다르다: %v", err)
-	}
-
-	// UPDATE로 우회하는 것도 막혀야 한다.
-	if _, err := sqlDB.Exec(`INSERT INTO categories (id, parent_id, name, slug) VALUES (4, NULL, '기타', 'misc')`); err != nil {
-		t.Fatalf("최상위 카테고리: %v", err)
-	}
-	if _, err := sqlDB.Exec(`UPDATE categories SET parent_id = 2 WHERE id = 4`); err == nil {
-		t.Error("UPDATE로 3단계가 만들어졌다")
-	}
-}
-
 // TestPostTagsCascade는 글을 지우면 태그 연결만 사라지고 태그 자체는 남는지 확인한다.
 func TestPostTagsCascade(t *testing.T) {
 	sqlDB := migratedDB(t)
@@ -177,5 +149,221 @@ func TestImageSha256IsUnique(t *testing.T) {
 	}
 	if err := insert(); err == nil {
 		t.Error("같은 sha256이 두 번 들어갔다 (중복 제거가 안 된다)")
+	}
+}
+
+// ---------- 002: 카테고리 3단계 ----------
+
+// insertCategory는 카테고리를 하나 넣고 id를 돌려준다.
+func insertCategory(t *testing.T, sqlDB *sql.DB, name string, parentID any) int64 {
+	t.Helper()
+	res, err := sqlDB.Exec(
+		`INSERT INTO categories (name, slug, parent_id) VALUES (?, ?, ?)`, name, name, parentID)
+	if err != nil {
+		t.Fatalf("카테고리 %q 삽입: %v", name, err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("LastInsertId: %v", err)
+	}
+	return id
+}
+
+// TestCategoryDepth3IsAllowed는 3단계까지는 들어가는지 본다.
+func TestCategoryDepth3IsAllowed(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	l1 := insertCategory(t, sqlDB, "dev", nil)
+	l2 := insertCategory(t, sqlDB, "Language", l1)
+	insertCategory(t, sqlDB, "프로그래밍 언어", l2)
+
+	var depth3 int
+	err := sqlDB.QueryRow(`
+		SELECT count(*) FROM categories c
+		JOIN categories p ON c.parent_id = p.id
+		WHERE p.parent_id IS NOT NULL`).Scan(&depth3)
+	if err != nil {
+		t.Fatalf("깊이 조회: %v", err)
+	}
+	if depth3 != 1 {
+		t.Errorf("3단계가 %d개다. 1개여야 한다", depth3)
+	}
+}
+
+// TestCategoryDepth4InsertIsBlocked는 4단계 삽입이 막히는지 본다.
+func TestCategoryDepth4InsertIsBlocked(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	l1 := insertCategory(t, sqlDB, "dev", nil)
+	l2 := insertCategory(t, sqlDB, "Language", l1)
+	l3 := insertCategory(t, sqlDB, "프로그래밍 언어", l2)
+
+	_, err := sqlDB.Exec(
+		`INSERT INTO categories (name, slug, parent_id) VALUES ('Java', 'java', ?)`, l3)
+	if err == nil {
+		t.Fatal("4단계 삽입이 통과했다")
+	}
+	if !strings.Contains(err.Error(), "3단계") {
+		t.Errorf("에러 메시지가 기대와 다르다: %v", err)
+	}
+}
+
+// TestCategoryMoveLeafRespectsDepth는 자식 없는 노드를 옮길 때
+// 부모 깊이만 보고 판정하는지 확인한다.
+func TestCategoryMoveLeafRespectsDepth(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	l1 := insertCategory(t, sqlDB, "dev", nil)
+	l2 := insertCategory(t, sqlDB, "Language", l1)
+	l3 := insertCategory(t, sqlDB, "프로그래밍 언어", l2)
+	leaf := insertCategory(t, sqlDB, "떠도는것", nil)
+
+	// 깊이 2 밑으로 = 3단계. 허용돼야 한다.
+	if _, err := sqlDB.Exec(`UPDATE categories SET parent_id = ? WHERE id = ?`, l2, leaf); err != nil {
+		t.Fatalf("깊이 2 밑으로 이동이 막혔다: %v", err)
+	}
+	// 깊이 3 밑으로 = 4단계. 막혀야 한다.
+	if _, err := sqlDB.Exec(`UPDATE categories SET parent_id = ? WHERE id = ?`, l3, leaf); err == nil {
+		t.Error("깊이 3 밑으로 이동이 통과했다")
+	}
+}
+
+// TestCategoryMoveSubtreeCountsChildren은 자식을 데리고 옮길 때
+// 그 자식들의 깊이까지 계산하는지 본다.
+//
+// 001의 트리거는 이걸 못 봐서, 자식이 있는 최상위 노드를 다른 최상위 밑으로
+// 옮기면 3단계가 조용히 생겼다. 그때는 2단계가 상한이었으므로 위반이었다.
+func TestCategoryMoveSubtreeCountsChildren(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	newTop := insertCategory(t, sqlDB, "dev", nil)
+
+	// 자식 하나만 있는 노드(높이 1) → 깊이 1 밑으로 가면 3단계. 허용.
+	oneLevel := insertCategory(t, sqlDB, "Language", nil)
+	insertCategory(t, sqlDB, "프로그래밍 언어", oneLevel)
+	if _, err := sqlDB.Exec(`UPDATE categories SET parent_id = ? WHERE id = ?`, newTop, oneLevel); err != nil {
+		t.Fatalf("높이 1짜리 서브트리 이동이 막혔다: %v", err)
+	}
+
+	// 손자까지 있는 노드(높이 2) → 어디로 옮겨도 4단계. 막혀야 한다.
+	twoLevel := insertCategory(t, sqlDB, "네트워크", nil)
+	mid := insertCategory(t, sqlDB, "HTTP", twoLevel)
+	insertCategory(t, sqlDB, "상태코드", mid)
+
+	_, err := sqlDB.Exec(`UPDATE categories SET parent_id = ? WHERE id = ?`, newTop, twoLevel)
+	if err == nil {
+		t.Fatal("높이 2짜리 서브트리를 옮기는 게 통과했다 (4단계가 된다)")
+	}
+	if !strings.Contains(err.Error(), "3단계") {
+		t.Errorf("에러 메시지가 기대와 다르다: %v", err)
+	}
+}
+
+// TestCategoryMoveSubtreeUnderDepth2IsBlocked는 자식 있는 노드를
+// 깊이 2 밑으로 옮기면 막히는지 본다 (1+1+... = 4단계).
+func TestCategoryMoveSubtreeUnderDepth2IsBlocked(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	l1 := insertCategory(t, sqlDB, "dev", nil)
+	l2 := insertCategory(t, sqlDB, "Language", l1)
+
+	withChild := insertCategory(t, sqlDB, "웹", nil)
+	insertCategory(t, sqlDB, "React", withChild)
+
+	_, err := sqlDB.Exec(`UPDATE categories SET parent_id = ? WHERE id = ?`, l2, withChild)
+	if err == nil {
+		t.Fatal("자식 있는 노드를 깊이 2 밑으로 옮기는 게 통과했다")
+	}
+}
+
+// TestCategorySelfParentIsBlocked는 자기 자신을 부모로 삼는 걸 막는지 본다.
+// 깊이 계산이 무한히 도는 상태다.
+func TestCategorySelfParentIsBlocked(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	id := insertCategory(t, sqlDB, "dev", nil)
+	_, err := sqlDB.Exec(`UPDATE categories SET parent_id = ? WHERE id = ?`, id, id)
+	if err == nil {
+		t.Fatal("자기 자신을 부모로 삼는 게 통과했다")
+	}
+	if !strings.Contains(err.Error(), "자기 자신") {
+		t.Errorf("에러 메시지가 기대와 다르다: %v", err)
+	}
+}
+
+// TestCategoryMoveToTopLevelAlwaysAllowed는 최상위로 빼는 건
+// 언제나 허용되는지 본다 (깊이가 줄어드는 방향이다).
+func TestCategoryMoveToTopLevelAlwaysAllowed(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	l1 := insertCategory(t, sqlDB, "dev", nil)
+	l2 := insertCategory(t, sqlDB, "Language", l1)
+	insertCategory(t, sqlDB, "프로그래밍 언어", l2)
+
+	if _, err := sqlDB.Exec(`UPDATE categories SET parent_id = NULL WHERE id = ?`, l2); err != nil {
+		t.Errorf("최상위로 빼는 게 막혔다: %v", err)
+	}
+}
+
+// ---------- 003: source_name ----------
+
+// TestCategorySourceNameSurvivesRename은 이름과 slug를 바꿔도
+// source_name이 그대로 남는지 본다. 이게 categorize의 멱등 키다.
+func TestCategorySourceNameSurvivesRename(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	_, err := sqlDB.Exec(`
+		INSERT INTO categories (name, slug, source_name) VALUES ('소프트스킬', '소프트스킬', '소프트스킬')`)
+	if err != nil {
+		t.Fatalf("INSERT: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`UPDATE categories SET name = 'tooling', slug = 'tooling' WHERE source_name = '소프트스킬'`); err != nil {
+		t.Fatalf("이름 변경: %v", err)
+	}
+
+	var name, slug string
+	err = sqlDB.QueryRow(
+		`SELECT name, slug FROM categories WHERE source_name = '소프트스킬'`).Scan(&name, &slug)
+	if err != nil {
+		t.Fatalf("source_name으로 못 찾는다: %v", err)
+	}
+	if name != "tooling" || slug != "tooling" {
+		t.Errorf("이름 변경이 반영되지 않았다: %q %q", name, slug)
+	}
+}
+
+// TestCategorySourceNameIsUnique는 같은 경로 이름이 두 번 들어가지 않는지 본다.
+func TestCategorySourceNameIsUnique(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	if _, err := sqlDB.Exec(
+		`INSERT INTO categories (name, slug, source_name) VALUES ('a', 'a', '운영체제')`); err != nil {
+		t.Fatalf("첫 INSERT: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO categories (name, slug, source_name) VALUES ('b', 'b', '운영체제')`); err == nil {
+		t.Error("같은 source_name이 두 번 들어갔다")
+	}
+}
+
+// TestCategorySourceNameAllowsMultipleNulls는 사람이 만든 상위 분류가
+// 여럿 있어도 되는지 본다. 그런 건 경로에서 온 게 아니라 source_name이 NULL이다.
+func TestCategorySourceNameAllowsMultipleNulls(t *testing.T) {
+	sqlDB := migratedDB(t)
+
+	for _, slug := range []string{"dev", "cs-theory", "algorithm"} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO categories (name, slug, source_name) VALUES (?, ?, NULL)`, slug, slug); err != nil {
+			t.Fatalf("source_name이 NULL인 카테고리 %q: %v", slug, err)
+		}
+	}
+	var n int
+	if err := sqlDB.QueryRow(
+		`SELECT count(*) FROM categories WHERE source_name IS NULL`).Scan(&n); err != nil {
+		t.Fatalf("조회: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("NULL인 카테고리가 %d개다. 3개여야 한다", n)
 	}
 }

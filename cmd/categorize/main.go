@@ -3,8 +3,11 @@
 //	original_path: "운영체제 > part 4 : 메모리 관리 > 공룡책 9장 > 3. 페이징"
 //	              └ 1단계 ┘ └────── 2단계 ──────┘ └ 버림 ┘ └ 글 제목 ┘
 //
-// 경로의 마지막 요소는 글 제목 자신이라 카테고리로 쓰지 않는다. 카테고리는 최대
-// 2단계라 3번째 이후 조상도 버린다.
+// 경로의 마지막 요소는 글 제목 자신이라 카테고리로 쓰지 않는다. 경로에서는 앞의
+// 두 개만 쓰고 3번째 이후 조상은 버린다.
+//
+// 여기서 만든 상위 카테고리를 다시 더 큰 분류로 묶는 건 cmd/regroup이 한다.
+// 이 도구는 이미 있는 행의 parent_id를 건드리지 않으므로 그 묶음이 유지된다.
 //
 // 기본은 미리보기다. 실제로 DB를 고치려면 -apply를 준다.
 //
@@ -220,22 +223,40 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 
 	idByName := map[string]int64{}
 
-	upsert := func(n node, parentID any, order int) error {
-		// slug가 멱등 키다. 다시 돌려도 행이 늘지 않는다.
-		_, err := tx.Exec(`
-			INSERT INTO categories (parent_id, name, slug, sort_order)
-			VALUES (?, ?, ?, ?)
-			ON CONFLICT (slug) DO UPDATE SET
+	// keepParent가 true면 이미 있는 행의 parent_id를 건드리지 않는다.
+	//
+	// original_path가 알려주는 건 "19개 노션 최상위 + 그 아래 66개"까지다. 그 19개를
+	// 다시 더 큰 분류(dev, cs-theory 등) 밑으로 묶는 건 cmd/regroup이 하는 별개의
+	// 수작업 층이다. 여기서 parent_id를 NULL로 덮으면 그 묶음이 매번 풀린다.
+	upsert := func(n node, parentID any, order int, keepParent bool) error {
+		// source_name이 멱등 키다. slug가 아니다.
+		//
+		// slug를 키로 쓰면 사람이 카테고리 이름을 바꿨을 때(소프트스킬 → tooling)
+		// 여기서 못 찾고 옛 이름으로 새로 만들어버린다. 글도 새 쪽으로 딸려간다.
+		// source_name은 경로에서 온 이름이라 사람이 바꾸지 않는다.
+		//
+		// name/slug는 처음 만들 때만 정한다. 이미 있으면 사람이 바꿔둔 걸 존중한다.
+		stmt := `
+			INSERT INTO categories (parent_id, name, slug, sort_order, source_name)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (source_name) DO UPDATE SET
 				parent_id  = excluded.parent_id,
-				name       = excluded.name,
-				sort_order = excluded.sort_order`,
-			parentID, n.name, n.slug, order)
+				sort_order = excluded.sort_order`
+		if keepParent {
+			stmt = `
+			INSERT INTO categories (parent_id, name, slug, sort_order, source_name)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (source_name) DO UPDATE SET
+				sort_order = excluded.sort_order`
+		}
+		_, err := tx.Exec(stmt, parentID, n.name, n.slug, order, n.name)
 		if err != nil {
 			return fmt.Errorf("categories upsert(%s): %w", n.name, err)
 		}
 		var id int64
-		if err := tx.QueryRow(`SELECT id FROM categories WHERE slug = ?`, n.slug).Scan(&id); err != nil {
-			return fmt.Errorf("categories id 조회(%s): %w", n.slug, err)
+		if err := tx.QueryRow(
+			`SELECT id FROM categories WHERE source_name = ?`, n.name).Scan(&id); err != nil {
+			return fmt.Errorf("categories id 조회(%s): %w", n.name, err)
 		}
 		idByName[n.name] = id
 		return nil
@@ -243,7 +264,7 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 
 	// 1단계를 먼저 넣어야 2단계가 부모 id를 참조할 수 있다.
 	for i, n := range p.level1 {
-		if err := upsert(n, nil, i); err != nil {
+		if err := upsert(n, nil, i, true); err != nil {
 			return 0, err
 		}
 	}
@@ -252,7 +273,7 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 		if !ok {
 			return 0, fmt.Errorf("2단계 %q의 부모 %q를 못 찾았다", n.name, n.parent)
 		}
-		if err := upsert(n, parentID, i); err != nil {
+		if err := upsert(n, parentID, i, false); err != nil {
 			return 0, err
 		}
 	}
@@ -304,32 +325,61 @@ func verify(sqlDB *sql.DB, p *plan) error {
 	fmt.Println("검증")
 	fmt.Println(rule)
 
-	var l1, l2 int
-	if err := sqlDB.QueryRow(`SELECT count(*) FROM categories WHERE parent_id IS NULL`).Scan(&l1); err != nil {
-		return fmt.Errorf("1단계 수 조회: %w", err)
+	// 계획한 카테고리가 전부 있는지 본다.
+	//
+	// "1단계가 몇 개인가"로 세지 않는다. 경로에서 뽑은 19개는 cmd/regroup이 더 큰
+	// 분류 밑으로 옮겨놨을 수 있어서, 절대 깊이로 판정하면 멀쩡한 상태를 실패로 본다.
+	// 대신 계획한 slug가 존재하는지와 부모 관계가 맞는지를 본다.
+	missing := 0
+	for _, n := range append(append([]node{}, p.level1...), p.level2...) {
+		var cnt int
+		if err := sqlDB.QueryRow(
+			`SELECT count(*) FROM categories WHERE source_name = ?`, n.name).Scan(&cnt); err != nil {
+			return fmt.Errorf("카테고리 존재 확인(%s): %w", n.name, err)
+		}
+		if cnt == 0 {
+			missing++
+		}
 	}
-	if err := sqlDB.QueryRow(`SELECT count(*) FROM categories WHERE parent_id IS NOT NULL`).Scan(&l2); err != nil {
-		return fmt.Errorf("2단계 수 조회: %w", err)
-	}
-	fmt.Printf("\n카테고리: 1단계 %d개, 2단계 %d개 (계획 %d/%d)%s\n",
-		l1, l2, len(p.level1), len(p.level2),
-		mark(l1 == len(p.level1) && l2 == len(p.level2)))
-	if l1 != len(p.level1) || l2 != len(p.level2) {
-		return fmt.Errorf("카테고리 개수가 계획과 다르다")
+	fmt.Printf("\n계획한 카테고리 %d개 중 DB에 없는 것: %d개%s\n",
+		len(p.level1)+len(p.level2), missing, mark(missing == 0))
+	if missing != 0 {
+		return fmt.Errorf("계획한 카테고리가 DB에 없다")
 	}
 
-	// 3단계가 생기지 않았는지. 스키마 트리거가 막지만 직접 확인한다.
-	var depth3 int
+	// 하위 카테고리가 계획한 부모를 가리키는지
+	wrongParent := 0
+	for _, n := range p.level2 {
+		var parentSource sql.NullString
+		err := sqlDB.QueryRow(`
+			SELECT pp.source_name FROM categories c
+			LEFT JOIN categories pp ON c.parent_id = pp.id
+			WHERE c.source_name = ?`, n.name).Scan(&parentSource)
+		if err != nil {
+			return fmt.Errorf("부모 확인(%s): %w", n.name, err)
+		}
+		if !parentSource.Valid || parentSource.String != n.parent {
+			wrongParent++
+		}
+	}
+	fmt.Printf("부모가 계획과 다른 하위 카테고리: %d개%s\n", wrongParent, mark(wrongParent == 0))
+	if wrongParent != 0 {
+		return fmt.Errorf("하위 카테고리의 부모가 계획과 다르다")
+	}
+
+	// 4단계가 생기지 않았는지. 스키마 트리거가 막지만 직접 확인한다.
+	var depth4 int
 	err := sqlDB.QueryRow(`
 		SELECT count(*) FROM categories c
 		JOIN categories p ON c.parent_id = p.id
-		WHERE p.parent_id IS NOT NULL`).Scan(&depth3)
+		JOIN categories g ON p.parent_id = g.id
+		WHERE g.parent_id IS NOT NULL`).Scan(&depth4)
 	if err != nil {
 		return fmt.Errorf("깊이 검사: %w", err)
 	}
-	fmt.Printf("3단계 이상 카테고리: %d개%s\n", depth3, mark(depth3 == 0))
-	if depth3 != 0 {
-		return fmt.Errorf("카테고리가 2단계를 넘었다")
+	fmt.Printf("4단계 이상 카테고리: %d개%s\n", depth4, mark(depth4 == 0))
+	if depth4 != 0 {
+		return fmt.Errorf("카테고리가 3단계를 넘었다")
 	}
 
 	// 부모가 실제로 존재하는지 (외래키가 보장하지만 명시적으로 본다)
