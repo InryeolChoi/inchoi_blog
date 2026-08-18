@@ -2,7 +2,9 @@ package web
 
 import (
 	"net/http"
+	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -303,5 +305,77 @@ func TestResolveBodyWithoutOriginalPath(t *testing.T) {
 	}
 	if out != body || fix.Left != 1 {
 		t.Errorf("got %q fix=%+v", out, fix)
+	}
+}
+
+// TestPostPageHasOutline은 제목이 충분히 많은 글에 목차가 붙고 앵커가 본문의
+// id와 맞는지 본다.
+func TestPostPageHasOutline(t *testing.T) {
+	srv, h := inlineFixture(t)
+
+	body := "## 하나\n\n가\n\n## 둘\n\n나\n\n### 셋\n\n다\n"
+	if _, err := srv.store.db.Exec(`UPDATE posts SET body = ? WHERE slug = 'r-tips'`, body); err != nil {
+		t.Fatal(err)
+	}
+
+	page := get(t, h, "/p/r-tips").Body.String()
+	if !strings.Contains(page, `<nav class="toc"`) {
+		t.Fatal("목차가 없다")
+	}
+	// href의 조각은 URL 인코딩된다. 디코딩해서 본문 id와 맞춰본다.
+	for _, want := range []string{"하나", "둘", "셋"} {
+		frag := regexp.MustCompile(`href="#([^"]+)"`)
+		found := false
+		for _, m := range frag.FindAllStringSubmatch(page, -1) {
+			if dec, err := url.QueryUnescape(m[1]); err == nil && dec == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q로 가는 목차 링크가 없다", want)
+		}
+	}
+	for _, want := range []string{`<h2 id="하나">`, `<h2 id="둘">`, `<h3 id="셋">`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("본문 앵커 %q가 없다", want)
+		}
+	}
+}
+
+// TestPostPageSkipsShortOutline은 제목이 몇 개 안 되는 글에는 목차를 안 붙이는지
+// 본다. 한두 줄짜리 목차는 자리만 차지한다.
+func TestPostPageSkipsShortOutline(t *testing.T) {
+	srv, h := inlineFixture(t)
+
+	if _, err := srv.store.db.Exec(
+		`UPDATE posts SET body = '## 하나' || char(10) || char(10) || '가' WHERE slug = 'r-tips'`); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(get(t, h, "/p/r-tips").Body.String(), `<nav class="toc"`) {
+		t.Error("제목 1개짜리에 목차가 붙었다")
+	}
+}
+
+// TestOutlineUsesResolvedBody는 목차를 "손본 뒤의 본문"에서 뽑는지 본다.
+// 인라인 데이터베이스를 펼치면 raw HTML이 끼어드는데, 그걸 넣기 전 원문으로
+// 목차를 뽑으면 앵커 번호가 어긋날 수 있다.
+func TestOutlineUsesResolvedBody(t *testing.T) {
+	srv, _ := inlineFixture(t)
+
+	post, err := srv.store.PostBySlug("owner")
+	if err != nil || post == nil {
+		t.Fatalf("PostBySlug: %v", err)
+	}
+	rendered, err := srv.renderPostBody(post)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rendered.HTML), `<a href="/p/row-1">1. 파일 다루기</a>`) {
+		t.Error("본문이 안 펼쳐졌다")
+	}
+	for _, h := range rendered.Outline {
+		if !strings.Contains(string(rendered.HTML), `id="`+h.ID+`"`) {
+			t.Errorf("본문에 없는 앵커: %q", h.ID)
+		}
 	}
 }

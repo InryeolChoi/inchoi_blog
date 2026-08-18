@@ -46,10 +46,19 @@ func New() *Renderer {
 	}
 }
 
+// newParseContext는 파싱 한 번에 쓸 문맥을 만든다.
+//
+// 제목 앵커 생성기를 갈아끼우려고 있다. 생성기는 이미 쓴 id를 기억하는 상태를
+// 들고 있어서 파싱마다 새로 만들어야 한다 — 돌려 쓰면 두 번째 글부터 앵커에
+// -1, -2가 붙는다.
+func newParseContext() parser.Context {
+	return parser.NewContext(parser.WithIDs(newHeadingIDs()))
+}
+
 // Render는 마크다운을 HTML로 바꾼다.
 func (r *Renderer) Render(source string) (template.HTML, error) {
 	var buf bytes.Buffer
-	if err := r.md.Convert([]byte(source), &buf); err != nil {
+	if err := r.md.Convert([]byte(source), &buf, parser.WithContext(newParseContext())); err != nil {
 		return "", err
 	}
 	return template.HTML(buf.String()), nil

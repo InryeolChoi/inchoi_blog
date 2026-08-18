@@ -86,6 +86,8 @@ type pageData struct {
 	Posts      []PostSummary
 	Post       *Post
 	Body       template.HTML
+	// Outline은 본문에서 뽑은 목차다. 짧은 글에는 안 붙인다.
+	Outline []markdown.Heading
 }
 
 // crumbs는 카테고리 경로를 링크로 바꾼다.
@@ -113,14 +115,34 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	}
 }
 
-// renderPostBody는 본문을 HTML로 바꾼다. 렌더링 직전에 죽은 링크 두 종류를
-// 손본다 — inline.go 참고. DB의 body는 건드리지 않는다.
-func (s *Server) renderPostBody(post *Post) (template.HTML, error) {
+// outlineMinHeadings는 목차를 붙이기 시작하는 제목 개수다. 하나짜리 목차는
+// 자리만 차지하고 알려주는 게 없다.
+const outlineMinHeadings = 3
+
+// renderedBody는 본문 한 편을 그린 결과다.
+type renderedBody struct {
+	HTML    template.HTML
+	Outline []markdown.Heading
+}
+
+// renderPostBody는 본문을 HTML로 바꾸고 목차를 함께 뽑는다.
+//
+// 렌더링 직전에 죽은 링크 두 종류를 손본다 — inline.go 참고. DB의 body는
+// 건드리지 않는다. 목차는 **손본 뒤의 문자열**에서 뽑아야 앵커가 본문과 맞는다.
+func (s *Server) renderPostBody(post *Post) (renderedBody, error) {
 	resolved, _, err := s.resolveBody(post.Body, post.OriginalPath.String)
 	if err != nil {
-		return "", err
+		return renderedBody{}, err
 	}
-	return s.md.Render(resolved)
+	html, err := s.md.Render(resolved)
+	if err != nil {
+		return renderedBody{}, err
+	}
+	out := renderedBody{HTML: html}
+	if heads := s.md.Outline(resolved); len(heads) >= outlineMinHeadings {
+		out.Outline = heads
+	}
+	return out, nil
 }
 
 func (s *Server) fail(w http.ResponseWriter, err error) {
@@ -177,7 +199,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 
 	// 표지 글이 있으면 본문을 목록 위에 펼친다. 소개처럼 목록이 아니라 글 자체가
 	// 그 분류의 알맹이인 경우가 있다. 한 번 더 눌러 들어가게 하지 않는다.
-	var coverBody template.HTML
+	var cover renderedBody
 	var coverPost *Post
 	if current.CoverPostSlug != "" {
 		coverPost, err = s.store.PostBySlug(current.CoverPostSlug)
@@ -186,7 +208,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if coverPost != nil {
-			if coverBody, err = s.renderPostBody(coverPost); err != nil {
+			if cover, err = s.renderPostBody(coverPost); err != nil {
 				s.fail(w, err)
 				return
 			}
@@ -201,7 +223,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		Categories: children,
 		Posts:      posts,
 		Post:       coverPost,
-		Body:       coverBody,
+		Body:       cover.HTML,
 	})
 }
 
@@ -216,7 +238,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := s.renderPostBody(post)
+	rendered, err := s.renderPostBody(post)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -230,10 +252,11 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, "post.html", pageData{
-		Title: post.Title,
-		Trail: crumbList,
-		Post:  post,
-		Body:  body,
+		Title:   post.Title,
+		Trail:   crumbList,
+		Post:    post,
+		Body:    rendered.HTML,
+		Outline: rendered.Outline,
 	})
 }
 
