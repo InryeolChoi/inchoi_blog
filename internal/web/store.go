@@ -3,6 +3,9 @@ package web
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -29,8 +32,20 @@ type PostSummary struct {
 	Status    string
 	SortOrder int
 	IsCover   bool
+	// CreatedAt은 노션 원본의 작성일이다(이관 시점이 아니다).
+	// sort_order가 이 값에서 나온 목록이 많아서, 순서가 이상해 보일 때
+	// 근거를 눈으로 확인할 수 있게 목록에 같이 찍는다.
+	CreatedAt sql.NullTime
 	// Children은 이 글에 달린 하위 글이다. nestPosts가 채운다.
 	Children []PostSummary
+}
+
+// Date는 목록에 찍을 날짜다. 값이 없으면 빈 문자열이라 템플릿에서 저절로 빠진다.
+func (p PostSummary) Date() string {
+	if !p.CreatedAt.Valid {
+		return ""
+	}
+	return p.CreatedAt.Time.Format("2006-01-02")
 }
 
 // Post는 글 상세다.
@@ -148,14 +163,15 @@ func (s *store) CategoryBySlug(slug string, parentID sql.NullInt64) (*Category, 
 // postColumns는 목록 한 줄에 필요한 컬럼이다. 표지 여부를 보려면 categories와
 // 조인해야 해서 c 별칭이 있는 쿼리에서만 쓴다.
 const postColumns = `p.id, p.parent_id, p.slug, p.title, p.status, p.sort_order,
-	       (c.cover_post_id IS NOT NULL AND c.cover_post_id = p.id)`
+	       (c.cover_post_id IS NOT NULL AND c.cover_post_id = p.id), p.original_created_at`
 
 func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	defer rows.Close()
 	var out []PostSummary
 	for rows.Next() {
 		var p PostSummary
-		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status, &p.SortOrder, &p.IsCover); err != nil {
+		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
+			&p.SortOrder, &p.IsCover, &p.CreatedAt); err != nil {
 			return nil, fmt.Errorf("글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -183,7 +199,54 @@ func (s *store) PostsInCategory(categoryID int64) ([]PostSummary, error) {
 	if err != nil {
 		return nil, err
 	}
+	sortPosts(flat)
 	return nestPosts(flat), nil
+}
+
+// leadingNumber는 제목 맨 앞의 번호를 잡는다. "10. 다중공선성" → 10.
+//
+// 구분자(. 또는 ))와 공백을 반드시 요구한다. 안 그러면 "1주차 정리"나
+// "2022년 탐자 1차 시험" 같은 제목의 앞자리를 번호로 착각한다.
+var leadingNumber = regexp.MustCompile(`^\s*(\d{1,4})\s*[.)]\s+`)
+
+// postNumber는 제목 앞 번호를 읽는다. 없으면 두 번째 값이 false다.
+func postNumber(title string) (int, bool) {
+	m := leadingNumber.FindStringSubmatch(title)
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// sortPosts는 목록을 제목 앞 번호대로 다시 세운다.
+//
+// **sort_order를 믿을 수 없어서 필요하다.** 데이터베이스 행의 sort_order는
+// created_time 순위에서 나왔는데(노션이 DB 뷰의 화면 순서를 API로 안 준다),
+// created_time은 분 단위라 한 번에 만든 글이 같은 값을 갖는다. 그래서
+// "10. 무중단 배포"가 "2. 테스트 코드"보다 앞에 오는 목록이 실제로 있다.
+// 제목 앞 번호는 사람이 직접 붙인 것이라 이보다 훨씬 믿을 만하다.
+//
+// 번호가 없는 글은 **번호 있는 글들 사이에 끼우지 않고 뒤로 보낸다.** 어느
+// 번호 옆에 놓아야 하는지 알 방법이 없어서다. 자기들끼리의 순서는 들어온 순서
+// (sort_order, title)를 그대로 쓴다 — 없는 순서를 지어내지 않는다.
+//
+// 안정 정렬이라 번호가 같은 글끼리도 들어온 순서가 유지된다.
+func sortPosts(in []PostSummary) {
+	sort.SliceStable(in, func(i, j int) bool {
+		ni, oki := postNumber(in[i].Title)
+		nj, okj := postNumber(in[j].Title)
+		if oki != okj {
+			return oki
+		}
+		if oki && ni != nj {
+			return ni < nj
+		}
+		return false
+	})
 }
 
 // nestPosts는 평평한 목록을 parent_id로 묶는다. 들어온 순서를 형제 순서로 그대로 쓴다.
@@ -258,7 +321,12 @@ func (s *store) ChildPosts(postID int64) ([]PostSummary, error) {
 	if err != nil {
 		return nil, fmt.Errorf("하위 글 조회: %w", err)
 	}
-	return scanPostSummaries(rows)
+	out, err := scanPostSummaries(rows)
+	if err != nil {
+		return nil, err
+	}
+	sortPosts(out)
+	return out, nil
 }
 
 // PostAncestors는 위에서부터 이 글의 부모까지를 돌려준다. 자기 자신은 뺀다.
@@ -287,7 +355,8 @@ func (s *store) PostAncestors(postID int64) ([]PostSummary, error) {
 	for rows.Next() {
 		var p PostSummary
 		var depth int
-		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status, &p.SortOrder, &p.IsCover, &depth); err != nil {
+		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
+			&p.SortOrder, &p.IsCover, &p.CreatedAt, &depth); err != nil {
 			return nil, fmt.Errorf("상위 글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -428,7 +497,7 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 		var p PostSummary
 		var path string
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.IsCover, &path); err != nil {
+			&p.SortOrder, &p.IsCover, &p.CreatedAt, &path); err != nil {
 			return nil, fmt.Errorf("인라인 데이터베이스 스캔: %w", err)
 		}
 		rest := strings.Split(strings.TrimPrefix(path, prefix), " > ")
@@ -447,6 +516,7 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 		delete(grouped, name)
 	}
 	for name, list := range grouped {
+		sortPosts(list)
 		grouped[name] = nestPosts(list)
 	}
 	return grouped, nil

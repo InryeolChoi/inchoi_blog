@@ -147,6 +147,7 @@ var inlineDBTmpl = template.Must(template.New("inlinedb").Parse(
 		{{- range . -}}
 			<li><a href="/p/{{.Slug}}">{{.Title}}</a>
 			{{- if eq .Status "draft"}} <span class="status">{{.Status}}</span>{{end -}}
+			{{- with .Date}}<span class="date">{{.}}</span>{{end -}}
 			{{- with .Children}}{{template "items" .}}{{end -}}
 			</li>
 		{{- end -}}

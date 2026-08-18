@@ -19,7 +19,8 @@
   /* 하위 글은 들여쓴다. 안쪽 목록은 바깥 항목의 밑줄을 물려받지 않게 한다. */
   ul.list ul.list { margin: .35rem 0 0; padding-left: 1rem; border-left: 2px solid rgba(128,128,128,.25); }
   ul.list ul.list li:last-child { border-bottom: none; padding-bottom: 0; }
-  .count, .status { font-size: .8rem; opacity: .6; }
+  .count, .status, .date { font-size: .8rem; opacity: .6; }
+  .date { float: right; font-variant-numeric: tabular-nums; }
   .cover { font-size: .75rem; border: 1px solid rgba(128,128,128,.4); border-radius: .2rem; padding: 0 .3rem; }
   article img { max-width: 100%; height: auto; }
   article pre { overflow-x: auto; padding: .8rem; background: rgba(128,128,128,.12); border-radius: .3rem; }
@@ -61,6 +62,8 @@
     {{/* unlisted가 1003/1408이라 전부 찍으면 목록이 그 글자로 덮인다.
          손봐야 할 글(draft)만 표시한다. */}}
     {{if eq .Status "draft"}}<span class="status">{{.Status}}</span>{{end}}
+    {{/* 노션 원본의 작성일. 목록 순서가 이상해 보일 때 근거가 된다. */}}
+    {{with .Date}}<span class="date">{{.}}</span>{{end}}
     {{with .Children}}{{template "posttree" .}}{{end}}
   </li>
   {{end}}
