@@ -33,6 +33,9 @@ type bodyFix struct {
 	Expanded int // 목록으로 펼친 인라인 데이터베이스
 	Rows     int // 그렇게 드러난 글
 	Left     int // 짝을 못 찾아 그대로 둔 죽은 링크
+	// Shown은 펼친 목록에 나온 글의 slug다. 카테고리 페이지에서 "하위 분류"가
+	// 본문과 겹치는지 볼 때 쓴다.
+	Shown map[string]bool
 }
 
 // resolveBody는 렌더링 직전에 본문을 손본다. 원본 문자열은 건드리지 않는다.
@@ -89,6 +92,10 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 				lines[i] = html
 				fix.Expanded++
 				fix.Rows += countRows(rows)
+				if fix.Shown == nil {
+					fix.Shown = map[string]bool{}
+				}
+				collectSlugs(rows, fix.Shown)
 				continue
 			}
 		}
@@ -171,6 +178,14 @@ func inlineDBHTML(title string, rows []PostSummary) (string, error) {
 		return "", fmt.Errorf("인라인 데이터베이스 HTML에 줄바꿈이 있다(%s)", title)
 	}
 	return out, nil
+}
+
+// collectSlugs는 중첩까지 훑어 slug를 모은다.
+func collectSlugs(rows []PostSummary, into map[string]bool) {
+	for _, r := range rows {
+		into[r.Slug] = true
+		collectSlugs(r.Children, into)
+	}
 }
 
 // countRows는 중첩까지 포함해 실제로 보이는 글 수를 센다.

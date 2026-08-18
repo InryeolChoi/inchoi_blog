@@ -521,3 +521,32 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 	}
 	return grouped, nil
 }
+
+// CategorySubtreePostSlugs는 카테고리와 그 아래 전체에 붙은 글의 slug를 돌려준다.
+//
+// 카테고리 페이지에서 "하위 분류" 목록이 표지 글 본문과 겹치는지 볼 때 쓴다.
+// 이름이 아니라 실제 글로 따진다 — 같은 이름이라도 분류 쪽에 더 많은 글이
+// 달려 있으면 그건 겹친 게 아니다.
+func (s *store) CategorySubtreePostSlugs(categoryID int64) (map[string]bool, error) {
+	rows, err := s.db.Query(`
+		WITH RECURSIVE sub(id) AS (
+			SELECT id FROM categories WHERE id = ?
+			UNION ALL
+			SELECT k.id FROM categories k JOIN sub ON k.parent_id = sub.id
+		)
+		SELECT slug FROM posts WHERE category_id IN (SELECT id FROM sub)`, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("분류 하위 글 조회: %w", err)
+	}
+	defer rows.Close()
+
+	out := map[string]bool{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, fmt.Errorf("분류 하위 글 스캔: %w", err)
+		}
+		out[slug] = true
+	}
+	return out, rows.Err()
+}

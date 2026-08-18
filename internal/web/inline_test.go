@@ -308,6 +308,83 @@ func TestResolveBodyWithoutOriginalPath(t *testing.T) {
 	}
 }
 
+// TestDropCoveredChildrenRemovesFullyShown은 표지 글 본문이 통째로 펼쳐 보여준
+// 하위 분류를 목록에서 빼는지 본다. 한 화면에 같은 것이 두 번 나오지 않게 한다.
+func TestDropCoveredChildrenRemovesFullyShown(t *testing.T) {
+	srv, _ := inlineFixture(t)
+
+	// 인라인 데이터베이스의 두 글을 하위 분류 하나에 몰아넣는다.
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := srv.store.db.Exec(q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO categories (id, name, slug, parent_id, sort_order) VALUES (2, '목차', 'toc', 1, 0)`)
+	exec(`UPDATE posts SET category_id = 2 WHERE slug IN ('row-1', 'row-2')`)
+
+	children, err := srv.store.ChildCategories(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(children) != 1 {
+		t.Fatalf("하위 분류가 %d개다", len(children))
+	}
+
+	got, err := srv.dropCoveredChildren(children, map[string]bool{"row-1": true, "row-2": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("본문이 다 보여준 분류가 남았다: %+v", got)
+	}
+}
+
+// TestDropCoveredChildrenKeepsPartiallyShown은 분류에 본문이 안 보여준 글이
+// 하나라도 있으면 남기는지 본다. 이름만 보고 빼면 그 글로 가는 길이 사라진다.
+// 실제로 `Language > 프로그래밍 언어`가 그렇다 — 이름은 같은데 분류에 191건,
+// 본문에 펼쳐진 건 7건이다.
+func TestDropCoveredChildrenKeepsPartiallyShown(t *testing.T) {
+	srv, _ := inlineFixture(t)
+
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := srv.store.db.Exec(q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO categories (id, name, slug, parent_id, sort_order) VALUES (2, '목차', 'toc', 1, 0)`)
+	exec(`UPDATE posts SET category_id = 2 WHERE slug IN ('row-1', 'row-2')`)
+
+	children, _ := srv.store.ChildCategories(1)
+	got, err := srv.dropCoveredChildren(children, map[string]bool{"row-1": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Errorf("일부만 보여줬는데 뺐다: %+v", got)
+	}
+}
+
+// TestDropCoveredChildrenLeavesEmptyCategories는 글이 없는 분류를 건드리지
+// 않는지 본다. "본문이 다 보여줬다"고 말할 근거가 없다.
+func TestDropCoveredChildrenLeavesEmptyCategories(t *testing.T) {
+	srv, _ := inlineFixture(t)
+
+	if _, err := srv.store.db.Exec(
+		`INSERT INTO categories (id, name, slug, parent_id, sort_order) VALUES (2, '빈 분류', 'empty', 1, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	children, _ := srv.store.ChildCategories(1)
+	got, err := srv.dropCoveredChildren(children, map[string]bool{"row-1": true, "row-2": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Errorf("빈 분류를 뺐다: %+v", got)
+	}
+}
+
 // TestPostPageHasOutline은 제목이 충분히 많은 글에 목차가 붙고 앵커가 본문의
 // id와 맞는지 본다.
 func TestPostPageHasOutline(t *testing.T) {

@@ -123,6 +123,7 @@ const outlineMinHeadings = 3
 type renderedBody struct {
 	HTML    template.HTML
 	Outline []markdown.Heading
+	fix     bodyFix
 }
 
 // renderPostBody는 본문을 HTML로 바꾸고 목차를 함께 뽑는다.
@@ -130,7 +131,7 @@ type renderedBody struct {
 // 렌더링 직전에 죽은 링크 두 종류를 손본다 — inline.go 참고. DB의 body는
 // 건드리지 않는다. 목차는 **손본 뒤의 문자열**에서 뽑아야 앵커가 본문과 맞는다.
 func (s *Server) renderPostBody(post *Post) (renderedBody, error) {
-	resolved, _, err := s.resolveBody(post.Body, post.OriginalPath.String)
+	resolved, fix, err := s.resolveBody(post.Body, post.OriginalPath.String)
 	if err != nil {
 		return renderedBody{}, err
 	}
@@ -138,7 +139,7 @@ func (s *Server) renderPostBody(post *Post) (renderedBody, error) {
 	if err != nil {
 		return renderedBody{}, err
 	}
-	out := renderedBody{HTML: html}
+	out := renderedBody{HTML: html, fix: fix}
 	if heads := s.md.Outline(resolved); len(heads) >= outlineMinHeadings {
 		out.Outline = heads
 	}
@@ -212,6 +213,10 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 				s.fail(w, err)
 				return
 			}
+			if children, err = s.dropCoveredChildren(children, cover.fix.Shown); err != nil {
+				s.fail(w, err)
+				return
+			}
 		}
 	}
 
@@ -225,6 +230,45 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		Post:       coverPost,
 		Body:       cover.HTML,
 	})
+}
+
+// dropCoveredChildren은 표지 글 본문이 이미 통째로 펼쳐 보여준 하위 분류를
+// 목록에서 뺀다.
+//
+// 노션에서 한 절의 머리에 두던 인라인 데이터베이스가 두 벌로 나타나기 때문이다:
+// categorize가 경로에서 그 이름을 카테고리로 뽑아 "하위 분류"에 넣고, 같은
+// 데이터베이스가 표지 글 본문에도 링크로 남아 이제 목록으로 펼쳐진다. 그러면
+// 한 화면에 같은 것이 두 번 나온다.
+//
+// **이름이 아니라 글로 따진다.** 이름이 같아도 분류 쪽에 더 깊은 글이 달려 있으면
+// 본문이 다 보여준 게 아니다. 실제로 `Language > 프로그래밍 언어`가 그렇다 —
+// 이름은 같은데 분류에는 191건이 있고 본문에 펼쳐진 건 7건뿐이라, 이름만 보고
+// 빼면 184건으로 가는 길이 사라진다.
+//
+// 섹션 자체를 없애지 않는 이유도 같다. `머신러닝 & 딥러닝`처럼 본문이 다루지 않는
+// 분류가 하나 더 있는 경우가 있다.
+func (s *Server) dropCoveredChildren(children []Category, shown map[string]bool) ([]Category, error) {
+	if len(shown) == 0 || len(children) == 0 {
+		return children, nil
+	}
+	out := make([]Category, 0, len(children))
+	for _, c := range children {
+		slugs, err := s.store.CategorySubtreePostSlugs(c.ID)
+		if err != nil {
+			return nil, err
+		}
+		covered := len(slugs) > 0
+		for slug := range slugs {
+			if !shown[slug] {
+				covered = false
+				break
+			}
+		}
+		if !covered {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
