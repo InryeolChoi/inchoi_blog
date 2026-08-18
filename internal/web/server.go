@@ -113,6 +113,16 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	}
 }
 
+// renderPostBody는 본문을 HTML로 바꾼다. 렌더링 직전에 죽은 링크 두 종류를
+// 손본다 — inline.go 참고. DB의 body는 건드리지 않는다.
+func (s *Server) renderPostBody(post *Post) (template.HTML, error) {
+	resolved, _, err := s.resolveBody(post.Body, post.OriginalPath.String)
+	if err != nil {
+		return "", err
+	}
+	return s.md.Render(resolved)
+}
+
 func (s *Server) fail(w http.ResponseWriter, err error) {
 	fmt.Printf("요청 처리 실패: %v\n", err)
 	http.Error(w, "internal error", http.StatusInternalServerError)
@@ -176,7 +186,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if coverPost != nil {
-			if coverBody, err = s.md.Render(coverPost.Body); err != nil {
+			if coverBody, err = s.renderPostBody(coverPost); err != nil {
 				s.fail(w, err)
 				return
 			}
@@ -206,7 +216,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := s.md.Render(post.Body)
+	body, err := s.renderPostBody(post)
 	if err != nil {
 		s.fail(w, err)
 		return

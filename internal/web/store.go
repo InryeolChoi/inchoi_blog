@@ -3,6 +3,8 @@ package web
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 )
 
 // Category는 목록에 보여줄 카테고리 한 줄이다.
@@ -364,4 +366,88 @@ func (s *store) ImageBySHA256(sha string) (*Image, error) {
 		return nil, fmt.Errorf("이미지 조회(%s): %w", sha, err)
 	}
 	return &img, nil
+}
+
+// PostTitlesBySlug는 주어진 slug들의 제목을 돌려준다. posts에 없는 slug는 빠진다.
+// 그래서 결과에 없다는 것이 곧 "가리킬 글이 없는 죽은 링크"라는 뜻이다.
+func (s *store) PostTitlesBySlug(slugs []string) (map[string]string, error) {
+	if len(slugs) == 0 {
+		return map[string]string{}, nil
+	}
+	args := make([]any, len(slugs))
+	for i, sl := range slugs {
+		args[i] = sl
+	}
+	q := `SELECT slug, title FROM posts WHERE slug IN (?` + strings.Repeat(",?", len(slugs)-1) + `)`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("글 제목 조회: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]string, len(slugs))
+	for rows.Next() {
+		var slug, title string
+		if err := rows.Scan(&slug, &title); err != nil {
+			return nil, fmt.Errorf("글 제목 스캔: %w", err)
+		}
+		out[slug] = title
+	}
+	return out, rows.Err()
+}
+
+// InlineDBGroups는 ownerPath 밑으로 "한 층 더" 들어가 있는 글들을 그 중간 이름별로
+// 묶어 돌려준다. 인라인 데이터베이스의 행이 여기 해당한다.
+//
+// 노션 데이터베이스는 posts에 행이 없어서 id로는 그 자식을 찾을 길이 없다.
+// 남아 있는 유일한 끈이 original_path다. 데이터베이스로 한 층 들어간 글의 경로는
+// `{주인 글 경로} > {데이터베이스 이름} > {글 제목}` 꼴이라, 가운데 칸이 곧
+// 데이터베이스 이름이다.
+//
+// **바로 아래 한 칸인 이름은 뺀다.** 그건 실제로 존재하는 글(child_page)이지
+// 데이터베이스가 아니다. 이걸 안 빼면 손자 글이 엉뚱한 링크 밑으로 딸려간다.
+func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, error) {
+	prefix := ownerPath + " > "
+	// SQLite의 substr/length는 글자 단위다. 경로에 한글이 많아 바이트 길이를
+	// 주면 어긋난다. LIKE를 안 쓰는 이유는 경로에 %와 _가 든 글이 120건이라서다.
+	rows, err := s.db.Query(`
+		SELECT `+postColumns+`, p.original_path
+		FROM posts p
+		LEFT JOIN categories c ON c.id = p.category_id
+		WHERE p.original_path IS NOT NULL AND substr(p.original_path, 1, ?) = ?
+		ORDER BY p.sort_order, p.title`,
+		utf8.RuneCountInString(prefix), prefix)
+	if err != nil {
+		return nil, fmt.Errorf("인라인 데이터베이스 조회: %w", err)
+	}
+	defer rows.Close()
+
+	direct := map[string]bool{}
+	grouped := map[string][]PostSummary{}
+	for rows.Next() {
+		var p PostSummary
+		var path string
+		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
+			&p.SortOrder, &p.IsCover, &path); err != nil {
+			return nil, fmt.Errorf("인라인 데이터베이스 스캔: %w", err)
+		}
+		rest := strings.Split(strings.TrimPrefix(path, prefix), " > ")
+		switch len(rest) {
+		case 1:
+			direct[rest[0]] = true
+		case 2:
+			grouped[rest[0]] = append(grouped[rest[0]], p)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for name := range direct {
+		delete(grouped, name)
+	}
+	for name, list := range grouped {
+		grouped[name] = nestPosts(list)
+	}
+	return grouped, nil
 }

@@ -31,6 +31,11 @@
   /* 수식은 아직 서버에서 그리지 않는다. 원문 LaTeX가 그대로 보인다. */
   .math { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(120,170,255,.13); }
   .math-display { display: block; padding: .6rem; margin: 1rem 0; white-space: pre-wrap; overflow-x: auto; }
+  /* 인라인 데이터베이스를 본문 안에 펼친 자리. 노션에서 표로 보이던 목차다. */
+  .inline-db { margin: 1rem 0; padding: .2rem .9rem .6rem; border: 1px solid rgba(128,128,128,.3); border-radius: .3rem; }
+  .inline-db-title { font-weight: 600; font-size: .95rem; margin: .6rem 0 .2rem; }
+  .inline-db ul.list li { border-bottom: 1px solid rgba(128,128,128,.15); }
+  .inline-db ul.list li:last-child { border-bottom: none; }
   footer { margin-top: 3rem; font-size: .8rem; opacity: .6; }
 </style>
 </head>
