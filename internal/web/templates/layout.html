@@ -85,6 +85,11 @@
     font-size: .875rem; line-height: 1.6;
   }
   article code { font-family: var(--mono); font-size: .875em; }
+  /* highlight.js 테마가 자기 배경과 여백을 code에 건다. 바깥 pre가 이미
+     배경·테두리·여백을 갖고 있으므로 안쪽 것은 지운다. */
+  article pre code.hljs { background: none; padding: 0; }
+  /* 하이라이팅이 안 걸리는 블록(text, mermaid 등)도 같은 폭으로 보이게 한다. */
+  article pre code { display: block; }
   article :not(pre) > code {
     background: var(--bg-soft); border: 1px solid var(--line);
     padding: .08em .32em; border-radius: .22rem; white-space: nowrap;
@@ -152,6 +157,25 @@
         integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
         crossorigin="anonymous"></script>
 <script defer src="/static/math.js"></script>
+{{/* 코드 하이라이팅. 본문의 <pre><code class="language-xxx">를 색칠한다.
+     common 묶음이 40여 개 언어를 담고 있어 python·c·r·bash·java 등 큰 것들을
+     덮는다. 거기 없는 것만 따로 붙인다(latex 16건, dockerfile 4, powershell 2). */}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/styles/github.min.css"
+      integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L"
+      crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js"
+        integrity="sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix"
+        crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/latex.min.js"
+        integrity="sha384-wHW9Hcxw0oenHF2z8fGo1rhAe1jZwnp35Z6xzC29Vj/O+toSfBY9+7TrUfUnwFMD"
+        crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/dockerfile.min.js"
+        integrity="sha384-/zu1pI8+9j/v/qNlCRRyidiBhGdxfvGwOLXEPBXpKc77eFNUAhccr0WglEQ+x9La"
+        crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/powershell.min.js"
+        integrity="sha384-jigawbLJjSW9uklht6/lvMBC7b00t25Id0RQW+qORcsF6B+LARvlTLfzyIaNolYG"
+        crossorigin="anonymous"></script>
+<script defer src="/static/highlight-init.js"></script>
 </head>
 <body>
 <nav class="trail">
