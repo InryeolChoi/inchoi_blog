@@ -14,13 +14,12 @@ import (
 	"github.com/inryeol/blog/internal/db"
 )
 
-// testServer는 작은 트리를 넣은 서버를 만든다.
+// testDB는 마이그레이션을 건 빈 DB를 만든다.
 //
-//	개발(dev) > 언어(language) > 파이썬(python) > 글 "리스트"
-//	                                            표지 글 "언어"는 language에 붙는다
-func testServer(t *testing.T) http.Handler {
+// :memory:를 쓰지 않는다. 커넥션 풀이 커넥션마다 별개의 인메모리 DB를 만들어서
+// 마이그레이션을 건 DB와 조회하는 DB가 달라진다.
+func testDB(t *testing.T) *sql.DB {
 	t.Helper()
-
 	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -29,8 +28,13 @@ func testServer(t *testing.T) http.Handler {
 	if _, err := db.Migrate(sqlDB, blog.MigrationsFS()); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
+	return sqlDB
+}
 
-	exec := func(q string, args ...any) sql.Result {
+// execer는 실패하면 바로 멈추는 Exec을 만든다.
+func execer(t *testing.T, sqlDB *sql.DB) func(string, ...any) sql.Result {
+	t.Helper()
+	return func(q string, args ...any) sql.Result {
 		t.Helper()
 		res, err := sqlDB.Exec(q, args...)
 		if err != nil {
@@ -38,6 +42,17 @@ func testServer(t *testing.T) http.Handler {
 		}
 		return res
 	}
+}
+
+// testServer는 작은 트리를 넣은 서버를 만든다.
+//
+//	개발(dev) > 언어(language) > 파이썬(python) > 글 "리스트"
+//	                                            표지 글 "언어"는 language에 붙는다
+func testServer(t *testing.T) http.Handler {
+	t.Helper()
+
+	sqlDB := testDB(t)
+	exec := execer(t, sqlDB)
 
 	exec(`INSERT INTO categories (id, name, slug, sort_order) VALUES (1, '개발', 'dev', 0)`)
 	exec(`INSERT INTO categories (id, name, slug, parent_id, sort_order) VALUES (2, '언어', 'language', 1, 0)`)
@@ -77,6 +92,31 @@ func testServer(t *testing.T) http.Handler {
 	return srv.Handler()
 }
 
+// mainOf는 본문 영역만 잘라낸다.
+//
+// 사이드바가 모든 페이지에 분류 트리를 통째로 그리기 때문에 필요하다.
+// 그냥 페이지 전체에서 href를 찾으면 "본문에 있다"가 아니라 "사이드바에
+// 있다"를 확인하게 되어 테스트가 아무것도 지키지 못한다.
+func mainOf(t *testing.T, body string) string {
+	t.Helper()
+	i := strings.Index(body, `<main`)
+	if i < 0 {
+		t.Fatalf("<main>이 없다:\n%s", body)
+	}
+	return body[i:]
+}
+
+// sideOf는 사이드바 영역만 잘라낸다.
+func sideOf(t *testing.T, body string) string {
+	t.Helper()
+	i := strings.Index(body, `<aside`)
+	j := strings.Index(body, `<main`)
+	if i < 0 || j < i {
+		t.Fatalf("<aside>가 없다:\n%s", body)
+	}
+	return body[i:j]
+}
+
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -90,7 +130,7 @@ func TestIndexListsTopCategories(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("상태 코드 %d", rec.Code)
 	}
-	body := rec.Body.String()
+	body := mainOf(t, rec.Body.String())
 	if !strings.Contains(body, `href="/dev"`) {
 		t.Errorf("최상위 카테고리 링크가 없다:\n%s", body)
 	}
@@ -107,7 +147,7 @@ func TestCategoryPageShowsChildrenAndPosts(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("/dev 상태 코드 %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), `href="/dev/language"`) {
+	if !strings.Contains(mainOf(t, rec.Body.String()), `href="/dev/language"`) {
 		t.Errorf("하위 분류 링크가 없다:\n%s", rec.Body.String())
 	}
 
@@ -115,7 +155,7 @@ func TestCategoryPageShowsChildrenAndPosts(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("/dev/language 상태 코드 %d", rec.Code)
 	}
-	body := rec.Body.String()
+	body := mainOf(t, rec.Body.String())
 	if !strings.Contains(body, `href="/dev/language/python"`) {
 		t.Errorf("3단계 링크가 없다:\n%s", body)
 	}

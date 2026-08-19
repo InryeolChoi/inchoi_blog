@@ -1,9 +1,12 @@
 {{define "content"}}
-<h1>{{.Post.Title}}</h1>
-<p class="status">
-  {{if eq .Post.Status "draft"}}{{.Post.Status}} · {{end}}
-  {{- if .Post.OriginalPath.Valid}}{{.Post.OriginalPath.String}}{{end}}
-</p>
+<header class="page-head">
+  <h1>{{.Post.Title}}</h1>
+  <p class="page-meta">
+    {{if eq .Post.Status "draft"}}<span class="status">{{.Post.Status}}</span>{{end}}
+    {{- if .Post.OriginalPath.Valid}}{{.Post.OriginalPath.String}}{{end}}
+  </p>
+</header>
+
 {{/* 목차. 제목이 outlineMinHeadings개 이상일 때만 서버가 채워 보낸다. */}}
 {{with .Outline}}
 <nav class="toc" aria-label="목차">
@@ -20,7 +23,7 @@
 </article>
 
 {{with .Post.Children}}
-<h2>하위 글</h2>
+<h2 class="section-title">하위 글</h2>
 {{template "posttree" .}}
 {{end}}
 {{end}}

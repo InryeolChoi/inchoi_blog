@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/inryeol/blog/internal/markdown"
@@ -95,6 +96,36 @@ type pageData struct {
 	Body       template.HTML
 	// Outline은 본문에서 뽑은 목차다. 짧은 글에는 안 붙인다.
 	Outline []markdown.Heading
+	// Nav는 사이드바에 그릴 카테고리 트리다. render가 채운다.
+	Nav []NavCategory
+	// openCats는 사이드바에서 펼쳐둘 카테고리다(지금 보고 있는 곳의 조상).
+	// activeCat은 현재 위치다. 둘 다 핸들러가 채우고 render가 트리에 반영한다.
+	openCats  map[int64]bool
+	activeCat int64
+	// HomeActive는 사이드바의 "홈"에 현재 위치 표시를 할지다.
+	HomeActive bool
+	// TotalPosts는 사이드바 머리에 찍는 전체 글 수다. render가 채운다.
+	TotalPosts int
+}
+
+// TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
+func (d pageData) TotalPostsText() string { return comma(d.TotalPosts) }
+
+// comma는 정수에 천 단위 구분을 넣는다. 표준 라이브러리에 없어서 직접 쓴다
+// (이것 하나 때문에 의존성을 늘리지 않는다).
+func comma(n int) string {
+	s := strconv.Itoa(n)
+	if n < 0 {
+		return "-" + comma(-n)
+	}
+	var b strings.Builder
+	for i, r := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // crumbs는 카테고리 경로를 링크로 바꾼다.
@@ -109,11 +140,25 @@ func crumbs(trail []Category) ([]Crumb, string) {
 	return out, path
 }
 
+// render는 페이지 하나를 그린다. 사이드바는 모든 페이지에 나오므로 여기서
+// 한 번에 채운다 — 핸들러마다 잊지 않고 넣게 하는 것보다 안전하다.
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	t, ok := s.pages[name]
 	if !ok {
 		s.fail(w, fmt.Errorf("템플릿이 없다: %s", name))
 		return
+	}
+	nav, err := s.store.NavTree()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	markNav(nav, data.openCats, data.activeCat)
+	data.Nav = nav
+	// 최상위 분류의 글 수 합이 곧 전체다. 카테고리 없는 글은 현재 0건이라
+	// 따로 세지 않는다 — 생기면 여기에 안 잡힌다.
+	for _, c := range nav {
+		data.TotalPosts += c.PostCount
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
@@ -164,7 +209,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.render(w, "index.html", pageData{Title: "카테고리", Categories: cats})
+	s.render(w, "index.html", pageData{Title: "카테고리", Categories: cats, HomeActive: true})
 }
 
 // handleCategory는 1~3단계 카테고리를 모두 처리한다.
@@ -228,6 +273,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	crumbList, basePath := crumbs(trail)
+	open, active := openTrail(trail)
 	s.render(w, "category.html", pageData{
 		Title:      current.Name,
 		Trail:      crumbList,
@@ -236,6 +282,8 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		Posts:      posts,
 		Post:       coverPost,
 		Body:       cover.HTML,
+		openCats:   open,
+		activeCat:  active,
 	})
 }
 
@@ -302,12 +350,16 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		crumbList = append(crumbList, Crumb{Name: a.Title, URL: "/p/" + url.PathEscape(a.Slug)})
 	}
 
+	// 글을 열면 사이드바에서 그 글이 속한 분류가 펼쳐져 있어야 한다.
+	open, active := openTrail(post.Trail)
 	s.render(w, "post.html", pageData{
-		Title:   post.Title,
-		Trail:   crumbList,
-		Post:    post,
-		Body:    rendered.HTML,
-		Outline: rendered.Outline,
+		Title:     post.Title,
+		Trail:     crumbList,
+		Post:      post,
+		Body:      rendered.HTML,
+		Outline:   rendered.Outline,
+		openCats:  open,
+		activeCat: active,
 	})
 }
 

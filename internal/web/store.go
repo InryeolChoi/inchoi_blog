@@ -3,6 +3,7 @@ package web
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -549,4 +550,90 @@ func (s *store) CategorySubtreePostSlugs(categoryID int64) (map[string]bool, err
 		out[slug] = true
 	}
 	return out, rows.Err()
+}
+
+// NavCategory는 사이드바 트리의 한 마디다.
+type NavCategory struct {
+	ID        int64
+	Name      string
+	Slug      string
+	PostCount int
+	// Path는 최상위부터 이어 붙인 주소다. 카테고리 라우트가 3단계 경로를
+	// 받으므로 조상 slug를 모두 알아야 링크를 만들 수 있다.
+	Path     string
+	Children []NavCategory
+	// Open은 이 마디의 자식을 펼쳐둘지다. Active는 지금 보고 있는 곳인지다.
+	// 둘 다 markNav가 채운다 — nav.go 참고.
+	Open   bool
+	Active bool
+}
+
+// NavTree는 카테고리 전체를 사이드바용 트리로 돌려준다.
+//
+// 사이드바는 **모든 페이지**에 나오므로 한 번의 조회로 끝내야 한다. 93개뿐이라
+// 전부 읽어 Go에서 묶는다 — 페이지마다 단계별로 세 번 조회하는 것보다 낫다.
+//
+// 순서는 목록 페이지와 같은 규칙(sort_order, name)이다. 두 곳이 다르면 같은
+// 분류가 화면마다 다른 자리에 있게 된다.
+func (s *store) NavTree() ([]NavCategory, error) {
+	rows, err := s.db.Query(`
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + subtreePostCount + `
+		FROM categories c
+		ORDER BY c.sort_order, c.name`)
+	if err != nil {
+		return nil, fmt.Errorf("사이드바 카테고리 조회: %w", err)
+	}
+	defer rows.Close()
+
+	type row struct {
+		cat    NavCategory
+		parent sql.NullInt64
+	}
+	var all []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.cat.ID, &r.cat.Name, &r.cat.Slug, &r.parent, &r.cat.PostCount); err != nil {
+			return nil, fmt.Errorf("사이드바 카테고리 스캔: %w", err)
+		}
+		all = append(all, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// 부모 → 자식 목록. 조회 순서를 그대로 두므로 형제 순서가 유지된다.
+	kids := map[int64][]int{}
+	var roots []int
+	for i, r := range all {
+		if r.parent.Valid {
+			kids[r.parent.Int64] = append(kids[r.parent.Int64], i)
+		} else {
+			roots = append(roots, i)
+		}
+	}
+
+	// categories에는 깊이를 지키는 트리거가 있지만(3단계), 여기서도 방어한다.
+	// 사이드바는 모든 페이지에 그려지므로 여기서 도는 것이 곧 전체 장애다.
+	seen := make([]bool, len(all))
+	var build func(i int, prefix string, depth int) NavCategory
+	build = func(i int, prefix string, depth int) NavCategory {
+		seen[i] = true
+		c := all[i].cat
+		c.Path = prefix + "/" + url.PathEscape(c.Slug)
+		if depth < 8 {
+			for _, k := range kids[c.ID] {
+				if seen[k] {
+					continue
+				}
+				c.Children = append(c.Children, build(k, c.Path, depth+1))
+			}
+		}
+		return c
+	}
+
+	out := make([]NavCategory, 0, len(roots))
+	for _, i := range roots {
+		out = append(out, build(i, "", 0))
+	}
+	return out, nil
 }
