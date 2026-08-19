@@ -30,6 +30,8 @@ func New() *Renderer {
 				&mathExtension{},
 				// 코드 블록에 언어 라벨을 붙인다.
 				&codeBlockExtension{},
+				// 제 문단을 통째로 차지한 외부 링크를 카드로 그린다.
+				&extCardExtension{},
 			),
 			goldmark.WithParserOptions(
 				// 제목에 id를 달아 목차와 앵커 링크에 쓴다.

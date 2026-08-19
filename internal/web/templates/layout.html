@@ -113,6 +113,31 @@
     overflow-wrap: anywhere;
   }
 
+  /* ── 본문 안의 바깥 링크 카드 ──────────────────────────────────── */
+  /* 제 문단을 통째로 차지한 외부 링크만 카드가 된다(노션의 bookmark 자리).
+     문장 속 링크는 글자 그대로 둔다 — internal/markdown/extlink.go 참고. */
+  a.extcard {
+    display: flex; align-items: center; gap: .7rem;
+    text-decoration: none; color: inherit;
+    background: var(--bg-soft);
+    border: 1px solid var(--line); border-left: 3px solid var(--line-mid);
+    border-radius: .45rem; padding: .6rem .8rem; margin: 1.1rem 0;
+  }
+  a.extcard:hover { border-color: var(--line-mid); }
+  .extcard-ico {
+    width: 1.75rem; height: 1.75rem; flex: none; border-radius: .3rem;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--accent); border: 1px solid var(--line);
+  }
+  .extcard-ico svg { width: 15px; height: 15px; }
+  .extcard-txt { min-width: 0; }
+  .extcard-t { display: block; font-size: .92rem; font-weight: 600; color: var(--ink);
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .extcard-h { display: block; font-size: .72rem; color: var(--ink-dim); letter-spacing: .01em;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .extcard-go { margin-left: auto; flex: none; color: var(--ink-dim); font-size: .85rem; }
+  a.extcard:hover .extcard-go { color: var(--accent); }
+
   article blockquote {
     margin: 1rem 0; padding: .1rem 0 .1rem 1rem;
     border-left: 3px solid var(--line-mid); color: var(--ink-dim);
