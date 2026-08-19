@@ -84,6 +84,20 @@
     background: var(--bg-soft); border: 1px solid var(--line); border-radius: .35rem;
     font-size: .875rem; line-height: 1.6;
   }
+  /* 코드 블록의 언어 라벨. 서버가 <div class="codeblock">으로 감싸고 라벨을
+     먼저 낸다(internal/markdown/codeblock.go). 여기서는 오른쪽 위에 얹기만 한다.
+     상자는 위의 `article pre`가 이미 갖고 있다 — 들여쓰기 코드 블록에는
+     껍데기가 없으므로 상자를 껍데기로 옮기면 안 된다. */
+  .codeblock { position: relative; margin: 1rem 0; }
+  .codeblock pre { margin: 0; padding-top: 1.5rem; }
+  .codeblock .lang {
+    position: absolute; top: 0; right: 0; user-select: none;
+    font: 600 .68rem/1.7 var(--mono); letter-spacing: .04em; color: var(--ink-dim);
+    background: var(--bg);
+    border-left: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    border-radius: 0 .35rem 0 .3rem; padding: .06rem .5rem;
+  }
+
   article code { font-family: var(--mono); font-size: .875em; }
   /* highlight.js 테마가 자기 배경·여백·가로 스크롤을 code에 건다. 바깥 pre가
      이미 다 갖고 있으므로 안쪽 것은 지운다. 특히 스크롤을 양쪽에 두면 좁은

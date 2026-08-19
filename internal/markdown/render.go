@@ -28,6 +28,8 @@ func New() *Renderer {
 				// 변환기가 표, ~~취소선~~, - [x] 체크박스를 만들어낸다. 전부 GFM 확장이다.
 				extension.GFM,
 				&mathExtension{},
+				// 코드 블록에 언어 라벨을 붙인다.
+				&codeBlockExtension{},
 			),
 			goldmark.WithParserOptions(
 				// 제목에 id를 달아 목차와 앵커 링크에 쓴다.
