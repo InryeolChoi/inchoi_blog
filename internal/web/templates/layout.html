@@ -5,50 +5,131 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
 <style>
-  /* 지금은 최소한만. 디자인은 나중에 따로 다듬는다. */
-  :root { color-scheme: light dark; }
-  body {
-    max-width: 46rem; margin: 2rem auto; padding: 0 1rem;
-    font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+  /* 읽기용 최소 스타일. 화려하게 만들지 않는다 — 본문이 읽히는 데 필요한
+     여백·타이포·대비만 잡는다. 다크모드는 나중에 따로 한다. */
+
+  /* 색과 치수를 한곳에 모은다. 값을 바꿀 일이 생기면 여기만 본다. */
+  :root {
+    --ink:      #1a1a1a;   /* 본문 */
+    --ink-dim:  #6b6b6b;   /* 부가 정보(날짜, 뱃지, 경로) */
+    --bg:       #fdfdfc;
+    --bg-soft:  #f4f4f2;   /* 목차·코드 배경 */
+    --line:     #e2e2df;
+    --line-mid: #c9c9c4;
+    --accent:   #1f5fa8;   /* 링크 */
+    --measure:  44rem;     /* 본문 한 줄 길이 */
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Noto Sans Mono CJK KR", monospace;
   }
-  nav.trail { font-size: .875rem; margin-bottom: 1.5rem; }
-  nav.trail a { color: inherit; }
-  h1 { font-size: 1.6rem; line-height: 1.3; }
-  ul.list { list-style: none; padding: 0; }
-  ul.list li { padding: .35rem 0; border-bottom: 1px solid rgba(128,128,128,.2); }
+
+  * { box-sizing: border-box; }
+
+  body {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: 2.5rem 1.15rem 4rem;
+    color: var(--ink);
+    background: var(--bg);
+    font: 17px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    /* 한글은 단어 중간에서도 줄이 바뀌는 게 자연스럽다. */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: .15em; }
+  a:hover { text-decoration-thickness: 2px; }
+
+  /* ── 제목 ────────────────────────────────────────────────────────── */
+  h1, h2, h3, h4 { line-height: 1.35; font-weight: 650; letter-spacing: -.01em; }
+  h1 { font-size: 1.75rem; margin: 0 0 .4rem; }
+  /* 본문 제목은 위쪽 여백을 넉넉히 줘서 절이 눈으로 갈린다. */
+  article h1 { font-size: 1.45rem; margin: 2.4rem 0 .7rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
+  article h2 { font-size: 1.2rem;  margin: 2rem 0 .6rem; }
+  article h3 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+  article h4 { font-size: 1rem;    margin: 1.3rem 0 .4rem; color: var(--ink-dim); }
+  article > :first-child { margin-top: 0; }
+
+  /* ── 상단 경로 ───────────────────────────────────────────────────── */
+  nav.trail { font-size: .85rem; color: var(--ink-dim); margin-bottom: 1.75rem; }
+  nav.trail a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line-mid); }
+  nav.trail a:hover { color: var(--accent); border-bottom-color: currentColor; }
+
+  /* ── 목록 ────────────────────────────────────────────────────────── */
+  ul.list { list-style: none; padding: 0; margin: .5rem 0; }
+  ul.list li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
+  ul.list a { text-decoration: none; }
+  ul.list a:hover { text-decoration: underline; }
   /* 하위 글은 들여쓴다. 안쪽 목록은 바깥 항목의 밑줄을 물려받지 않게 한다. */
-  ul.list ul.list { margin: .35rem 0 0; padding-left: 1rem; border-left: 2px solid rgba(128,128,128,.25); }
+  ul.list ul.list { margin: .4rem 0 0; padding-left: 1rem; border-left: 2px solid var(--line); }
   ul.list ul.list li:last-child { border-bottom: none; padding-bottom: 0; }
-  .count, .status, .date { font-size: .8rem; opacity: .6; }
+
+  .count, .status, .date { font-size: .78rem; color: var(--ink-dim); }
   .date { float: right; font-variant-numeric: tabular-nums; }
-  .cover { font-size: .75rem; border: 1px solid rgba(128,128,128,.4); border-radius: .2rem; padding: 0 .3rem; }
-  article img { max-width: 100%; height: auto; }
-  article pre { overflow-x: auto; padding: .8rem; background: rgba(128,128,128,.12); border-radius: .3rem; }
-  article code { font-size: .9em; }
-  article :not(pre) > code { background: rgba(128,128,128,.15); padding: .1em .3em; border-radius: .2rem; }
-  article blockquote { margin-left: 0; padding-left: 1rem; border-left: 3px solid rgba(128,128,128,.4); }
-  article table { border-collapse: collapse; display: block; overflow-x: auto; }
-  article th, article td { border: 1px solid rgba(128,128,128,.35); padding: .3rem .6rem; }
+  /* 뱃지는 목록 안의 span만이다. post/category의 <p class="status">는 글머리
+     설명문이라 테두리를 두르면 안 된다. */
+  .cover, span.status {
+    font-size: .72rem; border: 1px solid var(--line-mid); border-radius: .2rem;
+    padding: .05em .35em; margin-left: .3em; vertical-align: .08em;
+  }
+  p.status { margin: .2rem 0 0; }
+
+  /* ── 본문 ────────────────────────────────────────────────────────── */
+  article { margin-top: 1.5rem; }
+  article p, article li { margin: .7rem 0; }
+  article img { max-width: 100%; height: auto; border-radius: .25rem; }
+  article hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
+
+  article pre {
+    overflow-x: auto; padding: .85rem 1rem; margin: 1rem 0;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: .35rem;
+    font-size: .875rem; line-height: 1.6;
+  }
+  article code { font-family: var(--mono); font-size: .875em; }
+  article :not(pre) > code {
+    background: var(--bg-soft); border: 1px solid var(--line);
+    padding: .08em .32em; border-radius: .22rem; white-space: nowrap;
+  }
+
+  article blockquote {
+    margin: 1rem 0; padding: .1rem 0 .1rem 1rem;
+    border-left: 3px solid var(--line-mid); color: var(--ink-dim);
+  }
+
+  /* 표는 넓으면 자기 안에서만 가로로 스크롤한다. 페이지가 밀리면 안 된다. */
+  article table { border-collapse: collapse; display: block; overflow-x: auto; font-size: .9rem; margin: 1rem 0; }
+  article th, article td { border: 1px solid var(--line-mid); padding: .35rem .65rem; text-align: left; }
+  article th { background: var(--bg-soft); font-weight: 600; }
+
+  article details {
+    margin: 1rem 0; padding: .5rem .9rem;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: .35rem;
+  }
+  article summary { cursor: pointer; font-weight: 600; }
+
   /* 수식은 아직 서버에서 그리지 않는다. 원문 LaTeX가 그대로 보인다. */
-  .math { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(120,170,255,.13); }
+  .math { font-family: var(--mono); background: rgba(120,170,255,.13); }
   .math-display { display: block; padding: .6rem; margin: 1rem 0; white-space: pre-wrap; overflow-x: auto; }
-  /* 인라인 데이터베이스를 본문 안에 펼친 자리. 노션에서 표로 보이던 목차다. */
-  .inline-db { margin: 1rem 0; padding: .2rem .9rem .6rem; border: 1px solid rgba(128,128,128,.3); border-radius: .3rem; }
-  .inline-db-title { font-weight: 600; font-size: .95rem; margin: .6rem 0 .2rem; }
-  .inline-db ul.list li { border-bottom: 1px solid rgba(128,128,128,.15); }
+
+  /* ── 본문 안에 펼친 인라인 데이터베이스 (노션에서 표로 보이던 목차) ── */
+  .inline-db { margin: 1.2rem 0; padding: .3rem 1rem .7rem; border: 1px solid var(--line); border-radius: .35rem; }
+  .inline-db-title { font-weight: 600; font-size: .92rem; color: var(--ink-dim); margin: .6rem 0 .2rem; }
   .inline-db ul.list li:last-child { border-bottom: none; }
-  /* 본문 목차. 제목 단계만큼 들여쓴다. */
-  nav.toc { margin: 1.5rem 0; padding: .2rem 1rem .8rem; background: rgba(128,128,128,.08); border-radius: .3rem; }
-  nav.toc .toc-title { font-weight: 600; font-size: .9rem; margin: .8rem 0 .4rem; }
+
+  /* ── 글 목차 ─────────────────────────────────────────────────────── */
+  nav.toc { margin: 1.5rem 0; padding: .3rem 1rem .8rem; background: var(--bg-soft); border: 1px solid var(--line); border-radius: .35rem; }
+  nav.toc .toc-title { font-weight: 600; font-size: .85rem; color: var(--ink-dim); margin: .7rem 0 .4rem; }
   nav.toc ul { list-style: none; padding: 0; margin: 0; font-size: .9rem; }
-  nav.toc li { padding: .12rem 0; }
+  nav.toc li { padding: .1rem 0; }
   nav.toc .toc-h2 { padding-left: 1rem; }
   nav.toc .toc-h3 { padding-left: 2rem; }
-  nav.toc a { color: inherit; text-decoration: none; border-bottom: 1px solid rgba(128,128,128,.35); }
+  nav.toc a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line-mid); }
+  nav.toc a:hover { color: var(--accent); border-bottom-color: currentColor; }
+
   /* 앵커로 건너뛸 때 제목이 화면 맨 위에 딱 붙지 않게 여유를 둔다. */
   article :is(h1, h2, h3) { scroll-margin-top: 1rem; }
   html { scroll-behavior: smooth; }
-  footer { margin-top: 3rem; font-size: .8rem; opacity: .6; }
+
+  footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .78rem; color: var(--ink-dim); }
 </style>
 </head>
 <body>
