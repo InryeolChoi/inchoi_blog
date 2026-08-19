@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/inryeol/blog"
+	"github.com/inryeol/blog/internal/curation"
 	"github.com/inryeol/blog/internal/db"
 	"github.com/inryeol/blog/internal/importer"
 	"github.com/inryeol/blog/internal/notion"
@@ -65,6 +66,10 @@ func main() {
 	converted := make([]convertedPage, 0, len(files))
 	var failures []failure
 
+	// 본문에서 줄을 덜어낸 글. 표가 낡았는지 아래에서 대조한다.
+	bodyEdited := curation.BodyEditPageIDs()
+	var edited []string
+
 	for _, path := range files {
 		dump, err := notion.LoadDump(path)
 		if err != nil {
@@ -73,6 +78,17 @@ func main() {
 		}
 
 		md, report := notion.Convert(dump)
+
+		// 사람이 본문에서 덜어내기로 한 줄을 여기서 뺀다. **out/에 쓰기 전에**
+		// 해야 검토용 파일과 DB에 들어가는 것이 같아진다.
+		md, err = curation.ApplyBodyEdits(dump.Page.ID, md)
+		if err != nil {
+			failures = append(failures, failure{path, err})
+			continue
+		}
+		if bodyEdited[dump.Page.ID] {
+			edited = append(edited, dump.Page.ID)
+		}
 
 		outPath := filepath.Join(*outDir, dump.Page.ID+".md")
 		if err := os.WriteFile(outPath, []byte(md), 0o644); err != nil {
@@ -94,6 +110,7 @@ func main() {
 	}
 
 	printFullReport(reports, failures, *outDir)
+	printBodyEdits(edited, bodyEdited, *pages == "" && *limit == 0)
 
 	if *dbPath == "" {
 		return
@@ -602,4 +619,42 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 		return nil, fmt.Errorf("커밋: %w", err)
 	}
 	return res, nil
+}
+
+// printBodyEdits는 본문에서 덜어낸 줄을 리포트에 남긴다.
+//
+// 조용히 지우면 나중에 "이 문장이 왜 없지?" 하고 덤프를 뒤지게 된다.
+// full이면(전체를 돌린 실행이면) 표에 있는데 한 번도 안 걸린 항목도 짚는다 —
+// 그건 페이지가 사라졌거나 표가 낡았다는 뜻이다.
+func printBodyEdits(edited []string, wanted map[string]bool, full bool) {
+	if len(wanted) == 0 {
+		return
+	}
+	fmt.Printf("\n■ 본문에서 덜어낸 줄 (internal/curation)\n")
+	if len(edited) == 0 {
+		fmt.Println("  이번 실행에서는 해당 글이 없었다")
+	}
+	for _, id := range edited {
+		fmt.Printf("  %s\n", id)
+	}
+	if !full {
+		return
+	}
+	applied := make(map[string]bool, len(edited))
+	for _, id := range edited {
+		applied[id] = true
+	}
+	var stale []string
+	for id := range wanted {
+		if !applied[id] {
+			stale = append(stale, id)
+		}
+	}
+	if len(stale) > 0 {
+		sort.Strings(stale)
+		fmt.Printf("  [확인 필요] 표에 있는데 덤프에 없다 %d건\n", len(stale))
+		for _, id := range stale {
+			fmt.Printf("    %s\n", id)
+		}
+	}
 }

@@ -27,7 +27,8 @@ internal/db/    연결(Open)과 마이그레이션 러너(Migrate)
 internal/notion/ 덤프 파싱과 마크다운 변환기
 internal/importer/ 변환 결과를 DB에 넣기 (posts/images upsert)
 cmd/postparent/  글끼리의 부모-자식(parent_id) 복원. 카테고리 하나씩
-internal/curation/ 사람이 정한 분류 예외 (categorize·regroup이 공유)
+internal/curation/ 사람이 정한 예외. 분류는 categorize·regroup이, 본문에서
+                   덜어낼 줄(BodyEdits)은 import가 본다
 migrations/     번호순 SQL. 001_init.sql 형식.
 out/            (gitignore) 변환 결과 검토용
 embed.go        루트 패키지. migrations/를 embed해서 MigrationsFS()로 노출.
@@ -197,12 +198,13 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 **regroup이 이대로 DB를 고치고, categorize는 이걸 "경로와 다르다"고 트집잡지 않는다.**
 두 도구가 같은 표를 봐야 해서 별도 패키지로 뺐다.
 
-| 표 | 뜻 | 멱등 키 | 현재 |
-|---|---|---|---|
-| `Moves` | 카테고리를 다른 최상위 분류 밑으로 | `source_name` | (비어 있음) |
-| `Covers` | 사람이 만든 8개 분류에 표지 글 붙이기 | `notion_page_id` | `/intro` ← 최인렬 페이지 |
-| `PostMoves` | 글 하나를 경로와 다른 카테고리에 붙임 | `notion_page_id` | 6건 → `/project` |
-| `DropCategories` | 카테고리 없애기 | `source_name` | `프로젝트` |
+| 표 | 뜻 | 멱등 키 | 보는 쪽 | 현재 |
+|---|---|---|---|---|
+| `Moves` | 카테고리를 다른 최상위 분류 밑으로 | `source_name` | categorize·regroup | (비어 있음) |
+| `Covers` | 사람이 만든 8개 분류에 표지 글 붙이기 | `notion_page_id` | 〃 | `/intro` ← 최인렬 페이지 |
+| `PostMoves` | 글 하나를 경로와 다른 카테고리에 붙임 | `notion_page_id` | 〃 | 6건 → `/project` |
+| `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | `프로젝트` |
+| `BodyEdits` | **본문에서 줄 덜어내기** | `notion_page_id` | **import** | 1건 (소개 글) |
 
 - 키는 전부 사람이 바꾸지 않는 값이다. 이름이나 slug를 바꿔도 안 깨진다.
 - 표에서 빼면 다음 categorize 실행이 "경로와 다르다"고 **실패한다.** 되돌리려면
@@ -217,6 +219,22 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
   그래서 순서가 있다: `categorize`로 글을 먼저 옮기고 그다음 `regroup`으로 지운다.
 - 네 도구(categorize · regroup · sortorder · postparent)를 어떤 순서로 몇 번
   돌려도 결과가 같아야 한다. 바꾼 뒤에는 그걸 확인할 것.
+
+**`BodyEdits`만 보는 쪽이 다르다** — 분류가 아니라 **본문**을 고치기 때문에
+`cmd/import`가 변환 직후에 적용한다.
+
+- **DB의 body를 손으로 고치지 않는다.** 고쳐두면 `import -db`를 다시 돌릴 때
+  변환 결과가 덮어써서 되살아난다(relink 재작성이 날아가는 것과 같은 성질).
+  여기 적어두면 몇 번을 다시 이관해도 같은 결과가 나온다.
+- **`out/`에 쓰기 전에 적용한다.** 검토용 파일과 DB에 들어가는 것이 같아야 한다.
+- **줄 단위로만 지운다.** 문장 중간을 지우면 앞뒤가 어떻게 이어지는지 표만 보고는
+  알 수 없다. 지운 자리에 빈 줄이 겹치면 하나로 줄인다.
+- **못 찾으면 그 페이지의 변환이 실패한다.** 덤프가 고정이라 변환 결과도 고정이다.
+  안 맞으면 표가 낡았거나 변환기가 바뀐 것이지 "그냥 없는" 경우가 아니다.
+  조용히 넘어가면 지웠다고 믿는 것이 본문에 그대로 남는다.
+- 전체를 돌린 실행에서는 **표에 있는데 한 번도 안 걸린 항목**도 리포트가 짚는다.
+- 현재 1건: 소개 글 끝의 `[프로젝트](/p/…)`. 인라인 데이터베이스 링크인데
+  홈이 이 글을 통째로 펴고, 프로젝트로 가는 길은 사이드바에 이미 있다.
 
 ## 내부 링크
 
@@ -725,8 +743,8 @@ $$
 - **본문 바깥 링크 카드** — 제 문단을 통째로 차지한 외부 링크 71개(글 48편)가
   카드가 된다. 문장 속 링크 46개는 글자 그대로다.
 - **사이드바 하단에 GitHub / GitHub Pages 링크.**
-- **소개 글 끝의 `[프로젝트]` 링크를 지웠다** (DB의 `posts.body`를 직접 고쳤다).
-  `import -db`를 다시 돌리면 되살아난다 — relink 재작성과 같은 성질의 것이다.
+- **소개 글 끝의 `[프로젝트]` 링크를 지웠다.** `curation.BodyEdits`에 적어서
+  `cmd/import`가 변환 때 덜어낸다. 재이관해도 되살아나지 않는다.
 
 ### 남은 일
 

@@ -12,6 +12,11 @@
 // regroup으로 제자리에 옮긴 뒤에 뺀다.
 package curation
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Move는 노션 2단계 카테고리를 경로가 정한 곳이 아닌 다른 분류 밑으로 옮긴 것이다.
 type Move struct {
 	// SourceName은 옮길 카테고리의 source_name이다.
@@ -117,6 +122,90 @@ func PostMoveBySlug() map[string]string {
 	out := make(map[string]string, len(PostMoves))
 	for _, m := range PostMoves {
 		out[m.NotionPageID] = m.ToSlug
+	}
+	return out
+}
+
+// ── 본문에서 덜어낸 것 ──────────────────────────────────────────────────
+
+// BodyEdit는 사람이 본문에서 덜어내기로 한 줄이다.
+//
+// 위의 표들과 달리 이건 분류가 아니라 **본문**을 고친다. 그래서 보는 쪽도
+// 다르다 — cmd/import가 변환 직후에 적용한다(categorize·regroup이 아니다).
+//
+// **이관 시점에 적용하는 이유.** DB의 body를 손으로 고쳐두면 `import -db`를
+// 다시 돌릴 때 변환 결과가 덮어써서 되살아난다. relink 재작성이 날아가는 것과
+// 같은 성질이다. 여기 적어두면 몇 번을 다시 이관해도 같은 결과가 나온다.
+//
+// 덤프는 고정이라 변환 결과도 고정이다. 그래서 Remove가 안 맞으면 그건
+// 표가 낡았거나 변환기가 바뀐 것이다 — 조용히 넘어가지 않고 에러를 낸다.
+type BodyEdit struct {
+	// NotionPageID는 고칠 글이다. posts의 멱등 키라 slug보다 안정적이다.
+	NotionPageID string
+	// Remove는 지울 줄이다. 변환 결과에 **그 줄 전체가 정확히** 있어야 한다.
+	// 조각이 아니라 줄 단위인 이유: 문장 중간을 지우면 앞뒤가 어떻게 이어지는지
+	// 표만 보고는 알 수 없다.
+	Remove string
+	Title  string // 사람이 읽으라고 적어두는 것. 대조에 쓰지 않는다.
+	Why    string
+}
+
+var BodyEdits = []BodyEdit{
+	{
+		NotionPageID: "1080901b-87f1-80d2-811a-eba467c2c160",
+		Remove:       "[프로젝트](/p/fd9d12dc-83de-4424-9428-0f26582130bc)",
+		Title:        "최인렬 (Inryeol Choi)",
+		Why: "자기소개 끝의 인라인 데이터베이스 링크다. 홈이 이 글을 통째로 " +
+			"펴는데, 프로젝트로 가는 길은 사이드바에 이미 있어서 자리만 차지한다",
+	},
+}
+
+// ApplyBodyEdits는 한 페이지의 변환 결과에서 BodyEdits에 적힌 줄을 덜어낸다.
+//
+// 지운 줄 자리에 빈 줄이 겹치면 하나로 줄인다. 안 그러면 마크다운에 빈 줄이
+// 둘 남아 문단 사이가 벌어진다.
+//
+// 적힌 줄을 못 찾으면 에러다. 표가 낡았는데 조용히 넘어가면, 지웠다고 믿는
+// 것이 본문에 그대로 남아 있게 된다.
+func ApplyBodyEdits(pageID, body string) (string, error) {
+	out := body
+	for _, e := range BodyEdits {
+		if e.NotionPageID != pageID {
+			continue
+		}
+		next, ok := removeLine(out, e.Remove)
+		if !ok {
+			return "", fmt.Errorf("본문에서 지울 줄을 못 찾았다 (%s %q): %q",
+				e.NotionPageID, e.Title, e.Remove)
+		}
+		out = next
+	}
+	return out, nil
+}
+
+// removeLine은 그 줄 하나를 지운다. 첫 번째 것만 지운다.
+func removeLine(body, target string) (string, bool) {
+	lines := strings.Split(body, "\n")
+	for i, l := range lines {
+		if strings.TrimRight(l, " \t") != target {
+			continue
+		}
+		lines = append(lines[:i:i], lines[i+1:]...)
+		// 지운 자리에서 빈 줄이 겹치면 하나로 줄인다.
+		if i > 0 && i < len(lines) && lines[i-1] == "" && lines[i] == "" {
+			lines = append(lines[:i:i], lines[i+1:]...)
+		}
+		return strings.Join(lines, "\n"), true
+	}
+	return body, false
+}
+
+// BodyEditPageIDs는 본문을 고칠 글의 notion_page_id 집합이다.
+// 표가 낡았는지 보려고 cmd/import가 쓴다.
+func BodyEditPageIDs() map[string]bool {
+	out := make(map[string]bool, len(BodyEdits))
+	for _, e := range BodyEdits {
+		out[e.NotionPageID] = true
 	}
 	return out
 }
