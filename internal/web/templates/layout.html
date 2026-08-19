@@ -8,31 +8,36 @@
   /* 읽기용 스타일. 화려하게 만들지 않는다 — 여백·타이포·대비를 잡고,
      색은 길잡이가 필요한 자리(링크, 현재 위치, 뱃지)에만 쓴다.
 
-     색은 아직 예전 그대로다. 여기서는 자리만 잡는다. */
+     팔레트는 "썰물": 흰 바탕에 표면만 모래빛으로 깔고, 쨍한 하늘색은
+     현재 위치를 가리키는 레일 한 곳에만 쓴다. 본문이 1,408편이라
+     오래 읽어도 눈이 덜 피로한 쪽을 골랐다.
+
+     다크모드는 아직 없다. 넣을 때 **이 색을 뒤집지 않는다** — 모래빛을
+     그냥 어둡게 깔면 탁한 갈색이 된다. CLAUDE.md "남은 일" 참고. */
 
   /* 토큰 이름을 색이 아니라 **역할**로 지었다(--sand가 아니라 --surface).
      다크를 얹을 때 같은 이름에 다른 색을 매핑하면 되고, 아래 컴포넌트
      규칙은 한 줄도 안 건드려도 된다. */
   :root {
-    --ink:       #1a1a1a;  /* 본문 */
-    --ink-dim:   #6b6b6b;  /* 부가 정보(날짜, 뱃지, 경로) */
-    --bg:        #fdfdfc;
-    --surface:   #f4f4f2;  /* 코드·목차·표 머리 */
-    --line:      #e2e2df;
-    --line-mid:  #c9c9c4;
-    --accent:    #1f5fa8;  /* 링크 */
-    --rail:      #1f5fa8;  /* 현재 위치와 포커스 */
-    --mark-bg:   #f4f4f2;  /* 형광펜 */
+    --ink:       #17252B;  /* 본문 */
+    --ink-dim:   #627479;  /* 부가 정보(날짜, 뱃지, 경로) */
+    --bg:        #FFFFFF;
+    --surface:   #FFF8E7;  /* 코드·목차·표 머리 — 모래빛 */
+    --line:      #EBE0C6;
+    --line-mid:  #DCCB9F;
+    --accent:    #0C64B2;  /* 링크. 흰 바탕에서 대비 6.0:1 */
+    --rail:      #29B6F0;  /* 쨍한 하늘색. 현재 위치와 포커스에만 */
+    --mark-bg:   #FFE28A;  /* 형광펜 */
 
-    --side-bg:   #f4f4f2;
-    --side-line: #e2e2df;
-    --hover-bg:  #ececea;
-    --active-bg: #fdfdfc;
-    --active-fg: #1f5fa8;
+    --side-bg:   #FFFDF7;
+    --side-line: #EDE3CC;
+    --hover-bg:  #FFF4DE;
+    --active-bg: #FFFFFF;
+    --active-fg: #0C64B2;
 
-    --badge-bg:   transparent;
-    --badge-fg:   #6b6b6b;
-    --badge-line: #c9c9c4;
+    --badge-bg:   #E7F4FD;
+    --badge-fg:   #0C64B2;
+    --badge-line: #C3E4F8;
 
     --measure: 46rem;  /* 글줄 길이. 산문은 여기서 멈춘다 */
     --column:  62rem;  /* 콘텐츠 전체 폭. 코드·표는 여기까지 쓴다 */
