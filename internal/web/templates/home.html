@@ -1,0 +1,12 @@
+{{define "content"}}
+{{/* 홈은 소개 카테고리의 표지 글을 그대로 편다. 분류로 가는 길은 사이드바가
+     늘 열어두고 있어서, 첫 화면까지 목록이면 같은 것을 두 번 보여주게 된다. */}}
+<header class="page-head">
+  <h1>{{.Post.Title}}</h1>
+  <p class="page-meta">노트 {{.TotalPostsText}}편 · 분류 {{len .Nav}}개</p>
+</header>
+
+<article>
+{{.Body}}
+</article>
+{{end}}

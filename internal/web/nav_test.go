@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -85,5 +86,47 @@ func TestMarkNavHandlesEmptyTree(t *testing.T) {
 	}
 	if tree[0].Children[0].Open {
 		t.Error("자식이 없는데 펼침 표시가 붙었다")
+	}
+}
+
+// 홈은 소개 표지 글을 편다. 표지가 없으면 최상위 분류 목록으로 물러선다.
+func TestHomeFallsBackToCategoryList(t *testing.T) {
+	// testServer에는 intro 분류가 없다.
+	rec := get(t, testServer(t), "/")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d", rec.Code)
+	}
+	if !strings.Contains(mainOf(t, rec.Body.String()), `href="/dev"`) {
+		t.Errorf("대비책인 분류 목록이 안 나온다:\n%s", rec.Body.String())
+	}
+}
+
+// 홈의 본래 모습: intro 분류의 표지 글을 본문 자리에 편다.
+// 실제 데이터에서 curation.Covers가 intro에 자기소개 글을 붙여둔다.
+func TestHomeShowsIntroCoverPost(t *testing.T) {
+	sqlDB := testDB(t)
+	exec := execer(t, sqlDB)
+
+	exec(`INSERT INTO categories (id, name, slug, sort_order) VALUES (10, '소개', 'intro', 0)`)
+	exec(`INSERT INTO posts (id, slug, title, body, status, source, category_id, sort_order, created_at, updated_at)
+	      VALUES (10, 'about-me', '최인렬', '늘 우직하게 도전하는 개발자입니다.', 'unlisted', 'notion', 10, 0,
+	              datetime('now'), datetime('now'))`)
+	exec(`UPDATE categories SET cover_post_id = 10 WHERE id = 10`)
+
+	srv, err := New(sqlDB)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	rec := get(t, srv.Handler(), "/")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d", rec.Code)
+	}
+	body := mainOf(t, rec.Body.String())
+	if !strings.Contains(body, "늘 우직하게 도전하는 개발자입니다.") {
+		t.Errorf("소개 본문이 홈에 안 펼쳐졌다:\n%s", body)
+	}
+	// 사이드바는 여전히 나와야 한다.
+	if !strings.Contains(sideOf(t, rec.Body.String()), `href="/intro"`) {
+		t.Errorf("홈에 사이드바가 없다:\n%s", rec.Body.String())
 	}
 }

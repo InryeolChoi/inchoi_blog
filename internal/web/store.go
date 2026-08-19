@@ -637,3 +637,19 @@ func (s *store) NavTree() ([]NavCategory, error) {
 	}
 	return out, nil
 }
+
+// CoverPostSlugOf는 카테고리 slug로 그 분류의 표지 글 slug를 찾는다.
+// 최상위 카테고리만 본다. 없으면 빈 문자열이다.
+func (s *store) CoverPostSlugOf(catSlug string) (string, error) {
+	var slug sql.NullString
+	err := s.db.QueryRow(`
+		SELECT (SELECT p.slug FROM posts p WHERE p.id = c.cover_post_id)
+		FROM categories c WHERE c.slug = ? AND c.parent_id IS NULL`, catSlug).Scan(&slug)
+	switch {
+	case err == sql.ErrNoRows:
+		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("표지 글 조회(%s): %w", catSlug, err)
+	}
+	return slug.String, nil
+}

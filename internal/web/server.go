@@ -36,7 +36,7 @@ type Server struct {
 }
 
 // pageTemplates는 layout과 함께 묶을 페이지 템플릿 목록이다.
-var pageTemplates = []string{"index.html", "category.html", "post.html"}
+var pageTemplates = []string{"home.html", "index.html", "category.html", "post.html"}
 
 // New는 서버를 만든다. 템플릿은 바이너리에 박혀 있으므로 여기서 한 번만 파싱한다.
 //
@@ -203,7 +203,46 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
+// homeCategorySlug는 홈에 펼칠 표지 글을 가진 카테고리다.
+// curation.Covers가 이 분류에 자기소개 글을 표지로 붙여둔다.
+const homeCategorySlug = "intro"
+
+// handleIndex는 홈이다. **카테고리 목록이 아니라 자기소개를 편다.**
+//
+// 분류로 들어가는 길은 이제 사이드바가 늘 열어두고 있어서, 첫 화면까지
+// 목록이면 같은 것을 두 번 보여주는 셈이다. 소개 카테고리의 표지 글이 곧
+// 그 자리에 놓을 글이다.
+//
+// 표지가 없으면(이관 상태에 따라 비어 있을 수 있다) 예전처럼 최상위 분류
+// 목록을 보여준다. 홈이 빈 화면이 되는 것보다 낫다.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	slug, err := s.store.CoverPostSlugOf(homeCategorySlug)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if slug != "" {
+		post, err := s.store.PostBySlug(slug)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		if post != nil {
+			rendered, err := s.renderPostBody(post)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			s.render(w, "home.html", pageData{
+				Title:      post.Title,
+				Post:       post,
+				Body:       rendered.HTML,
+				HomeActive: true,
+			})
+			return
+		}
+	}
+
 	cats, err := s.store.TopCategories()
 	if err != nil {
 		s.fail(w, err)
