@@ -106,9 +106,18 @@
   }
   article summary { cursor: pointer; font-weight: 600; }
 
-  /* 수식은 아직 서버에서 그리지 않는다. 원문 LaTeX가 그대로 보인다. */
-  .math { font-family: var(--mono); background: rgba(120,170,255,.13); }
+  /* 수식. 서버는 원문 LaTeX만 내보내고 KaTeX가 브라우저에서 그린다(아래 스크립트).
+     아래 규칙은 **그리기 전** 모습이다 — 스크립트가 못 뜨거나 파싱에 실패하면
+     여기 그대로 남으므로, 원문이라도 읽히게 해둔다. */
+  .math { font-family: var(--mono); font-size: .9em; background: rgba(120,170,255,.13); }
   .math-display { display: block; padding: .6rem; margin: 1rem 0; white-space: pre-wrap; overflow-x: auto; }
+  /* 그린 뒤에는 KaTeX가 자기 마크업을 넣는다. 위의 원문용 배경·글꼴을 지운다. */
+  .math.katex-done { background: none; font-family: inherit; font-size: inherit; white-space: normal; }
+  /* 긴 수식은 화면을 밀지 않고 자기 안에서 스크롤한다. */
+  .math-display.katex-done { padding: .2rem 0; overflow-x: auto; overflow-y: hidden; }
+  /* KaTeX가 못 읽은 것. 원문을 그대로 두고 표시만 남긴다. 대부분 수식이 아니라
+     변환기가 본문을 수식으로 잘못 삼킨 자리다(진행 상황 절 참고). */
+  .math.katex-failed { background: rgba(220,140,60,.12); outline: 1px solid rgba(220,140,60,.35); }
 
   /* ── 본문 안에 펼친 인라인 데이터베이스 (노션에서 표로 보이던 목차) ── */
   .inline-db { margin: 1.2rem 0; padding: .3rem 1rem .7rem; border: 1px solid var(--line); border-radius: .35rem; }
@@ -131,6 +140,18 @@
 
   footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .78rem; color: var(--ink-dim); }
 </style>
+{{/* 수식은 브라우저에서 그린다. 변환기와 goldmark 확장은 원문 LaTeX를
+     .math 안에 넣어두기만 한다(internal/markdown/math.go).
+
+     CDN에 무결성 해시를 걸어둔다. 파일이 바뀌면 브라우저가 실행을 거부한다.
+     버전을 올릴 때 해시도 같이 바꿔야 한다 — 안 그러면 조용히 안 뜬다. */}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+      integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+      crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+        integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+        crossorigin="anonymous"></script>
+<script defer src="/static/math.js"></script>
 </head>
 <body>
 <nav class="trail">

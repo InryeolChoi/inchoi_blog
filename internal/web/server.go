@@ -20,6 +20,12 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+// staticFS는 브라우저에서 도는 스크립트다. 빌드 스텝 없이 손으로 쓴 것을
+// 그대로 바이너리에 박아 서빙한다.
+//
+//go:embed static/*.js
+var staticFS embed.FS
+
 // Server는 라우팅과 렌더링을 들고 있다.
 type Server struct {
 	store *store
@@ -64,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /p/{slug}", s.handlePost)
 	mux.HandleFunc("GET /img/{sha256}", s.handleImage)
+	mux.HandleFunc("GET /static/{file}", s.handleStatic)
 	mux.HandleFunc("GET /{l1}", s.handleCategory)
 	mux.HandleFunc("GET /{l1}/{l2}", s.handleCategory)
 	mux.HandleFunc("GET /{l1}/{l2}/{l3}", s.handleCategory)
@@ -302,6 +309,37 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		Body:    rendered.HTML,
 		Outline: rendered.Outline,
 	})
+}
+
+// staticName은 정적 파일 이름이 될 수 있는 형태인지 본다.
+// {file}은 한 칸짜리 경로라 /가 안 들어오지만, 이름을 좁혀 두면 embed에
+// 없는 것을 찾느라 헛일하지 않는다.
+var staticName = regexp.MustCompile(`^[a-z0-9_-]+\.(js|css)$`)
+
+// handleStatic은 바이너리에 박힌 스크립트를 내보낸다.
+func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("file")
+	if !staticName.MatchString(name) {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := staticFS.ReadFile("static/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	switch {
+	case strings.HasSuffix(name, ".js"):
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	case strings.HasSuffix(name, ".css"):
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	}
+	// 경로에 내용 해시가 없어서 immutable을 걸 수 없다. 바이너리를 새로 올리면
+	// 곧 반영되도록 짧게 잡는다.
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	if _, err := w.Write(data); err != nil {
+		fmt.Printf("정적 파일 쓰기 실패(%s): %v\n", name, err)
+	}
 }
 
 // sha256Pattern은 이미지 경로가 해시 형태인지 본다.
