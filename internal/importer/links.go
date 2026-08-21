@@ -31,6 +31,14 @@ var pageLinkPattern = regexp.MustCompile(`\]\(/p/([^)\s#]+)(#[^)\s]*)?\)`)
 // 뒤에 #조각이 붙으면 페이지 안의 특정 블록을 가리킨다. 조각은 그대로 둔다.
 var notionInlineLinkPattern = regexp.MustCompile(`\]\(/([0-9a-f]{32})(#[0-9a-f]{32})?\)`)
 
+// notionAbsoluteLinkPattern은 노션 워크스페이스로 **나가는** 절대 URL을 잡는다.
+//
+// rich_text의 href가 상대경로가 아니라 전체 주소로 들어온 경우다. 그대로 두면
+// 독자가 눌렀을 때 남의 비공개 노션으로 가서 아무것도 못 본다. 가리키는 글이
+// 우리에게 있으면 그 글로 보낸다.
+var notionAbsoluteLinkPattern = regexp.MustCompile(
+	`\]\(https://(?:www\.|app\.)?notion\.(?:so|com)/(?:[^)/\s]+/)?(?:p/)?([0-9a-f]{32})(#[0-9a-f]{32})?\)`)
+
 // bareLinkPattern은 /p/ 접두사가 없는 사이트 내부 절대경로를 잡는다.
 //
 // 옛 relink가 `/{slug}`로 써둔 링크를 찾아내려는 것이다. 여기 걸린 게 전부
@@ -44,6 +52,8 @@ type LinkRewrite struct {
 	PageLinks int
 	// InlineLinks는 노션 인라인 href(/{32자리}) 형태에서 바뀐 링크 수다.
 	InlineLinks int
+	// AbsoluteLinks는 노션 워크스페이스로 나가던 절대 URL에서 바뀐 링크 수다.
+	AbsoluteLinks int
 	// BareLinks는 접두사 없는 /{slug} 형태에서 바뀐 링크 수다.
 	// 옛 relink가 남긴 것으로, 라우트가 없어 404가 나던 것들이다.
 	BareLinks int
@@ -52,7 +62,9 @@ type LinkRewrite struct {
 }
 
 // Replaced는 바뀐 링크의 총 개수다.
-func (r LinkRewrite) Replaced() int { return r.PageLinks + r.InlineLinks + r.BareLinks }
+func (r LinkRewrite) Replaced() int {
+	return r.PageLinks + r.InlineLinks + r.AbsoluteLinks + r.BareLinks
+}
 
 // RewriteLinks는 본문의 노션 링크와 옛 형태 링크를 /p/{slug}로 바꾼다.
 //
@@ -99,6 +111,23 @@ func RewriteLinks(body string, slugByPageID map[string]string, slugs map[string]
 			return match
 		}
 		res.InlineLinks++
+		return "](" + PostURLPrefix + slug + fragment + ")"
+	})
+
+	// 노션으로 나가는 절대 URL도 같은 대상을 가리킨다. 그대로 두면 독자가
+	// 남의 비공개 워크스페이스로 간다.
+	out = notionAbsoluteLinkPattern.ReplaceAllStringFunc(out, func(match string) string {
+		m := notionAbsoluteLinkPattern.FindStringSubmatch(match)
+		if m == nil {
+			return match
+		}
+		compact, fragment := m[1], m[2]
+		slug, ok := slugByPageID[compact]
+		if !ok {
+			res.Unresolved[compact]++
+			return match
+		}
+		res.AbsoluteLinks++
 		return "](" + PostURLPrefix + slug + fragment + ")"
 	})
 
@@ -185,7 +214,8 @@ func CountNotionPageLinks(body string, slugs map[string]bool) int {
 
 // CountNotionInlineLinks는 본문에 남은 노션 인라인 href 수를 센다.
 func CountNotionInlineLinks(body string) int {
-	return len(notionInlineLinkPattern.FindAllString(body, -1))
+	return len(notionInlineLinkPattern.FindAllString(body, -1)) +
+		len(notionAbsoluteLinkPattern.FindAllString(body, -1))
 }
 
 // BareSlugLinks는 /p/ 접두사 없이 글 slug를 가리키는 링크의 대상을 모은다.

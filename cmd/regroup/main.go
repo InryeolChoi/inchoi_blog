@@ -80,7 +80,7 @@ var groups = []group{
 		}},
 	}},
 	{slug: "project", name: "프로젝트", members: []string{
-		"école 42", "Projects", "전주 데이터분석",
+		"école 42", "Projects",
 	}},
 	{slug: "career", name: "커리어", members: []string{"취업 준비"}},
 	{slug: "life", name: "라이프", members: nil},

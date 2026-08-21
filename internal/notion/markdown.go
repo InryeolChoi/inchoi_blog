@@ -385,6 +385,14 @@ func (c *converter) richTextBody(b Block) string {
 // listItem은 리스트 항목을 만들고 자식을 marker 너비만큼 들여쓴다.
 // 들여쓰기 폭이 marker 너비와 다르면 중첩 리스트가 코드 블록으로 잘못 해석될 수 있다.
 func (c *converter) listItem(b Block, path, marker string) string {
+	// **글자도 자식도 없는 항목은 내보내지 않는다.** 노션에서 목록을 만들다 만
+	// 빈 줄인데, 그대로 두면 화면에 아무것도 없는 점만 하나 찍힌다. 덤프 전체에서
+	// 57개고 그중 자식이 있는 것은 없다 — 버리는 내용이 없다.
+	if strings.TrimSpace(c.richTextBody(b)) == "" && len(b.Children) == 0 {
+		c.note(b, path, KindEmptyBlock, "글자도 자식도 없는 목록 항목이라 뺐다")
+		return ""
+	}
+
 	text := marker + c.richTextBody(b)
 	return c.withChildren(b, path, text, strings.Repeat(" ", len([]rune(marker))), true)
 }

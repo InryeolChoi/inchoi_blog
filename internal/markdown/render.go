@@ -40,7 +40,11 @@ func New() *Renderer {
 				// 본문 제목을 한 단계 내린다. 페이지의 <h1>은 템플릿이 그리는
 				// 글 제목이라, 본문의 `# 제목`까지 <h1>이면 한 페이지에 <h1>이
 				// 여러 개가 된다 (heading.go 참고).
-				parser.WithASTTransformers(util.Prioritized(headingShift{}, 100)),
+				parser.WithASTTransformers(
+					util.Prioritized(headingShift{}, 100),
+					// 칸이 전부 빈 표 머리를 뗀다 (table.go).
+					util.Prioritized(dropEmptyTableHead{}, 110),
+				),
 			),
 			goldmark.WithRendererOptions(
 				// 변환기가 <details>, <u>, <br>, 빈 블록 주석을 그대로 넣는다.

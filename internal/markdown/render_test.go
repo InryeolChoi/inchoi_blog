@@ -262,3 +262,38 @@ func TestFencedCodeStillWorks(t *testing.T) {
 		t.Errorf("울타리 코드가 깨졌다:\n%s", got)
 	}
 }
+
+// TestEmptyTableHeadIsDropped는 칸이 전부 빈 표 머리가 화면에서 빠지는지 본다.
+//
+// GFM 표는 머리 행이 문법상 필수라, 노션 표에 머리가 없으면 변환기가 빈 머리를
+// 넣어 형태만 맞춘다. 그대로 그리면 표 위에 빈 띠가 한 줄 생긴다.
+func TestEmptyTableHeadIsDropped(t *testing.T) {
+	got := render(t, "|  |  |\n| --- | --- |\n| 가 | 나 |\n")
+
+	if strings.Contains(got, "<thead>") {
+		t.Errorf("빈 표 머리가 남았다:\n%s", got)
+	}
+	for _, want := range []string{"<table>", "<td>가</td>", "<td>나</td>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%q가 없다:\n%s", want, got)
+		}
+	}
+}
+
+// TestRealTableHeadStays는 글자가 있는 머리는 그대로 두는지 본다.
+func TestRealTableHeadStays(t *testing.T) {
+	got := render(t, "| 이름 | 값 |\n| --- | --- |\n| 가 | 나 |\n")
+
+	if !strings.Contains(got, "<thead>") || !strings.Contains(got, "<th>이름</th>") {
+		t.Errorf("사람이 쓴 표 머리를 없앴다:\n%s", got)
+	}
+}
+
+// TestPartlyFilledTableHeadStays는 한 칸이라도 글자가 있으면 남기는지 본다.
+func TestPartlyFilledTableHeadStays(t *testing.T) {
+	got := render(t, "|  | 값 |\n| --- | --- |\n| 가 | 나 |\n")
+
+	if !strings.Contains(got, "<thead>") {
+		t.Errorf("반쯤 찬 표 머리를 없앴다:\n%s", got)
+	}
+}

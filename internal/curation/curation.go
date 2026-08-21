@@ -123,6 +123,9 @@ var PostMoves = []PostMove{
 // 이 프로젝트는 글을 지우지 않지만 카테고리는 분류일 뿐이라 지울 수 있다.
 // regroup이 **글도 자식도 없을 때만** 지운다. 그렇지 않으면 에러로 멈춘다 —
 // 딸린 것을 조용히 잃지 않기 위해서다.
+//
+// **자식이 먼저다.** 표에 적힌 순서대로 지우므로, 부모를 자식보다 먼저 적으면
+// "하위 분류가 남아 있다"고 멈춘다.
 type DropCategory struct {
 	SourceName string
 	Why        string
@@ -146,6 +149,14 @@ var DropCategories = []DropCategory{
 	{
 		SourceName: "머신러닝 & 딥러닝",
 		Why:        "머신러닝 갈래가 그 자리를 대신한다. 밑에 있던 것은 전부 옮겼다",
+	},
+	{
+		SourceName: "전주시 데이터 분석",
+		Why:        "전주 데이터분석 밑의 하위 분류. 같이 없앤다",
+	},
+	{
+		SourceName: "전주 데이터분석",
+		Why:        "프로젝트 전체를 블로그에 남기지 않기로 했다. 글은 DropPosts로 뺐다",
 	},
 }
 
@@ -291,6 +302,43 @@ var DropPosts = []DropPost{
 		NotionPageID: "6a1f9122-3ed0-4860-8f7b-fb28edc8e478",
 		Title:        "예측모델 평가",
 		Why:          "머신러닝 : 기초이론에 있던 글. 절반이 빈 글이고 나머지도 핸즈온 머신러닝 2와 내용이 겹친다",
+	},
+
+	// 전주 데이터분석 프로젝트 전체. 분류까지 통째로 없앤다.
+	{
+		NotionPageID: "6e1fa7b1-7fbe-4071-96ed-83e866015d63",
+		Title:        "전주 데이터분석",
+		Why:          "전주 데이터분석 프로젝트. 블로그에 남기지 않기로 했다",
+	},
+	{
+		NotionPageID: "1069fbc9-488d-49d3-ae11-cd26a3bcb00f",
+		Title:        "데이터가 필요해요!",
+		Why:          "전주 데이터분석 프로젝트. 블로그에 남기지 않기로 했다",
+	},
+	{
+		NotionPageID: "7f180bda-3097-443b-8a34-b8aec0d9e684",
+		Title:        "중간 점검 - 방향 확인하기",
+		Why:          "전주 데이터분석 프로젝트. 블로그에 남기지 않기로 했다",
+	},
+	{
+		NotionPageID: "7f550d90-029e-43ae-957c-45ebe62d565b",
+		Title:        "분석 배경",
+		Why:          "전주 데이터분석 프로젝트. 블로그에 남기지 않기로 했다",
+	},
+	{
+		NotionPageID: "7fc6dc5d-ae7a-4f03-97b2-214e54f6b72d",
+		Title:        "어떤 모델이 좋을까요~?",
+		Why:          "전주 데이터분석 프로젝트. 블로그에 남기지 않기로 했다",
+	},
+	{
+		NotionPageID: "eef0901f-9d98-45dd-a47b-09c60dcf8c32",
+		Title:        "가설을 설정해 봅시다!",
+		Why:          "전주 데이터분석 프로젝트. 블로그에 남기지 않기로 했다",
+	},
+	{
+		NotionPageID: "ffc452d1-8681-471f-802b-2f6361257996",
+		Title:        "결론!",
+		Why:          "전주 데이터분석 프로젝트. 블로그에 남기지 않기로 했다",
 	},
 }
 

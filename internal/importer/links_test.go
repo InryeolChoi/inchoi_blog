@@ -367,3 +367,35 @@ func TestRewriteLinksIgnoresNonNotionPaths(t *testing.T) {
 		t.Errorf("교체가 일어났다: %d", res.Replaced())
 	}
 }
+
+// TestRewriteNotionAbsoluteURL은 노션 워크스페이스로 나가던 절대 URL이
+// 사이트 안 글로 바뀌는지 본다. 그대로 두면 독자가 남의 비공개 노션으로 간다.
+func TestRewriteNotionAbsoluteURL(t *testing.T) {
+	body := "자세한 건 [MGF를 이용](https://app.notion.com/p/a7642d97c30e4a4d90c1e13feed8e512#5045d617f2234f2dbf57eb8438790d98) 참고"
+	slugs := map[string]string{"a7642d97c30e4a4d90c1e13feed8e512": "mgf"}
+
+	out, res := RewriteLinks(body, slugs, nil)
+
+	want := "[MGF를 이용](/p/mgf#5045d617f2234f2dbf57eb8438790d98)"
+	if !strings.Contains(out, want) {
+		t.Errorf("got  %q\nwant %q 포함", out, want)
+	}
+	if res.AbsoluteLinks != 1 {
+		t.Errorf("AbsoluteLinks = %d, want 1", res.AbsoluteLinks)
+	}
+}
+
+// TestKeepsNotionAbsoluteURLWhenTargetMissing은 가리킬 글이 없으면 그대로
+// 두는지 본다. 경로만 바꾸면 깨진 링크가 멀쩡해 보인다.
+func TestKeepsNotionAbsoluteURLWhenTargetMissing(t *testing.T) {
+	body := "[x](https://app.notion.com/p/ffffffffffffffffffffffffffffffff)"
+
+	out, res := RewriteLinks(body, map[string]string{}, nil)
+
+	if out != body {
+		t.Errorf("대상이 없는데 바꿨다: %q", out)
+	}
+	if res.AbsoluteLinks != 0 {
+		t.Errorf("AbsoluteLinks = %d, want 0", res.AbsoluteLinks)
+	}
+}
