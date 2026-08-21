@@ -3,18 +3,9 @@
   <h1>{{.Title}}</h1>
 </header>
 
-{{/* 표지 글이 있으면 본문을 여기 펼친다. 목록보다 이게 알맹이인 분류가 있다. */}}
-{{if .Post}}
-<article>
-{{.Body}}
-</article>
-<p class="page-meta"><a href="/p/{{.Post.Slug}}">이 글만 따로 보기</a></p>
-{{end}}
-
 {{/* 갈래가 몇 개 안 되고 성격이 뚜렷한 분류는 목록 대신 아이콘 카드로 편다.
      어디에 쓸지는 internal/web/deck.go가 정한다. */}}
 {{if .Deck}}
-<h2 class="section-title">갈래</h2>
 <div class="deck">
   {{range .Deck}}
   <a class="deck-card" href="{{.URL}}">
@@ -26,6 +17,19 @@
   {{end}}
 </div>
 {{end}}
+
+{{/* 표지 글이 있으면 본문을 여기 펼친다. 목록보다 이게 알맹이인 분류가 있다.
+
+     **갈래 카드가 있는 분류는 카드만 보여준다.** 카드가 곧 그 분류의 안내라서,
+     본문과 글 목록까지 함께 두면 같은 곳으로 가는 길이 세 벌이 된다. */}}
+{{if and .Post (not .Deck)}}
+<article>
+{{.Body}}
+</article>
+<p class="page-meta"><a href="/p/{{.Post.Slug}}">이 글만 따로 보기</a></p>
+{{end}}
+
+
 
 {{if and .Categories (not .Deck)}}
 <h2 class="section-title">하위 분류</h2>
@@ -39,12 +43,12 @@
 </ul>
 {{end}}
 
-{{if .Posts}}
+{{if and .Posts (not .Deck)}}
 <h2 class="section-title">글</h2>
 {{template "posttree" .Posts}}
 {{end}}
 
-{{if and (not .Categories) (not .Posts)}}
+{{if and (not .Categories) (not .Posts) (not .Deck)}}
 <p>비어 있다.</p>
 {{end}}
 {{end}}
