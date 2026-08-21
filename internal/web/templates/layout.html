@@ -373,6 +373,67 @@
   .inline-db-title { font-weight: 650; font-size: .8rem; letter-spacing: .03em; color: var(--ink-dim); margin: .6rem 0 .1rem; }
   .inline-db ul.list li:last-child { border-bottom: none; }
 
+  /* ── 갈래 카드 (deck) ──────────────────────────────────────────── */
+  /* 목록 한 줄로는 그 갈래가 무엇을 담는지 알 수 없어서, 갈래가 몇 개 안 되는
+     분류에서는 카드로 편다. 어디에 쓸지는 internal/web/deck.go가 정한다.
+
+     3차원 느낌은 **CSS만으로** 낸다. perspective를 묶음에 걸고 카드를
+     preserve-3d로 두면, 아이콘만 translateZ로 띄워 깊이가 생긴다. 포인터를
+     따라 기우는 것은 static/deck.js가 얹어주고, 스크립트가 없어도 hover
+     기울기는 그대로 동작한다. */
+  .deck {
+    display: grid; gap: 1rem; margin: 1.2rem 0 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    perspective: 900px;
+  }
+  .deck-card {
+    position: relative; display: flex; flex-direction: column; gap: .45rem;
+    padding: 1.15rem 1.15rem 1.2rem; border-radius: .55rem;
+    background: linear-gradient(155deg, var(--surface), var(--bg) 78%);
+    border: 1px solid var(--line); color: inherit; text-decoration: none;
+    transform-style: preserve-3d; will-change: transform;
+    transition: transform .35s cubic-bezier(.2,.7,.3,1), box-shadow .35s ease, border-color .35s ease;
+  }
+  /* 빛이 한 번 훑고 지나가는 느낌. 카드 위에 얹되 클릭은 막지 않는다. */
+  .deck-card::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%);
+    opacity: 0; transition: opacity .35s ease;
+  }
+  .deck-card:hover, .deck-card:focus-visible {
+    transform: translateY(-5px) rotateX(6deg) rotateY(-7deg);
+    box-shadow: 0 20px 34px -20px rgba(20, 40, 55, .45);
+    border-color: var(--rail);
+  }
+  .deck-card:hover::after, .deck-card:focus-visible::after { opacity: 1; }
+  .deck-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .deck-icon {
+    width: 2.6rem; height: 2.6rem; color: var(--rail);
+    transform: translateZ(30px);
+    animation: deck-float 5.5s ease-in-out infinite;
+  }
+  .deck-icon svg {
+    width: 100%; height: 100%; fill: none; stroke: currentColor;
+    stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+  }
+  /* 카드마다 조금씩 어긋나게 떠서 한 덩어리로 움직이지 않게 한다. */
+  .deck-card:nth-child(2) .deck-icon { animation-delay: -1.8s; }
+  .deck-card:nth-child(3) .deck-icon { animation-delay: -3.6s; }
+  @keyframes deck-float {
+    0%, 100% { transform: translateZ(30px) translateY(0); }
+    50%      { transform: translateZ(30px) translateY(-5px); }
+  }
+  .deck-name  { font-weight: 650; font-size: 1.02rem; transform: translateZ(18px); }
+  .deck-blurb { font-size: .88rem; color: var(--ink-dim); line-height: 1.6; transform: translateZ(10px); }
+  .deck-count { font-size: .78rem; color: var(--ink-dim); letter-spacing: .02em; margin-top: .15rem; }
+
+  /* 움직임을 줄여달라고 한 사람에게는 뜨지도 기울지도 않는다. */
+  @media (prefers-reduced-motion: reduce) {
+    .deck-icon { animation: none; }
+    .deck-card, .deck-card::after { transition: none; }
+    .deck-card:hover, .deck-card:focus-visible { transform: none; }
+  }
+
   /* ── 글 목차 ───────────────────────────────────────────────────── */
   nav.toc {
     margin: 1.4rem 0 1.9rem; padding: .7rem 1rem .8rem 1.05rem;
@@ -446,6 +507,11 @@
         crossorigin="anonymous"></script>
 {{end}}
 <script defer src="/static/highlight-init.js"></script>
+{{end}}
+{{if .Deck}}
+{{/* 갈래 카드가 포인터를 따라 기울게 한다. 못 떠도 CSS만으로 hover 기울기와
+     아이콘 떠 있기는 그대로 동작한다. */}}
+<script defer src="/static/deck.js"></script>
 {{end}}
 {{/* 사이드바 아코디언과 좁은 화면의 서랍. 스크립트가 못 떠도 지금 보고 있는
      곳까지는 서버가 이미 펼쳐서 보내므로 길이 막히지는 않는다. */}}

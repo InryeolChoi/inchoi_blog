@@ -11,7 +11,23 @@
 <p class="page-meta"><a href="/p/{{.Post.Slug}}">이 글만 따로 보기</a></p>
 {{end}}
 
-{{if .Categories}}
+{{/* 갈래가 몇 개 안 되고 성격이 뚜렷한 분류는 목록 대신 아이콘 카드로 편다.
+     어디에 쓸지는 internal/web/deck.go가 정한다. */}}
+{{if .Deck}}
+<h2 class="section-title">갈래</h2>
+<div class="deck">
+  {{range .Deck}}
+  <a class="deck-card" href="{{.URL}}">
+    <span class="deck-icon" aria-hidden="true">{{.Icon}}</span>
+    <span class="deck-name">{{.Name}}</span>
+    <span class="deck-blurb">{{.Blurb}}</span>
+    <span class="deck-count">글 {{.Count}}건</span>
+  </a>
+  {{end}}
+</div>
+{{end}}
+
+{{if and .Categories (not .Deck)}}
 <h2 class="section-title">하위 분류</h2>
 <ul class="list">
   {{range .Categories}}

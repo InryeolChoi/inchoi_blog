@@ -109,6 +109,9 @@ type pageData struct {
 	// Assets는 이 페이지가 CDN에서 받아야 할 것이다. render가 Body를 보고 채운다
 	// (assets.go).
 	Assets assetNeeds
+	// Deck은 하위 분류를 아이콘 카드로 펼칠 때 그릴 것이다 (deck.go).
+	// 비어 있으면 평소대로 목록을 그린다.
+	Deck []DeckCard
 }
 
 // TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
@@ -321,6 +324,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	open, active := openTrail(trail)
 	s.render(w, "category.html", pageData{
 		Title:      current.Name,
+		Deck:       deckFor(current.Slug, basePath, children),
 		Trail:      crumbList,
 		BasePath:   basePath,
 		Categories: children,
