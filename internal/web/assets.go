@@ -20,6 +20,8 @@ type assetNeeds struct {
 	// Code는 **색칠될** 코드 블록이 있는지다. 아래 skipLangs는 색칠 대상이
 	// 아니라서 그것만 있는 글에는 highlight.js를 받지 않는다.
 	Code bool
+	// YouTube는 유튜브 재생 자리가 있는지다. 있을 때만 static/youtube.js를 받는다.
+	YouTube bool
 	// Langs는 본문에 나온 언어 이름이다. common 묶음에 없어서 따로 받는
 	// 언어(latex, dockerfile, powershell)를 그때만 받으려고 둔다.
 	Langs map[string]bool
@@ -44,6 +46,7 @@ func needsFor(body template.HTML) assetNeeds {
 
 	// math.go가 내보내는 형태는 <span class="math math-inline"> / <div class="math math-display">다.
 	n.Math = strings.Contains(s, `class="math math-`)
+	n.YouTube = strings.Contains(s, `class="ytembed"`)
 
 	for _, m := range langClass.FindAllStringSubmatch(s, -1) {
 		lang := strings.ToLower(m[1])

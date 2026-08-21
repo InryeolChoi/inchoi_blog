@@ -114,3 +114,58 @@ func visibleSpan(html, class string) string {
 	}
 	return rest[:j]
 }
+
+// TestYouTubeLinkBecomesPlayer는 유튜브 링크가 재생 자리로 바뀌는지 본다.
+func TestYouTubeLinkBecomesPlayer(t *testing.T) {
+	got := render(t, "[영상](https://www.youtube.com/watch?v=fNk_zzaMoSs&list=PLZHQObOWTQD)\n")
+
+	for _, want := range []string{`class="ytembed"`, `data-yt="fNk_zzaMoSs"`, `data-yt-list="PLZHQObOWTQD"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%q가 없다:\n%s", want, got)
+		}
+	}
+	// 누르기 전에는 유튜브에 아무 요청도 가면 안 된다.
+	for _, bad := range []string{"<iframe", "ytimg.com", "youtube.com/embed"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("누르기 전에 유튜브를 부르고 있다(%q):\n%s", bad, got)
+		}
+	}
+	// 스크립트가 못 떠도 유튜브로 갈 수 있어야 한다.
+	if !strings.Contains(got, `href="https://www.youtube.com/watch?v=fNk_zzaMoSs`) {
+		t.Errorf("원래 링크가 사라졌다:\n%s", got)
+	}
+}
+
+// TestYouTubeShortAndShortsForms는 youtu.be와 /shorts/도 잡는지 본다.
+func TestYouTubeShortAndShortsForms(t *testing.T) {
+	for _, src := range []string{
+		"[a](https://youtu.be/fNk_zzaMoSs)\n",
+		"[a](https://www.youtube.com/shorts/fNk_zzaMoSs)\n",
+	} {
+		got := render(t, src)
+		if !strings.Contains(got, `data-yt="fNk_zzaMoSs"`) {
+			t.Errorf("%q에서 id를 못 뽑았다:\n%s", src, got)
+		}
+	}
+}
+
+// TestNonYouTubeStaysCard는 유튜브가 아닌 링크는 그대로 카드인지 본다.
+func TestNonYouTubeStaysCard(t *testing.T) {
+	got := render(t, "[문서](https://go.dev/doc/)\n")
+
+	if strings.Contains(got, "ytembed") {
+		t.Errorf("유튜브가 아닌데 재생 자리가 됐다:\n%s", got)
+	}
+	if !strings.Contains(got, `class="extcard"`) {
+		t.Errorf("카드가 아니다:\n%s", got)
+	}
+}
+
+// TestYouTubeInSentenceStaysText는 문장 속 유튜브 링크는 글자로 두는지 본다.
+func TestYouTubeInSentenceStaysText(t *testing.T) {
+	got := render(t, "자세한 건 [영상](https://youtu.be/fNk_zzaMoSs)을 보라.\n")
+
+	if strings.Contains(got, "ytembed") {
+		t.Errorf("문장 속 링크가 재생 자리가 됐다:\n%s", got)
+	}
+}

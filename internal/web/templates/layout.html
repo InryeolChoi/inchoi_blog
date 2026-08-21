@@ -373,6 +373,36 @@
   .inline-db-title { font-weight: 650; font-size: .8rem; letter-spacing: .03em; color: var(--ink-dim); margin: .6rem 0 .1rem; }
   .inline-db ul.list li:last-child { border-bottom: none; }
 
+  /* ── 유튜브 재생 자리 ──────────────────────────────────────────── */
+  /* 누르기 전에는 유튜브에 아무 요청도 가지 않는다. 섬네일도 안 받으므로
+     자리는 우리 색으로 채우고 재생 삼각형만 그린다
+     (internal/markdown/youtube.go). */
+  a.ytembed {
+    display: flex; align-items: center; gap: .9rem; margin: 1.2rem 0;
+    padding: 1rem 1.1rem; border-radius: .45rem; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--rail);
+    transition: border-color .2s ease, transform .2s ease;
+  }
+  a.ytembed:hover { border-color: var(--accent); transform: translateY(-2px); }
+  a.ytembed:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .ytembed-play { flex: none; width: 3.1rem; }
+  .ytembed-play svg { width: 100%; height: auto; display: block; }
+  /* 유튜브 빨강은 브랜드 색이라 팔레트 토큰을 쓰지 않는다. */
+  .ytembed-body { fill: #cf2b23; transition: fill .2s ease; }
+  .ytembed-tri  { fill: #fff; }
+  a.ytembed:hover .ytembed-body { fill: #e6271f; }
+  .ytembed-txt { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+  .ytembed-t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ytembed-h { font-size: .82rem; color: var(--ink-dim); }
+  /* 켜진 뒤. 16:9를 유지한다. */
+  .ytembed-on { margin: 1.2rem 0; aspect-ratio: 16 / 9; border-radius: .45rem; overflow: hidden;
+                border: 1px solid var(--line); background: #000; }
+  .ytembed-on iframe { width: 100%; height: 100%; border: 0; display: block; }
+  @media (prefers-reduced-motion: reduce) {
+    a.ytembed { transition: none; }
+    a.ytembed:hover { transform: none; }
+  }
+
   /* ── 갈래 카드 (deck) ──────────────────────────────────────────── */
   /* 목록 한 줄로는 그 갈래가 무엇을 담는지 알 수 없어서, 갈래가 몇 개 안 되는
      분류에서는 카드로 편다. 어디에 쓸지는 internal/web/deck.go가 정한다.
@@ -510,6 +540,11 @@
         crossorigin="anonymous"></script>
 {{end}}
 <script defer src="/static/highlight-init.js"></script>
+{{end}}
+{{if .Assets.YouTube}}
+{{/* 눌렀을 때 그 자리에서 유튜브 플레이어를 켠다. 못 떠도 원래대로 유튜브로
+     가는 링크라 빈 자리가 되지 않는다. */}}
+<script defer src="/static/youtube.js"></script>
 {{end}}
 {{if .Deck}}
 {{/* 갈래 카드가 포인터를 따라 기울게 한다. 못 떠도 CSS만으로 hover 기울기와

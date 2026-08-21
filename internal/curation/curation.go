@@ -414,6 +414,19 @@ type BodyEdit struct {
 
 var BodyEdits = []BodyEdit{
 	{
+		NotionPageID: "ad1ef256-4567-4b9f-b57e-6f16486d0606",
+		Remove:       "[Untitled](/p/1e8accad-7dac-4eb2-8da7-383a404b3ee5)",
+		Title:        "선형대수",
+		Why:          "이름 없는 인라인 데이터베이스라 눌러도 404다. 목록 맨 위에서 자리만 차지한다",
+	},
+	{
+		NotionPageID: "ad1ef256-4567-4b9f-b57e-6f16486d0606",
+		Remove:       "[선형대수 : 이론](/p/22206acc-5b0e-445c-8e09-52ef3a41cf4a)",
+		Title:        "선형대수",
+		Why: "그 데이터베이스의 행이던 글 일곱 건을 DropPosts로 뺐다. " +
+			"이제 눌러도 빈 목록이라 링크째 없앤다",
+	},
+	{
 		NotionPageID: "1080901b-87f1-80d2-811a-eba467c2c160",
 		Remove:       "[프로젝트](/p/fd9d12dc-83de-4424-9428-0f26582130bc)",
 		Title:        "최인렬 (Inryeol Choi)",

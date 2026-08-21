@@ -34,6 +34,10 @@ type extCardNode struct {
 	URL   string
 	Title string
 	Sub   string
+	// YTVideo가 비어 있지 않으면 카드 대신 유튜브 재생 자리로 그린다
+	// (youtube.go). YTList는 재생목록 id다.
+	YTVideo string
+	YTList  string
 }
 
 func (n *extCardNode) Kind() gast.NodeKind { return kindExtCard }
@@ -154,6 +158,9 @@ func (t *extCardTransformer) Transform(doc *gast.Document, reader text.Reader, _
 		}
 		title, sub := cardLabels(u, label)
 		card := &extCardNode{URL: u.String(), Title: title, Sub: sub}
+		if id, list := ytVideoID(u); id != "" {
+			card.YTVideo, card.YTList = id, list
+		}
 		p.Parent().ReplaceChild(p.Parent(), p, card)
 	}
 }
@@ -184,6 +191,10 @@ func (r *extCardRenderer) render(w util.BufWriter, _ []byte, node gast.Node, ent
 	n, ok := node.(*extCardNode)
 	if !ok {
 		return gast.WalkContinue, nil
+	}
+
+	if n.YTVideo != "" {
+		return renderYouTube(w, n)
 	}
 
 	// rel은 밖으로 나가는 링크에만 붙인다. 우리 주소가 상대 쪽 로그에
