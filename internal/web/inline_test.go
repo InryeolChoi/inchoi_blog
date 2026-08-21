@@ -523,3 +523,61 @@ func TestPostPageKeepsChildrenNotInBody(t *testing.T) {
 		t.Error("본문에 있는 하위 글이 목록에도 남았다")
 	}
 }
+
+// TestGroupsConsecutiveLinksIntoBox는 줄줄이 이어진 글 링크가 목록 상자로
+// 묶이는지 본다. 인라인 데이터베이스가 상자로 펼쳐지는 것과 같은 모양이어야
+// 한다 — 같은 것을 두 모양으로 보여줄 이유가 없다.
+func TestGroupsConsecutiveLinksIntoBox(t *testing.T) {
+	body := "## 머리말\n\n[가](/p/row-1)\n\n[나](/p/row-2)\n\n[다](/p/r-tips)\n"
+	got, n := groupLinkRuns(body)
+
+	if n != 1 {
+		t.Fatalf("묶음 수가 %d다:\n%s", n, got)
+	}
+	if !strings.Contains(got, `<div class="inline-db">`) {
+		t.Errorf("상자로 안 묶었다:\n%s", got)
+	}
+	for _, want := range []string{`href="/p/row-1"`, `href="/p/row-2"`, `href="/p/r-tips"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%s가 빠졌다:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "[가](/p/row-1)") {
+		t.Errorf("원래 링크 줄이 남았다:\n%s", got)
+	}
+}
+
+// TestKeepsSingleLinkAsText는 하나짜리 링크는 그대로 두는지 본다.
+// 그건 목록이 아니라 문장 사이의 링크다.
+func TestKeepsSingleLinkAsText(t *testing.T) {
+	body := "## 머리말\n\n[하나](/p/row-1)\n\n본문이 이어진다.\n"
+	got, n := groupLinkRuns(body)
+
+	if n != 0 {
+		t.Errorf("하나짜리를 묶었다:\n%s", got)
+	}
+	if !strings.Contains(got, "[하나](/p/row-1)") {
+		t.Errorf("원래 링크가 사라졌다:\n%s", got)
+	}
+}
+
+// TestKeepsLinksInsideListItems는 목록 항목 안의 링크는 안 묶는지 본다.
+func TestKeepsLinksInsideListItems(t *testing.T) {
+	body := "- [가](/p/row-1)\n- [나](/p/row-2)\n"
+	got, n := groupLinkRuns(body)
+
+	if n != 0 {
+		t.Errorf("목록 항목을 묶었다:\n%s", got)
+	}
+}
+
+// TestGroupedBoxHasNoNewline은 묶은 HTML이 한 줄인지 본다. 마크다운 본문에
+// 끼워 넣으므로 줄이 나뉘면 뒷부분이 마크다운으로 다시 해석된다.
+func TestGroupedBoxHasNoNewline(t *testing.T) {
+	got, _ := groupLinkRuns("[가](/p/a)\n\n[나](/p/b)\n")
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "inline-db") && strings.Count(line, "<div") != 1 {
+			t.Errorf("상자가 한 줄이 아니다: %q", line)
+		}
+	}
+}

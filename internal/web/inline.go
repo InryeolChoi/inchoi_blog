@@ -33,6 +33,7 @@ type bodyFix struct {
 	Expanded int // 목록으로 펼친 인라인 데이터베이스
 	Rows     int // 그렇게 드러난 글
 	Left     int // 짝을 못 찾아 그대로 둔 죽은 링크
+	Grouped  int // 낱개 링크를 묶어 만든 목록 상자
 	// Shown은 펼친 목록에 나온 글의 slug다. 카테고리 페이지에서 "하위 분류"가
 	// 본문과 겹치는지 볼 때 쓴다.
 	Shown map[string]bool
@@ -103,7 +104,11 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 			lines[i] = fillPlaceholders(line, titles, &fix)
 		}
 	}
-	return strings.Join(lines, "\n"), fix, nil
+	// **묶기는 맨 마지막이다.** 자리표시자가 진짜 제목이 된 뒤라야 상자 안의
+	// 글자가 "페이지 링크"가 아니라 글 제목이 된다.
+	out, grouped := groupLinkRuns(strings.Join(lines, "\n"))
+	fix.Grouped = grouped
+	return out, fix, nil
 }
 
 // linkTargets는 본문에 나오는 /p/ 링크의 대상을 중복 없이 모은다.
@@ -159,7 +164,7 @@ var inlineDBTmpl = template.Must(template.New("inlinedb").Parse(
 			</li>
 		{{- end -}}
 	</ul>{{- end -}}
-<div class="inline-db"><p class="inline-db-title">{{.Title}}</p>{{template "items" .Rows}}</div>`))
+<div class="inline-db">{{with .Title}}<p class="inline-db-title">{{.}}</p>{{end}}{{template "items" .Rows}}</div>`))
 
 // inlineDBHTML은 데이터베이스 하나를 목록 HTML로 만든다.
 func inlineDBHTML(title string, rows []PostSummary) (string, error) {
@@ -195,4 +200,69 @@ func countRows(rows []PostSummary) int {
 		n += 1 + countRows(r.Children)
 	}
 	return n
+}
+
+// standaloneLink는 제 문단을 통째로 차지한 글 링크다.
+var standaloneLink = regexp.MustCompile(`^\[([^\[\]]+)\]\(/p/([^)\s#]+)\)$`)
+
+// groupLinkRuns는 **줄줄이 이어진 글 링크를 목록 상자로 묶는다.**
+//
+// 노션에서 한 절의 머리에 두던 목록이 두 모양으로 들어온다. 인라인 데이터베이스는
+// 이미 상자로 펼치는데(expandInlineDB), 사람이 link_to_page 블록을 여러 개 쌓아
+// 만든 목록은 링크가 낱개로 흩어져 나온다. 같은 것을 두 모양으로 보여줄 이유가 없다.
+//
+// **두 개 이상 이어질 때만 묶는다.** 하나짜리는 목록이 아니라 문장 사이의 링크다.
+// 문단 하나를 통째로 차지한 링크만 본다 — 목록 항목 안이나 문장 속 링크는 글자
+// 그대로 둔다(바깥 링크를 카드로 만드는 규칙과 같은 결이다).
+func groupLinkRuns(body string) (string, int) {
+	lines := strings.Split(body, "\n")
+	var out []string
+	grouped := 0
+
+	for i := 0; i < len(lines); {
+		if standaloneLink.FindStringSubmatch(strings.TrimSpace(lines[i])) == nil {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+		// 링크와 빈 줄이 이어지는 동안 모은다.
+		var rows []PostSummary
+		j := i
+		for j < len(lines) {
+			t := strings.TrimSpace(lines[j])
+			if m := standaloneLink.FindStringSubmatch(t); m != nil {
+				rows = append(rows, PostSummary{Slug: m[2], Title: m[1]})
+				j++
+				continue
+			}
+			if t == "" {
+				// 다음에 링크가 더 있을 때만 빈 줄을 건너뛴다. 아니면 여기서 끝이다.
+				k := j
+				for k < len(lines) && strings.TrimSpace(lines[k]) == "" {
+					k++
+				}
+				if k < len(lines) && standaloneLink.MatchString(strings.TrimSpace(lines[k])) {
+					j = k
+					continue
+				}
+			}
+			break
+		}
+		if len(rows) < 2 {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+		html, err := inlineDBHTML("", rows)
+		if err != nil {
+			// 상자를 못 만들면 원문 그대로 둔다. 링크는 여전히 눌린다.
+			out = append(out, lines[i:j]...)
+			i = j
+			continue
+		}
+		out = append(out, html)
+		grouped++
+		i = j
+	}
+	return strings.Join(out, "\n"), grouped
 }
