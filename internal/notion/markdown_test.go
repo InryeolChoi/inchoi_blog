@@ -939,6 +939,54 @@ func TestEmptyEquationLeavesComment(t *testing.T) {
 	}
 }
 
+func TestEmphasisDoesNotWrapSpace(t *testing.T) {
+	// 노션은 굵게 범위에 뒤따르는 공백까지 넣는 일이 잦다. 그대로 쓰면
+	// `**시그마 대수, **`가 되고, 닫는 `**` 앞이 공백이라 짝이 안 지어져
+	// 별표가 글자로 보인다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"text","plain_text":"우리는 ","annotations":{}},
+	    {"type":"text","plain_text":"시그마 대수, ","annotations":{"bold":true}},
+	    {"type":"text","plain_text":"라고 한다.","annotations":{}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, "**시그마 대수,** ") {
+		t.Errorf("공백이 기호 밖으로 안 나갔다:\n%s", md)
+	}
+	if strings.Contains(md, "**시그마 대수, **") {
+		t.Errorf("짝이 안 지어지는 형태가 남았다:\n%s", md)
+	}
+}
+
+func TestEmphasisKeepsLeadingSpaceOutside(t *testing.T) {
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"text","plain_text":"가","annotations":{}},
+	    {"type":"text","plain_text":" 사용","annotations":{"bold":true}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, "가 **사용**") {
+		t.Errorf("앞 공백이 기호 밖으로 안 나갔다:\n%s", md)
+	}
+}
+
+func TestEmphasisOnAllSpaceIsDropped(t *testing.T) {
+	// 통째로 공백이면 감쌀 알맹이가 없다. 기호를 붙여봐야 짝이 안 된다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"text","plain_text":"앞","annotations":{}},
+	    {"type":"text","plain_text":" ","annotations":{"bold":true}},
+	    {"type":"text","plain_text":"뒤","annotations":{}}
+	  ]}}
+	]`))
+
+	if strings.Contains(md, "**") {
+		t.Errorf("공백만 있는데 기호를 붙였다:\n%s", md)
+	}
+}
+
 func TestMathWrapsHangulInText(t *testing.T) {
 	// KaTeX는 수식 모드의 한글을 수학 글꼴로 그려서 자모가 뭉개진다.
 	md, _ := convertJSON(t, blocksJSON(`[
@@ -977,5 +1025,54 @@ func TestMathLeavesExistingTextAlone(t *testing.T) {
 
 	if !strings.Contains(md, `\text{일때, } x_{i}\text{는} \text{작다}`) {
 		t.Errorf("이미 \\text{}인 자리를 건드렸거나 밖을 안 감쌌다:\n%s", md)
+	}
+}
+
+func TestEmphasisFallsBackToHTMLWhenItCannotPair(t *testing.T) {
+	// 닫는 `**` 앞이 문장부호이고 뒤가 한글이면 CommonMark가 짝으로 안 본다.
+	// 한국어에서 조사가 바로 붙어 자주 걸린다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"text","plain_text":"하나의 테이블을 ","annotations":{}},
+	    {"type":"text","plain_text":"릴레이션(relation)","annotations":{"bold":true}},
+	    {"type":"text","plain_text":"이라고 한다.","annotations":{}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, "<strong>릴레이션(relation)</strong>이라고") {
+		t.Errorf("짝이 안 되는 자리를 HTML로 안 냈다:\n%s", md)
+	}
+	if strings.Contains(md, "**릴레이션") {
+		t.Errorf("짝이 안 지어지는 마크다운이 남았다:\n%s", md)
+	}
+}
+
+func TestEmphasisStaysMarkdownWhenItPairs(t *testing.T) {
+	// 알맹이가 글자로 끝나면 뒤에 조사가 붙어도 짝이 된다. 그런 자리는
+	// 마크다운으로 둔다 — 본문은 사람이 웹에서 고칠 것이다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"text","plain_text":"이를 ","annotations":{}},
+	    {"type":"text","plain_text":"슈퍼키","annotations":{"bold":true}},
+	    {"type":"text","plain_text":"라고 하며","annotations":{}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, "**슈퍼키**라고") {
+		t.Errorf("짝이 되는데 HTML로 냈다:\n%s", md)
+	}
+}
+
+func TestEmphasisPairsWhenFollowedByPunctuation(t *testing.T) {
+	// 문장부호로 끝나도 뒤가 문장부호나 공백이면 짝이 된다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"text","plain_text":"슈퍼키!","annotations":{"bold":true}},
+	    {"type":"text","plain_text":" 끝","annotations":{}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, "**슈퍼키!**") {
+		t.Errorf("짝이 되는데 HTML로 냈다:\n%s", md)
 	}
 }

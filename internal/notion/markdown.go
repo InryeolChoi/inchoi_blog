@@ -5,6 +5,8 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // ImageURLPrefix는 결과 마크다운이 이미지를 가리킬 경로 앞부분이다.
@@ -769,13 +771,75 @@ func normalizeBlockMath(expr string) string {
 // renderRichText는 rich_text 배열을 인라인 마크다운으로 바꾼다.
 func renderRichText(rts []RichText) string {
 	var sb strings.Builder
-	for _, rt := range rts {
-		sb.WriteString(renderRichTextOne(rt))
+	for i, rt := range rts {
+		// 서식 기호가 짝이 되는지는 **앞뒤 글자에 달려 있다**(아래 canPairEmphasis).
+		// 그래서 조각을 따로 떼어 보지 않고 이웃을 같이 넘긴다.
+		sb.WriteString(renderRichTextOne(rt, lastRune(sb.String()), firstRune(plainTextOf(rts[i+1:]))))
 	}
 	return sb.String()
 }
 
-func renderRichTextOne(rt RichText) string {
+// plainTextOf는 뒤따르는 조각들의 글자를 이어붙인다. 바로 다음 조각이 비어 있을
+// 수 있어서 나오는 첫 글자를 찾을 때까지 본다.
+func plainTextOf(rts []RichText) string {
+	for _, rt := range rts {
+		if rt.PlainText != "" {
+			return rt.PlainText
+		}
+		if rt.Type == "equation" && rt.Equation != nil {
+			return "$"
+		}
+	}
+	return ""
+}
+
+func lastRune(s string) rune {
+	if s == "" {
+		return 0
+	}
+	r, _ := utf8.DecodeLastRuneInString(s)
+	return r
+}
+
+func firstRune(s string) rune {
+	if s == "" {
+		return 0
+	}
+	r, _ := utf8.DecodeRuneInString(s)
+	return r
+}
+
+// canPairEmphasis는 `**알맹이**` 꼴이 CommonMark에서 짝이 되는지 본다.
+//
+// 규칙은 "여는 기호는 왼쪽으로, 닫는 기호는 오른쪽으로 붙어야 한다"인데,
+// **문장부호가 끼면 조건이 하나 더 붙는다**: 닫는 기호 바로 앞이 문장부호면
+// 기호 뒤가 공백이거나 문장부호여야 한다. 한국어에서 이게 자주 걸린다 —
+// `**릴레이션(relation)**이라고`는 닫는 기호 앞이 `)`이고 뒤가 `이`라서
+// 짝이 안 지어지고 별표가 글자로 보인다. 덤프 전체에서 186자리가 이랬다.
+//
+// prev는 앞에 이미 쓴 글자, next는 뒤에 나올 글자다. 줄의 처음과 끝(0)은
+// 공백으로 친다.
+func canPairEmphasis(core string, prev, next rune) bool {
+	open, _ := utf8.DecodeRuneInString(core)
+	close, _ := utf8.DecodeLastRuneInString(core)
+	// 여는 기호: 알맹이 첫 글자가 문장부호면 기호 앞이 공백이나 문장부호여야 한다.
+	if isPunct(open) && !isSpaceOrEdge(prev) && !isPunct(prev) {
+		return false
+	}
+	// 닫는 기호: 알맹이 끝 글자가 문장부호면 기호 뒤가 공백이나 문장부호여야 한다.
+	if isPunct(close) && !isSpaceOrEdge(next) && !isPunct(next) {
+		return false
+	}
+	return true
+}
+
+func isSpaceOrEdge(r rune) bool { return r == 0 || unicode.IsSpace(r) }
+
+// isPunct는 CommonMark가 말하는 문장부호다. 기호(S 범주)도 여기 든다 —
+// `✅`나 `→` 같은 것도 문장부호로 친다.
+func isPunct(r rune) bool { return unicode.IsPunct(r) || unicode.IsSymbol(r) }
+
+func renderRichTextOne(rt RichText, prev, next rune) string {
 	if rt.Type == "equation" && rt.Equation != nil {
 		return "$" + normalizeInlineMath(rt.Equation.Expression) + "$"
 	}
@@ -789,18 +853,34 @@ func renderRichTextOne(rt RichText) string {
 	if rt.Annotations.Code {
 		text = "`" + text + "`"
 	} else {
-		if rt.Annotations.Bold {
-			text = "**" + text + "**"
-		}
-		if rt.Annotations.Italic {
-			text = "*" + text + "*"
-		}
-		if rt.Annotations.Strikethrough {
-			text = "~~" + text + "~~"
-		}
-		if rt.Annotations.Underline {
-			// 마크다운에 밑줄이 없다. HTML로 남긴다.
-			text = "<u>" + text + "</u>"
+		// **서식 기호가 공백을 감싸면 안 된다.** CommonMark에서 여는 `**`는 뒤가,
+		// 닫는 `**`는 앞이 공백이 아니어야 짝이 된다. 노션은 굵게 범위에 뒤따르는
+		// 공백까지 넣는 일이 잦은데(`"시그마 대수, "`), 그대로 `**시그마 대수, **`로
+		// 쓰면 짝이 안 지어져서 별표가 글자로 보인다. 덤프 전체에서 237조각이
+		// 이렇다. 공백을 기호 밖으로 빼면 뜻은 그대로고 짝은 맞는다.
+		lead, core, trail := splitOuterSpace(text)
+		if core != "" {
+			// 알맹이가 문장부호로 끝나고 바로 뒤에 조사가 붙는 자리에서는
+			// 마크다운 기호가 짝이 안 된다. 그럴 때만 HTML로 낸다 — 본문은
+			// 사람이 웹에서 고칠 것이라 되도록 마크다운으로 두는 편이 낫다.
+			ml := markdownEmphasis
+			if !canPairEmphasis(core, lastRune(lead+string(prev)), firstRune(trail+string(next))) {
+				ml = htmlEmphasis
+			}
+			if rt.Annotations.Bold {
+				core = ml.bold(core)
+			}
+			if rt.Annotations.Italic {
+				core = ml.italic(core)
+			}
+			if rt.Annotations.Strikethrough {
+				core = ml.strike(core)
+			}
+			if rt.Annotations.Underline {
+				// 마크다운에 밑줄이 없다. HTML로 남긴다.
+				core = "<u>" + core + "</u>"
+			}
+			text = lead + core + trail
 		}
 	}
 
@@ -1005,4 +1085,36 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return string(runes[:max]) + "…"
+}
+
+// splitOuterSpace는 앞뒤 공백을 알맹이와 갈라놓는다.
+// 알맹이가 통째로 공백이면 core가 빈 문자열이다.
+func splitOuterSpace(s string) (lead, core, trail string) {
+	// **유니코드 공백 전부를 본다.** 노션 본문에는 줄바꿈 없는 공백(U+00A0)이
+	// 흔한데, 그것도 CommonMark가 공백으로 치므로 기호 안에 남으면 짝이 깨진다.
+	core = strings.TrimFunc(s, unicode.IsSpace)
+	if core == "" {
+		return "", "", s
+	}
+	i := strings.Index(s, core)
+	return s[:i], core, s[i+len(core):]
+}
+
+// emphasisMarkup은 굵게·기울임·취소선을 어떤 표기로 낼지다.
+type emphasisMarkup struct {
+	bold, italic, strike func(string) string
+}
+
+var markdownEmphasis = emphasisMarkup{
+	bold:   func(s string) string { return "**" + s + "**" },
+	italic: func(s string) string { return "*" + s + "*" },
+	strike: func(s string) string { return "~~" + s + "~~" },
+}
+
+// htmlEmphasis는 마크다운 기호가 짝이 안 되는 자리에서 쓴다. goldmark가 raw
+// HTML을 통과시키므로(WithUnsafe) 이웃 글자에 상관없이 항상 옳게 그려진다.
+var htmlEmphasis = emphasisMarkup{
+	bold:   func(s string) string { return "<strong>" + s + "</strong>" },
+	italic: func(s string) string { return "<em>" + s + "</em>" },
+	strike: func(s string) string { return "<del>" + s + "</del>" },
 }
