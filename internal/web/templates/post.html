@@ -7,14 +7,23 @@
   </p>
 </header>
 
-{{/* 목차. 제목이 outlineMinHeadings개 이상일 때만 서버가 채워 보낸다. */}}
+{{/* 목차. 제목이 outlineMinHeadings개 이상일 때만 서버가 채워 보낸다.
+
+     접고 펴는 것은 <details>가 한다. 스크립트를 쓰지 않는 이유는 사이드바와
+     같다 — CDN이 막히거나 JS가 꺼져도 목차는 그대로 펴진 채로 읽힌다. */}}
 {{with .Outline}}
 <nav class="toc" aria-label="목차">
-  <p class="toc-title">목차</p>
-  <ul>
-    {{range .}}<li class="toc-h{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>
-    {{end}}
-  </ul>
+  <details open>
+    <summary class="toc-title">
+      {{/* 삼각형은 사이드바와 같은 것을 쓴다. 접힘 상태가 한눈에 같아 보여야 한다. */}}
+      <svg class="toc-twist" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1l4 4-4 4z"/></svg>
+      목차
+    </summary>
+    <ul>
+      {{range .}}<li class="toc-h{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>
+      {{end}}
+    </ul>
+  </details>
 </nav>
 {{end}}
 
