@@ -938,3 +938,44 @@ func TestEmptyEquationLeavesComment(t *testing.T) {
 		t.Errorf("빈 블록이 기록되지 않았다: %+v", rep.Issues)
 	}
 }
+
+func TestMathWrapsHangulInText(t *testing.T) {
+	// KaTeX는 수식 모드의 한글을 수학 글꼴로 그려서 자모가 뭉개진다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"equation","plain_text":"x_{선수} \\le x+w",
+	     "equation":{"expression":"x_{선수} \\le x+w"},"annotations":{}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, `x_{\text{선수}} \le x+w`) {
+		t.Errorf("한글을 \\text{}로 안 감쌌다:\n%s", md)
+	}
+}
+
+func TestMathKeepsSpaceInsideHangulRun(t *testing.T) {
+	// 수식 모드에서 공백은 무시된다. 덩어리를 따로 감싸면 `행의갯수`가 된다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"equation","plain_text":"e","equation":{"expression":"\\binom{행의 갯수}{열의 갯수}"},"annotations":{}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, `\binom{\text{행의 갯수}}{\text{열의 갯수}}`) {
+		t.Errorf("한글 사이 공백이 사라졌다:\n%s", md)
+	}
+}
+
+func TestMathLeavesExistingTextAlone(t *testing.T) {
+	// 원문이 이미 \text{}로 옳게 쓴 자리는 두 번 감싸지 않는다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"paragraph","paragraph":{"rich_text":[
+	    {"type":"equation","plain_text":"e",
+	     "equation":{"expression":"\\text{일때, } x_{i}는 \\text{작다}"},"annotations":{}}
+	  ]}}
+	]`))
+
+	if !strings.Contains(md, `\text{일때, } x_{i}\text{는} \text{작다}`) {
+		t.Errorf("이미 \\text{}인 자리를 건드렸거나 밖을 안 감쌌다:\n%s", md)
+	}
+}

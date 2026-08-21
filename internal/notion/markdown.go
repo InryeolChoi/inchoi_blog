@@ -752,6 +752,7 @@ var blankLines = regexp.MustCompile(`\n[ \t]*\n[\s]*`)
 // 닫는 $가 서로 다른 문단으로 갈라져서 수식이 렌더링되지 않고 $가 글자로 보인다.
 // 리스트 안에서는 이어지는 줄에 들여쓰기까지 끼어들어 수식 문자열이 더 변형된다.
 func normalizeInlineMath(expr string) string {
+	expr = wrapHangulInText(expr)
 	return strings.Join(strings.Fields(expr), " ")
 }
 
@@ -761,6 +762,7 @@ func normalizeInlineMath(expr string) string {
 // $$ ... $$ 안의 빈 줄은 마크다운 파서가 문단 경계로 볼 수 있어서 수식 블록이
 // 중간에 끊길 위험이 있다.
 func normalizeBlockMath(expr string) string {
+	expr = wrapHangulInText(expr)
 	return strings.TrimSpace(blankLines.ReplaceAllString(expr, "\n"))
 }
 
