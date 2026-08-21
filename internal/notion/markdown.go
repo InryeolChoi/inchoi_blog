@@ -443,12 +443,25 @@ func (c *converter) toggle(b Block, path string) string {
 
 	children := joinChunks(c.renderBlocks(b.Children, path+">children"))
 	if children == "" {
-		reason := "노션에서도 비어 있던 토글이라 뺐다"
-		if len(b.Children) > 0 {
-			reason = "자식이 있었지만 변환 결과가 비어서 뺐다"
+		// 자식이 아예 없던 토글과, 자식을 넣어뒀는데 그 내용이 빈 토글은 다르다.
+		// 앞의 것은 라벨만 붙은 빈 껍데기라 통째로 뺀다. 뒤의 것은 사람이 거기에
+		// 무언가를 쓰려고 자리를 잡아둔 것이고, 실제로 이런 토글의 summary는
+		// 라벨이 아니라 문장이었다. 껍데기만 벗기고 글자는 문단으로 남긴다.
+		if len(b.Children) == 0 {
+			c.note(b, path, KindDroppedEmptyToggle,
+				"노션에서도 비어 있던 토글이라 뺐다 (summary: %s)", plainSummary(b))
+			return ""
 		}
-		c.note(b, path, KindDroppedEmptyToggle, "%s (summary: %s)", reason, plainSummary(b))
-		return ""
+		// 문단이 되므로 HTML이 아니라 마크다운으로 낸다. <summary> 안과 달리
+		// 여기는 goldmark가 인라인 파싱을 하는 자리다.
+		text := c.richTextBody(b)
+		if text == "" {
+			c.note(b, path, KindDroppedEmptyToggle, "자식도 summary도 비어서 뺐다")
+			return ""
+		}
+		c.note(b, path, KindToggleToParagraph,
+			"자식이 비어 있어 토글 껍데기만 벗기고 summary를 문단으로 남겼다 (%s)", plainSummary(b))
+		return text
 	}
 
 	summary := c.richTextBodyHTML(b)

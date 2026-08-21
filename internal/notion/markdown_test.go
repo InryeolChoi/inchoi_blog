@@ -367,8 +367,7 @@ func TestEmptyToggleIsDropped(t *testing.T) {
 }
 
 func TestToggleWithLostChildrenIsDroppedAndReported(t *testing.T) {
-	// 자식이 있었는데 변환 결과가 비었다면 변환기가 뭔가를 버렸다는 신호다.
-	// 토글은 빼되 기록은 남긴다.
+	// 목차만 든 토글은 자식이 있어도 통째로 뺀다(summary도 같이).
 	md, rep := convertJSON(t, blocksJSON(`[
 	  {"id":"b1","type":"toggle","has_children":true,
 	   "toggle":{"rich_text":[{"type":"text","plain_text":"개념","annotations":{}}]},
@@ -381,6 +380,32 @@ func TestToggleWithLostChildrenIsDroppedAndReported(t *testing.T) {
 	}
 	if rep.CountKind(KindDroppedTOCToggle) != 1 {
 		t.Errorf("목차만 든 토글로 기록되지 않았다: %+v", rep)
+	}
+}
+
+func TestToggleWithEmptyChildBecomesParagraph(t *testing.T) {
+	// 자식을 넣어뒀는데 그 내용이 비었다면 사람이 거기 뭔가를 쓰려던 자리다.
+	// 껍데기만 벗기고 summary 글자는 문단으로 남긴다.
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"toggle","has_children":true,
+	   "toggle":{"rich_text":[
+	     {"type":"text","plain_text":"이를 시행한 뒤 ","annotations":{}},
+	     {"type":"text","plain_text":"train_dataset[0]","annotations":{"code":true}},
+	     {"type":"text","plain_text":"을 시행하면 다음과 같음","annotations":{}}
+	   ]},
+	   "children":[{"id":"b2","type":"paragraph","paragraph":{"rich_text":[]}}]}
+	]`))
+
+	if strings.Contains(md, "<details>") || strings.Contains(md, "<summary>") {
+		t.Errorf("토글 껍데기가 남았다:\n%s", md)
+	}
+	// 문단이니 마크다운으로 나와야 한다(<summary> 안과 달리 인라인 파싱이 닿는다).
+	want := "이를 시행한 뒤 `train_dataset[0]`을 시행하면 다음과 같음"
+	if !strings.Contains(md, want) {
+		t.Errorf("summary 글자가 문단으로 안 남았다:\n%s", md)
+	}
+	if rep.CountKind(KindToggleToParagraph) != 1 {
+		t.Errorf("toggle-to-paragraph 기록이 없다: %+v", rep)
 	}
 }
 

@@ -33,6 +33,7 @@ const (
 	KindDroppedTOC         Kind = "dropped-toc"          // 목차 블록 제거
 	KindDroppedTOCToggle   Kind = "dropped-toc-toggle"   // 목차만 들어 있던 토글째로 제거
 	KindDroppedEmptyToggle Kind = "dropped-empty-toggle" // 눌러도 아무것도 안 나오는 빈 토글 제거
+	KindToggleToParagraph  Kind = "toggle-to-paragraph"  // 자식이 빈 토글을 풀고 summary만 문단으로 남김
 	KindChildLink          Kind = "child-link"           // 하위 페이지/DB 링크 (slug 재작성 필요)
 	KindSyncedCopy         Kind = "synced-copy"          // 사본 synced_block 건너뜀
 	KindEmbedAsLink        Kind = "embed-as-link"        // 임베드를 링크로 바꿈
