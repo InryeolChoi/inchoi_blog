@@ -457,3 +457,69 @@ func TestOutlineUsesResolvedBody(t *testing.T) {
 		}
 	}
 }
+
+// TestPostPageDropsChildrenLinkedInBody는 본문이 이미 가리키는 하위 글이
+// "하위 글"에 또 나오지 않는지 본다.
+//
+// cmd/postparent가 parent_id를 채운 근거가 child_page 블록인데 그 블록은
+// 본문에서 링크가 된다. 그래서 손대지 않으면 같은 목록이 두 번 나온다.
+func TestPostPageDropsChildrenLinkedInBody(t *testing.T) {
+	srv, h := inlineFixture(t)
+
+	// row-1, row-2는 owner 본문이 인라인 데이터베이스 목록으로 펼치고,
+	// r-tips는 글자 링크로 가리킨다. 셋 다 owner의 하위 글로 매단다.
+	if _, err := srv.store.db.Exec(`
+		UPDATE posts SET parent_id = (SELECT id FROM posts WHERE slug = 'owner')
+		WHERE slug IN ('row-1', 'row-2', 'r-tips')`); err != nil {
+		t.Fatal(err)
+	}
+
+	page := get(t, h, "/p/owner").Body.String()
+
+	if !strings.Contains(page, `class="inline-db"`) {
+		t.Fatal("본문에 펼친 목록이 없다")
+	}
+	for _, slug := range []string{"row-1", "row-2"} {
+		if n := strings.Count(page, `href="/p/`+slug+`"`); n != 1 {
+			t.Errorf("%s 링크가 %d번 나온다 (본문에 1번이어야 한다)", slug, n)
+		}
+	}
+	// r-tips는 픽스처 본문에 두 번 나온다(자리표시자 + 글자 링크). 그건 본문
+	// 사정이고, 여기서 볼 것은 "하위 글" 목록에 또 안 나오는지다.
+	if strings.Contains(page, "하위 글") {
+		t.Error("하위 글이 전부 본문에 있는데 섹션이 남았다")
+	}
+}
+
+// TestPostPageKeepsChildrenNotInBody는 본문이 안 가리키는 하위 글은 그대로
+// 남는지 본다. 본문에 없으면 여기서 빼는 순간 갈 길이 사라진다.
+func TestPostPageKeepsChildrenNotInBody(t *testing.T) {
+	srv, h := inlineFixture(t)
+
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := srv.store.db.Exec(q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 본문 어디에도 안 나오는 하위 글을 하나 만든다.
+	exec(`INSERT INTO posts (slug, title, body, status, source, category_id, sort_order,
+	      original_path, created_at, updated_at, parent_id)
+	      VALUES ('lonely', '본문에 없는 글', '내용', 'unlisted', 'notion', 1, 0,
+	              '수학 & 통계 > 탐색적 자료분석 > 본문에 없는 글', datetime('now'), datetime('now'),
+	              (SELECT id FROM posts WHERE slug = 'owner'))`)
+	exec(`UPDATE posts SET parent_id = (SELECT id FROM posts WHERE slug = 'owner')
+	      WHERE slug IN ('row-1', 'row-2')`)
+
+	page := get(t, h, "/p/owner").Body.String()
+
+	if !strings.Contains(page, "하위 글") {
+		t.Fatal("본문이 안 가리키는 하위 글까지 없앴다")
+	}
+	if !strings.Contains(page, `href="/p/lonely"`) {
+		t.Error("본문에 없는 하위 글이 목록에서 빠졌다")
+	}
+	if strings.Contains(page, `하위 글`) && strings.Count(page, `href="/p/row-1"`) != 1 {
+		t.Error("본문에 있는 하위 글이 목록에도 남았다")
+	}
+}

@@ -395,6 +395,10 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		crumbList = append(crumbList, Crumb{Name: a.Title, URL: "/p/" + url.PathEscape(a.Slug)})
 	}
 
+	// 본문이 이미 가리키고 있는 글은 "하위 글"에서 뺀다. 안 그러면 한 화면에
+	// 같은 목록이 두 번 나온다.
+	post.Children = dropLinkedChildren(post.Children, rendered.HTML)
+
 	// 글을 열면 사이드바에서 그 글이 속한 분류가 펼쳐져 있어야 한다.
 	open, active := openTrail(post.Trail)
 	s.render(w, "post.html", pageData{
@@ -406,6 +410,51 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		openCats:  open,
 		activeCat: active,
 	})
+}
+
+// postHref는 본문 HTML에서 글로 가는 링크를 잡는다.
+var postHref = regexp.MustCompile(`href="/p/([^"#]+)`)
+
+// dropLinkedChildren은 본문이 이미 링크로 가리키고 있는 하위 글을 "하위 글"
+// 목록에서 뺀다.
+//
+// 노션에서 한 글의 머리에 목록을 두던 습관이 두 벌로 나타나기 때문이다.
+// cmd/postparent가 parent_id를 채운 근거가 child_page 블록인데, **그 블록이
+// 본문에서는 링크가 된다.** 그래서 본문에 목록이 있고 그 아래 "하위 글"에
+// 같은 목록이 또 나온다. 인라인 데이터베이스가 목록으로 펼쳐지는 경우도
+// 결국 같은 `<a href="/p/...">`라 여기서 같이 걸린다.
+//
+// **본문 HTML에서 찾는다.** 원문 마크다운이 아니라 렌더링 결과를 보는 이유는,
+// 펼친 인라인 데이터베이스처럼 렌더링 단계에서 생기는 링크까지 세야 하기
+// 때문이다(inline.go).
+//
+// **글 하나씩 따진다.** 본문이 가리키는 글은 눌러서 갈 수 있으니 목록에서
+// 빼도 길이 사라지지 않고, 본문이 안 가리키는 형제는 그대로 남는다. 지금은
+// 하위 글이 있는 6편 모두 자식 전부가 본문에 링크돼 있어 섹션이 통째로
+// 사라지지만, parent_id를 다른 카테고리로 넓히면 일부만 빠지는 경우가 생긴다.
+func dropLinkedChildren(children []PostSummary, body template.HTML) []PostSummary {
+	if len(children) == 0 {
+		return children
+	}
+	linked := map[string]bool{}
+	for _, m := range postHref.FindAllStringSubmatch(string(body), -1) {
+		slug, err := url.PathUnescape(m[1])
+		if err != nil {
+			slug = m[1]
+		}
+		linked[slug] = true
+	}
+	if len(linked) == 0 {
+		return children
+	}
+	out := make([]PostSummary, 0, len(children))
+	for _, c := range children {
+		if linked[c.Slug] {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // staticName은 정적 파일 이름이 될 수 있는 형태인지 본다.
