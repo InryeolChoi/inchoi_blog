@@ -57,6 +57,26 @@ var PostMoves = []PostMove{
 	{NotionPageID: "1080901b-87f1-800c-b1d5-f98d79010552", ToSlug: "project", Title: "PhiloSopher"},
 	{NotionPageID: "5fd73f8a-648d-4b15-88be-c3612e0c3262", ToSlug: "project", Title: "Where42"},
 	{NotionPageID: "e210fa33-6030-430e-8a7b-58d1026b1ba7", ToSlug: "project", Title: "심심조각"},
+
+	// 노션에서 `최적화이론 > 수업 : 통수 & 선계`에 있던 글이다. 그 수업이 통계수학과
+	// 선형계획을 같이 다뤄서 선형대수 내용까지 최적화이론 밑에 들어가 있었다.
+	// 최적화(라그랑주·심플렉스·쌍대정리)는 그대로 두고 선형대수만 옮긴다.
+	//
+	// 선형대수 카테고리에는 같은 제목의 글이 이미 있지만 **전부 본문이 0바이트인
+	// 껍데기다**(노션에서 목차만 만들고 내용을 안 쓴 것). 내용이 있는 쪽이 이쪽이라
+	// 옮기면 그 분류가 비로소 알맹이를 갖는다. 껍데기는 지우지 않고 그대로 둔다 —
+	// 이 프로젝트는 글을 지우지 않는다.
+	{NotionPageID: "2cb48833-6e6e-4b48-9f74-2855ef3c63db", ToSlug: "선형대수", Title: "고유값과 대각화"},
+	{NotionPageID: "c520daf4-6db6-44cd-9767-d0f0c560caa2", ToSlug: "선형대수", Title: "내적공간"},
+	{NotionPageID: "f69e826a-2112-4dbe-861d-8b61e0c136a5", ToSlug: "선형대수", Title: "벡터"},
+	{NotionPageID: "8ef5464f-7a44-41c5-9850-f9804ff9cf2f", ToSlug: "선형대수", Title: "벡터공간"},
+	{NotionPageID: "2275909f-ed86-40c7-ba47-198768145ded", ToSlug: "선형대수", Title: "선형변환"},
+	{NotionPageID: "f77c0e4e-dd54-4a4a-9534-e9f8ca1846a8", ToSlug: "선형대수", Title: "특이값 분해"},
+	{NotionPageID: "c76070b0-c71d-45ba-82d7-a542f7dbab89", ToSlug: "선형대수", Title: "피봇연산"},
+	{NotionPageID: "5ef93000-4852-4af7-84cf-37c78b9b3774", ToSlug: "선형대수", Title: "피봇연산과 대각화"},
+	{NotionPageID: "9e966d0e-e821-46e5-b5d4-64aae905748d", ToSlug: "선형대수", Title: "피봇연산과 역행렬"},
+	{NotionPageID: "7555c053-d6d0-404c-9282-43b737a4c063", ToSlug: "선형대수", Title: "행렬"},
+	{NotionPageID: "4e2f7f05-8d33-46bb-8285-833973dd7747", ToSlug: "선형대수", Title: "행렬식과 역행렬"},
 }
 
 // DropCategory는 사람이 없애기로 한 카테고리다.
