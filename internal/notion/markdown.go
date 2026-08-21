@@ -227,7 +227,12 @@ func isSoftInterrupt(b Block) bool {
 func (c *converter) renderBlock(b Block, path string, number int) (string, bool) {
 	switch b.Type {
 	case "paragraph":
-		return c.withChildren(b, path, c.richTextBody(b), "  ", false), false
+		// **자식을 들여쓰지 않는다.** 마크다운에는 "문단의 자식"이라는 구조가 없어서
+		// 들여써도 아무 뜻이 없고, 대신 위험하다: CommonMark에서 4칸 들여쓰기는
+		// 코드 블록이라, 문단 안에 문단이 겹치면 두 칸씩 쌓여 4칸을 넘고 그 아래
+		// 목록이 통째로 회색 상자가 된다. 그 안의 `$수식$`은 코드 안이라 글자로 굳는다.
+		// 실제로 `1. 확률`에서 그랬다. 제목(heading_*)도 같은 이유로 안 들여쓴다.
+		return c.withChildren(b, path, c.richTextBody(b), "", false), false
 
 	case "heading_1", "heading_2", "heading_3":
 		level := map[string]string{"heading_1": "#", "heading_2": "##", "heading_3": "###"}[b.Type]

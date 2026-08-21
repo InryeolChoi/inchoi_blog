@@ -234,3 +234,31 @@ func TestFencedCodeAfterBlockMath(t *testing.T) {
 		t.Errorf("코드 블록이 사라졌다:\n%s", got)
 	}
 }
+
+// TestNestedParagraphChildrenStayOutOfCodeBlock은 문단 아래 깊이 달린 내용이
+// 코드 블록으로 굳지 않는지 본다.
+//
+// CommonMark에서 4칸 들여쓰기는 코드 블록이다. 변환기가 문단의 자식을 들여쓰면
+// 그게 겹쳐 4칸을 넘고, 목록이 통째로 회색 상자가 되면서 안의 수식이 글자로 굳는다.
+// 변환기 쪽에서 문단 자식을 들여쓰지 않게 고쳤다(internal/notion/markdown.go).
+func TestNestedParagraphChildrenStayOutOfCodeBlock(t *testing.T) {
+	// 변환기가 내놓는 모양: 문단(0칸) 아래 목록(2칸), 그 아래 문단(4칸)이 아니라
+	// 목록(2칸) 아래 문단(4칸)까지만 간다.
+	got := render(t, "머리말\n\n- 항목\n\n  $P(B) \\geq P(A)$\n")
+
+	if strings.Contains(got, "<pre>") {
+		t.Errorf("목록 안 문단이 코드 블록이 됐다:\n%s", got)
+	}
+	if !strings.Contains(got, `class="math math-inline"`) {
+		t.Errorf("수식이 안 살아났다:\n%s", got)
+	}
+}
+
+// TestFencedCodeStillWorks는 울타리 코드 블록은 그대로인지 본다.
+func TestFencedCodeStillWorks(t *testing.T) {
+	got := render(t, "```python\nx = 1\n```\n")
+
+	if !strings.Contains(got, `<code class="language-python">`) {
+		t.Errorf("울타리 코드가 깨졌다:\n%s", got)
+	}
+}
