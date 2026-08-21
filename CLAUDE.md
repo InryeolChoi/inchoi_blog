@@ -204,6 +204,7 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 | `Covers` | 사람이 만든 8개 분류에 표지 글 붙이기 | `notion_page_id` | 〃 | `/intro` ← 최인렬 페이지 |
 | `PostMoves` | 글 하나를 경로와 다른 카테고리에 붙임 | `notion_page_id` | 〃 | 6건 → `/project` |
 | `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | `프로젝트` |
+| `DropPosts` | **글을 이관에서 뺌** | `notion_page_id` | **import** | 1건 |
 | `BodyEdits` | **본문에서 줄 덜어내기** | `notion_page_id` | **import** | 1건 (소개 글) |
 
 - 키는 전부 사람이 바꾸지 않는 값이다. 이름이나 slug를 바꿔도 안 깨진다.
@@ -219,6 +220,11 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
   그래서 순서가 있다: `categorize`로 글을 먼저 옮기고 그다음 `regroup`으로 지운다.
 - 네 도구(categorize · regroup · sortorder · postparent)를 어떤 순서로 몇 번
   돌려도 결과가 같아야 한다. 바꾼 뒤에는 그걸 확인할 것.
+
+**`DropPosts`는 이 프로젝트의 원칙에 대한 예외다.** 원래 글은 지우지 않고 status로
+가린다. 그래서 표에 이유를 함께 적는다. **DB에서 행만 지우면 안 된다** — 덤프에
+있는 한 다음 `import -db`가 다시 넣는다. 여기 적어두면 변환 단계에서 건너뛰므로
+몇 번을 다시 이관해도 안 돌아온다. 현재 1건(회귀분석 밑의 제목도 본문도 없는 페이지).
 
 **`BodyEdits`만 보는 쪽이 다르다** — 분류가 아니라 **본문**을 고치기 때문에
 `cmd/import`가 변환 직후에 적용한다.

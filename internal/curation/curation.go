@@ -148,6 +148,39 @@ func PostMoveBySlug() map[string]string {
 
 // ── 본문에서 덜어낸 것 ──────────────────────────────────────────────────
 
+// DropPost는 사람이 이관하지 않기로 한 글이다.
+//
+// **이 프로젝트는 원칙적으로 글을 지우지 않는다.** 공개 여부는 삭제가 아니라
+// status로 가린다. 여기 적는 것은 그 원칙의 예외이고, 그래서 이유를 함께 적는다.
+//
+// **DB에서 행만 지우면 안 된다.** 덤프에 있는 한 다음 `import -db`가 다시 넣는다.
+// 여기 적어두면 변환 단계에서 아예 건너뛰므로 몇 번을 다시 이관해도 안 돌아온다.
+type DropPost struct {
+	// NotionPageID는 안 넣을 글이다. posts의 멱등 키다.
+	NotionPageID string
+	Title        string // 사람이 읽으라고 적어두는 것. 대조에 쓰지 않는다.
+	Why          string
+}
+
+var DropPosts = []DropPost{
+	{
+		NotionPageID: "1678930f-1003-4482-81be-699992b904bc",
+		Title:        "(제목 없음)",
+		Why: "회귀분석 > 회귀분석 : 코드 밑에 제목도 본문도 없이 남은 빈 페이지다. " +
+			"목록에서 자리만 차지하고 눌러도 볼 것이 없다",
+	},
+}
+
+// Dropped는 이 글을 이관에서 빼야 하는지다.
+func Dropped(pageID string) bool {
+	for _, d := range DropPosts {
+		if d.NotionPageID == pageID {
+			return true
+		}
+	}
+	return false
+}
+
 // BodyEdit는 사람이 본문에서 덜어내기로 한 줄이다.
 //
 // 위의 표들과 달리 이건 분류가 아니라 **본문**을 고친다. 그래서 보는 쪽도
