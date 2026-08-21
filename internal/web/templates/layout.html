@@ -332,8 +332,27 @@
      원문이라도 읽히게 해둔다. */
   .math { font-family: var(--mono); font-size: .9em; background: var(--surface); }
   /* 인라인 수식은 줄바꿈이 안 된다(KaTeX가 한 덩어리로 그린다). 좁은 화면에서
-     행렬 같은 긴 식이 페이지를 밀지 않도록 제 안에서 스크롤하게 한다. */
-  .math-inline { display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: bottom; }
+     행렬 같은 긴 식이 페이지를 밀지 않도록 제 안에서 스크롤하게 한다.
+
+     overflow-x만 auto로 두면 안 된다. 한 축이 visible이 아니면 다른 축의 visible은
+     auto로 계산되므로 overflow-y까지 auto가 되고, KaTeX가 그린 식이 줄 상자보다
+     2px 높은 것만으로 세로 스크롤바가 뜬다. 그 스크롤바가 폭을 15px 먹으면 이번엔
+     가로가 넘쳐서 가로 스크롤바까지 뜬다 — 짧은 \sqrt x 옆에 회색 알약 두 개가
+     붙는 것이 이것이다 (수식 1528개 중 730개가 그랬다).
+
+     세로는 스크롤할 내용이 없으니 아예 닫는다. 가로는 스크롤은 살리되 **막대를
+     감춘다.** 문장 속에 끼는 인라인 수식에 스크롤 막대가 뜨는 것 자체가 맞지 않고,
+     실측해보니 상자 폭이 소수점이라 1~4px 반올림 차이로 헛뜨는 것이 402개인 반면
+     본문 폭을 진짜로 넘치는 식은 1528개 중 2개뿐이다. 그 2개도 좁은 화면에서만
+     넘치고, 막대가 없어도 손가락·트랙패드로 밀린다.
+
+     여백을 줘서 반올림 차이를 흡수하는 길도 있었지만(4px이면 다 사라진다) 그러면
+     식 1526개에 없던 공백이 붙고, 언젠가 4px을 넘는 식이 나오면 다시 깨진다.
+     블록 수식(.math-display)은 이 규칙에서 빼둔다 — 거긴 제 줄을 차지하는 덩어리라
+     넘칠 때 막대가 보이는 편이 맞다. */
+  .math-inline { display: inline-block; max-width: 100%; vertical-align: bottom;
+                 overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .math-inline::-webkit-scrollbar { display: none; }
   .math-display { display: block; padding: .6rem; margin: 1rem 0; white-space: pre-wrap; overflow-x: auto; border-radius: .3rem; }
   /* 그린 뒤에는 KaTeX가 자기 마크업을 넣는다. 위의 원문용 배경·글꼴을 지운다. */
   .math.katex-done { background: none; font-family: inherit; font-size: inherit; white-space: normal; }
