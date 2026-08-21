@@ -188,8 +188,12 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 	//
 	// 지금 스키마에는 "표지 글"을 표시할 자리가 없다. 그건 나중에 컬럼을 더할 일이고,
 	// 여기서는 category_id만 이어둔다.
+	droppedL1 := map[string]bool{}
+	for _, d := range curation.DropCategories {
+		droppedL1[d.SourceName] = true
+	}
 	for _, o := range orphans {
-		if _, ok := l1Posts[o.title]; ok {
+		if _, ok := l1Posts[o.title]; ok && !droppedL1[o.title] {
 			if prev, dup := p.coverByCategory[o.title]; dup {
 				// 같은 이름의 최상위 페이지가 둘이면 어느 쪽이 표지인지 알 수 없다.
 				return nil, fmt.Errorf(
@@ -204,7 +208,22 @@ func buildPlan(sqlDB *sql.DB) (*plan, error) {
 		p.assignByPageID[o.pageID] = ""
 	}
 
+	// 사람이 없애기로 한 분류(internal/curation)는 계획에서 뺀다.
+	//
+	// **없으면 regroup과 서로 싸운다.** regroup이 지운 분류를 categorize가 다음
+	// 실행에서 다시 만들고, 그러면 두 도구를 번갈아 돌릴 때마다 트리가 달라진다.
+	// 실제로 `수학 & 통계`와 `머신러닝 & 딥러닝`이 그렇게 되살아났다.
+	//
+	// 2단계는 뺄 필요가 없다. 지금 없애는 것은 전부 노션 최상위(1단계)이고,
+	// 그 밑의 2단계는 사람이 다른 곳으로 옮겨서 살아 있다(Moves).
+	dropped := map[string]bool{}
+	for _, d := range curation.DropCategories {
+		dropped[d.SourceName] = true
+	}
 	for name, n := range l1Posts {
+		if dropped[name] {
+			continue
+		}
 		p.level1 = append(p.level1, node{name: name, slug: importer.Slugify(name), posts: n})
 	}
 	for name, parent := range l2Parent {
@@ -355,6 +374,8 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 		return nil
 	}
 
+	movedCats := curation.MovedSourceNames()
+
 	// 1단계를 먼저 넣어야 2단계가 부모 id를 참조할 수 있다.
 	for i, n := range p.level1 {
 		if err := upsert(n, nil, i, true); err != nil {
@@ -362,6 +383,16 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 		}
 	}
 	for i, n := range p.level2 {
+		// 사람이 옮긴 카테고리는 경로가 알려주는 부모가 이미 없을 수 있다.
+		// 그런 건 upsert가 parent_id를 안 건드리므로 부모 id도 필요 없다.
+		if movedCats[n.name] {
+			// keepParent=true: 사람이 옮겨둔 자리를 그대로 둔다. 새 DB에서는
+			// 최상위로 들어갔다가 regroup이 제자리로 옮긴다.
+			if err := upsert(n, nil, i, true); err != nil {
+				return 0, err
+			}
+			continue
+		}
 		parentID, ok := idByName[n.parent]
 		if !ok {
 			return 0, fmt.Errorf("2단계 %q의 부모 %q를 못 찾았다", n.name, n.parent)
@@ -611,11 +642,64 @@ func verify(sqlDB *sql.DB, p *plan) error {
 	if err != nil {
 		return fmt.Errorf("표지 글 참조 검사: %w", err)
 	}
-	// 사람이 붙인 표지(internal/curation)는 categorize의 계획 밖이다. 그 글이 원래
-	// 어느 카테고리의 표지였다면 regroup이 옛 자리를 비웠으므로 총수는 그대로다.
-	wantCovers := len(p.coverByCategory)
-	fmt.Printf("표지 글이 이어진 카테고리: %d개 (계획 %d개 + 사람이 정한 %d개)%s\n",
-		coverCount, wantCovers, len(curation.Covers), mark(coverCount == wantCovers))
+	// 사람이 붙인 표지(internal/curation)는 categorize의 계획 밖이다.
+	//
+	// 계획이 이미 표지를 두는 카테고리에 사람이 다시 붙이면 총수가 그대로지만
+	// (소개 ← 최인렬 페이지가 그렇다), **계획에 표지가 없던 카테고리**에 붙이면
+	// 그만큼 늘어난다. 사람이 노션 2단계 분류에 목차 글을 표지로 달면서 이렇게 됐다.
+	// 그래서 겹치지 않는 것만 더해서 센다.
+	// **이름이 아니라 DB의 id로 센다.** 사람이 분류 이름을 바꾸면 계획의 이름과
+	// 실제 slug가 갈라지기 때문이다(핸즈온 머신러닝 2 → 머신러닝: 기초이론).
+	want := map[int64]bool{}
+	for name := range p.coverByCategory {
+		var id int64
+		switch err := sqlDB.QueryRow(
+			`SELECT id FROM categories WHERE source_name = ?`, name).Scan(&id); err {
+		case nil:
+			want[id] = true
+		case sql.ErrNoRows: // 없앤 카테고리다
+		default:
+			return fmt.Errorf("표지 카테고리 조회(%s): %w", name, err)
+		}
+	}
+	humanPages := map[string]bool{}
+	for _, cv := range curation.Covers {
+		humanPages[cv.NotionPageID] = true
+		var id int64
+		switch err := sqlDB.QueryRow(
+			`SELECT id FROM categories WHERE slug = ?`, cv.Slug).Scan(&id); err {
+		case nil:
+			want[id] = true
+		case sql.ErrNoRows:
+			return fmt.Errorf("표지를 붙일 카테고리가 없다: %q", cv.Slug)
+		default:
+			return fmt.Errorf("표지 카테고리 조회(%s): %w", cv.Slug, err)
+		}
+	}
+	// **한 글은 한 카테고리의 표지만 될 수 있다**(cover_post_id가 UNIQUE다).
+	// 사람이 어떤 글을 다른 분류의 표지로 가져가면, 경로가 그 글을 표지로 두려던
+	// 카테고리는 표지를 잃는다. `최인렬 (Inryeol Choi)`가 그렇다 — 그 글은
+	// `/intro`의 표지다.
+	for name, pageID := range p.coverByCategory {
+		if !humanPages[pageID] {
+			continue
+		}
+		var id int64
+		if err := sqlDB.QueryRow(
+			`SELECT id FROM categories WHERE source_name = ?`, name).Scan(&id); err == nil {
+			var used int
+			_ = sqlDB.QueryRow(
+				`SELECT count(*) FROM categories WHERE cover_post_id =
+				   (SELECT id FROM posts WHERE notion_page_id = ?) AND id = ?`, pageID, id).Scan(&used)
+			if used == 0 {
+				delete(want, id)
+			}
+		}
+	}
+	extra := len(want) - len(p.coverByCategory)
+	wantCovers := len(want)
+	fmt.Printf("표지 글이 이어진 카테고리: %d개 (계획 %d개 + 사람이 정한 것 중 새로 붙는 %d개)%s\n",
+		coverCount, len(p.coverByCategory), extra, mark(coverCount == wantCovers))
 	if coverCount != wantCovers {
 		return fmt.Errorf("표지 글 수가 계획과 다르다")
 	}

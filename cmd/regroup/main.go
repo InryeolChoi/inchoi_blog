@@ -32,6 +32,18 @@ type group struct {
 	name string
 	// members는 이 분류 밑으로 내릴 기존 카테고리 이름들이다.
 	members []string
+	// subs는 이 분류 밑에 **한 층을 더** 두는 경우다. members와 같이 쓰지 않는다.
+	//
+	// 노션 최상위 하나가 너무 많은 것을 담고 있어서 사람이 갈라주고 싶을 때 쓴다.
+	// 깊이는 group(1) > sub(2) > member(3)으로 여전히 3단계다.
+	subs []subgroup
+}
+
+// subgroup은 최상위 분류 밑에 사람이 하나 더 두는 층이다.
+type subgroup struct {
+	slug    string
+	name    string
+	members []string
 }
 
 // rename은 옮기면서 이름과 slug까지 바꾸는 경우다.
@@ -54,8 +66,18 @@ var groups = []group{
 	{slug: "dev", name: "개발", members: []string{
 		"Language", "소프트스킬", "모바일 프로그래밍", "웹 프로그래밍", "리눅스 & 쉘",
 	}},
-	{slug: "math-stat", name: "수학 & 통계", members: []string{
-		"수학 & 통계", "머신러닝 & 딥러닝",
+	// 노션 최상위 "수학 & 통계" 하나에 이론·응용·머신러닝이 다 들어 있어서
+	// 사람이 세 갈래로 갈랐다. 갈래 이름은 노션에 없는 것이라 source_name이 NULL이다.
+	{slug: "data-math", name: "데이터 & 수리", subs: []subgroup{
+		{slug: "수리통계-이론", name: "수리/통계: 이론", members: []string{
+			"선형대수", "최적화이론", "수리통계1", "수리통계2", "확률과정론", "이산수학",
+		}},
+		{slug: "수리통계-응용", name: "수리/통계: 응용", members: []string{
+			"탐색적 자료분석", "회귀분석", "다변량분석", "빅데이터 분석기사",
+		}},
+		{slug: "머신러닝", name: "머신러닝", members: []string{
+			"핸즈온 머신러닝 2", "자연어처리 (1) : BERT와 GPT",
+		}},
 	}},
 	{slug: "project", name: "프로젝트", members: []string{
 		"école 42", "Projects", "전주 데이터분석",
@@ -64,9 +86,21 @@ var groups = []group{
 	{slug: "life", name: "라이프", members: nil},
 }
 
+// groupRenames는 **최상위 분류 자체의 slug를 바꾼 것**이다.
+//
+// groups는 slug를 멱등 키로 쓰기 때문에, 배정표에서 slug만 바꾸면 새 행이 하나
+// 더 생기고 옛 행은 자식을 안은 채 남는다. 그래서 upsert보다 먼저 옮겨준다.
+var groupRenames = []struct{ fromSlug, toSlug, toName string }{
+	{fromSlug: "math-stat", toSlug: "data-math", toName: "데이터 & 수리"},
+}
+
 // renames는 옮기면서 이름도 바꾸는 카테고리다.
 var renames = []rename{
 	{fromName: "소프트스킬", toName: "tooling", toSlug: "tooling"},
+	// 핸즈온 책 정리가 사실상 이 블로그의 머신러닝 기초 이론이다. 원래 그 이름을
+	// 달고 있던 카테고리는 글이 열 편뿐이고 내용이 여기와 겹쳐서 없앴다.
+	{fromName: "핸즈온 머신러닝 2", toName: "머신러닝: 기초이론", toSlug: "머신러닝-기초이론"},
+	{fromName: "자연어처리 (1) : BERT와 GPT", toName: "자연어처리", toSlug: "자연어처리"},
 }
 
 // category는 DB에 있는 카테고리 한 줄이다.
@@ -170,6 +204,13 @@ func loadCategories(sqlDB *sql.DB) (*catalog, error) {
 	newSlugs := map[string]bool{}
 	for _, g := range groups {
 		newSlugs[g.slug] = true
+		for _, sub := range g.subs {
+			newSlugs[sub.slug] = true
+		}
+	}
+	// 아직 옮기기 전이면 옛 slug로 남아 있다. 그것도 "우리가 만든 분류"다.
+	for _, r := range groupRenames {
+		newSlugs[r.fromSlug] = true
 	}
 
 	cat := &catalog{
@@ -202,6 +243,9 @@ func loadCategories(sqlDB *sql.DB) (*catalog, error) {
 func checkPlan(cat *catalog) error {
 	planned := map[string]string{} // 기존 이름 → 새 부모 slug
 	newSlugs := map[string]bool{}
+	for _, r := range groupRenames {
+		newSlugs[r.fromSlug] = true
+	}
 	for _, g := range groups {
 		newSlugs[g.slug] = true
 		for _, m := range g.members {
@@ -210,6 +254,20 @@ func checkPlan(cat *catalog) error {
 			}
 			planned[m] = g.slug
 		}
+		for _, sub := range g.subs {
+			newSlugs[sub.slug] = true
+			for _, m := range sub.members {
+				if prev, dup := planned[m]; dup {
+					return fmt.Errorf("%q가 %q와 %q 두 곳에 배정돼 있다", m, prev, sub.slug)
+				}
+				planned[m] = sub.slug
+			}
+		}
+	}
+	// 없앨 카테고리는 배정하지 않는다. 아래 "배정표에 없다" 검사에서 빼준다.
+	dropping := map[string]bool{}
+	for _, d := range curation.DropCategories {
+		dropping[d.SourceName] = true
 	}
 
 	var missing []string
@@ -230,7 +288,7 @@ func checkPlan(cat *catalog) error {
 		if c.parentID.Valid || newSlugs[c.slug] {
 			continue
 		}
-		if _, ok := planned[name]; !ok {
+		if _, ok := planned[name]; !ok && !dropping[name] {
 			unassigned = append(unassigned, name)
 		}
 	}
@@ -271,7 +329,7 @@ func checkPlan(cat *catalog) error {
 			return fmt.Errorf("%q를 옮길 부모 카테고리가 없다: slug %q", mv.SourceName, mv.ToSlug)
 		}
 		if !newSlugs[mv.ToSlug] {
-			return fmt.Errorf("%q의 새 부모 %q가 최상위 분류가 아니다", mv.SourceName, mv.ToSlug)
+			return fmt.Errorf("%q의 새 부모 %q가 우리가 만든 분류가 아니다", mv.SourceName, mv.ToSlug)
 		}
 		if c.grandchildren > 0 {
 			return fmt.Errorf("%q는 손자까지 있어 옮기면 4단계가 된다", mv.SourceName)
@@ -301,8 +359,24 @@ func printPlan(cat *catalog) {
 	fmt.Println()
 	for _, g := range groups {
 		fmt.Printf("%s  (/%s)\n", g.name, g.slug)
+		for _, sub := range g.subs {
+			fmt.Printf("    ├ %s  (/%s)  [사람이 둔 층]\n", sub.name, sub.slug)
+			for _, m := range sub.members {
+				c, _ := cat.member(m)
+				totalMembers++
+				totalChildren += c.children
+				totalPosts += c.posts
+				label := c.name
+				if r, ok := renameBy[m]; ok && c.name != r.toName {
+					label = fmt.Sprintf("%s → %s (slug: %s → %s)", m, r.toName, c.slug, r.toSlug)
+				}
+				fmt.Printf("    │   └ %s   [자식 %d개, 직접 붙은 글 %d건]\n", label, c.children, c.posts)
+			}
+		}
 		if len(g.members) == 0 {
-			fmt.Println("    (아직 소속 카테고리 없음)")
+			if len(g.subs) == 0 {
+				fmt.Println("    (아직 소속 카테고리 없음)")
+			}
 			continue
 		}
 		for _, m := range g.members {
@@ -373,6 +447,16 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 	}
 	defer tx.Rollback()
 
+	// 0) 최상위 분류의 slug를 옮긴다. groups는 slug가 멱등 키라, 먼저 옮기지 않으면
+	//    옛 행이 자식을 안은 채 남고 새 행이 하나 더 생긴다.
+	for _, r := range groupRenames {
+		if _, err := tx.Exec(
+			`UPDATE categories SET slug = ?, name = ? WHERE slug = ?`,
+			r.toSlug, r.toName, r.fromSlug); err != nil {
+			return fmt.Errorf("최상위 분류 slug 변경(%s → %s): %w", r.fromSlug, r.toSlug, err)
+		}
+	}
+
 	// 1) 새 최상위 분류를 넣는다. slug가 멱등 키다.
 	groupID := map[string]int64{}
 	for i, g := range groups {
@@ -392,6 +476,64 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 			return fmt.Errorf("최상위 분류 id 조회(%s): %w", g.slug, err)
 		}
 		groupID[g.slug] = id
+	}
+
+	// 1b) 사람이 둔 중간 층(subs)을 넣는다. 최상위와 같은 방식이고 부모만 다르다.
+	subID := map[string]int64{}
+	for _, g := range groups {
+		for i, sub := range g.subs {
+			_, err := tx.Exec(`
+				INSERT INTO categories (parent_id, name, slug, sort_order)
+				VALUES (?, ?, ?, ?)
+				ON CONFLICT (slug) DO UPDATE SET
+					name       = excluded.name,
+					parent_id  = excluded.parent_id,
+					sort_order = excluded.sort_order`,
+				groupID[g.slug], sub.name, sub.slug, i)
+			if err != nil {
+				return fmt.Errorf("중간 분류 %q: %w", sub.slug, err)
+			}
+			var id int64
+			if err := tx.QueryRow(`SELECT id FROM categories WHERE slug = ?`, sub.slug).Scan(&id); err != nil {
+				return fmt.Errorf("중간 분류 id 조회(%s): %w", sub.slug, err)
+			}
+			subID[sub.slug] = id
+		}
+	}
+
+	// 1c) 사람이 없애기로 한 카테고리를 **이름 변경보다 먼저** 지운다.
+	//     없앨 카테고리가 쓰던 slug를 다른 카테고리가 물려받는 경우가 있어서,
+	//     나중에 지우면 UNIQUE에 걸린다(핸즈온 머신러닝 2 → 머신러닝: 기초이론).
+	// 글도 자식도 없을 때만 지운다.
+	//    딸린 게 남아 있으면 조용히 잃지 않도록 에러로 멈춘다.
+	dropped := 0
+	for _, dc := range curation.DropCategories {
+		var id int64
+		switch err := tx.QueryRow(
+			`SELECT id FROM categories WHERE source_name = ?`, dc.SourceName).Scan(&id); err {
+		case nil:
+		case sql.ErrNoRows:
+			continue // 이미 지워졌다
+		default:
+			return fmt.Errorf("지울 카테고리 조회(%s): %w", dc.SourceName, err)
+		}
+
+		var posts, kids int
+		if err := tx.QueryRow(
+			`SELECT (SELECT count(*) FROM posts p WHERE p.category_id = c.id),
+			        (SELECT count(*) FROM categories k WHERE k.parent_id = c.id)
+			 FROM categories c WHERE c.id = ?`, id).Scan(&posts, &kids); err != nil {
+			return fmt.Errorf("딸린 것 조회(%s): %w", dc.SourceName, err)
+		}
+		if posts > 0 || kids > 0 {
+			return fmt.Errorf(
+				"카테고리 %q를 지우려는데 글 %d건, 하위 분류 %d개가 남아 있다. "+
+					"먼저 curation.PostMoves로 옮겨라", dc.SourceName, posts, kids)
+		}
+		if _, err := tx.Exec(`DELETE FROM categories WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("카테고리 삭제(%s): %w", dc.SourceName, err)
+		}
+		dropped++
 	}
 
 	// 2) 이름을 바꿀 것부터 처리한다. 옮긴 뒤에 하면 이름으로 못 찾는다.
@@ -428,6 +570,23 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 			}
 			moved++
 		}
+		for _, sub := range g.subs {
+			for j, m := range sub.members {
+				c, ok := cat.member(m)
+				if !ok {
+					return fmt.Errorf("옮기려는 카테고리가 없다: %q", m)
+				}
+				if c.parentID.Valid && c.parentID.Int64 == subID[sub.slug] {
+					continue
+				}
+				if _, err := tx.Exec(
+					`UPDATE categories SET parent_id = ?, sort_order = ? WHERE id = ?`,
+					subID[sub.slug], j, c.id); err != nil {
+					return fmt.Errorf("%q를 %q 밑으로 이동: %w", m, sub.slug, err)
+				}
+				moved++
+			}
+		}
 	}
 
 	// 4) 사람이 정한 개별 이동. groups가 끝난 뒤에 해야 새 부모 id가 다 있다.
@@ -438,6 +597,10 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 			return fmt.Errorf("옮기려는 카테고리가 없다: source_name %q", mv.SourceName)
 		}
 		parentID, ok := groupID[mv.ToSlug]
+		if !ok {
+			// 사람이 둔 중간 층도 부모가 될 수 있다.
+			parentID, ok = subID[mv.ToSlug]
+		}
 		if !ok {
 			return fmt.Errorf("%q의 새 부모 %q를 못 찾았다", mv.SourceName, mv.ToSlug)
 		}
@@ -483,38 +646,6 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 		if n, _ := res.RowsAffected(); n > 0 {
 			coverSet++
 		}
-	}
-
-	// 6) 사람이 없애기로 한 카테고리. 글도 자식도 없을 때만 지운다.
-	//    딸린 게 남아 있으면 조용히 잃지 않도록 에러로 멈춘다.
-	dropped := 0
-	for _, dc := range curation.DropCategories {
-		var id int64
-		switch err := tx.QueryRow(
-			`SELECT id FROM categories WHERE source_name = ?`, dc.SourceName).Scan(&id); err {
-		case nil:
-		case sql.ErrNoRows:
-			continue // 이미 지워졌다
-		default:
-			return fmt.Errorf("지울 카테고리 조회(%s): %w", dc.SourceName, err)
-		}
-
-		var posts, kids int
-		if err := tx.QueryRow(
-			`SELECT (SELECT count(*) FROM posts p WHERE p.category_id = c.id),
-			        (SELECT count(*) FROM categories k WHERE k.parent_id = c.id)
-			 FROM categories c WHERE c.id = ?`, id).Scan(&posts, &kids); err != nil {
-			return fmt.Errorf("딸린 것 조회(%s): %w", dc.SourceName, err)
-		}
-		if posts > 0 || kids > 0 {
-			return fmt.Errorf(
-				"카테고리 %q를 지우려는데 글 %d건, 하위 분류 %d개가 남아 있다. "+
-					"먼저 curation.PostMoves로 옮겨라", dc.SourceName, posts, kids)
-		}
-		if _, err := tx.Exec(`DELETE FROM categories WHERE id = ?`, id); err != nil {
-			return fmt.Errorf("카테고리 삭제(%s): %w", dc.SourceName, err)
-		}
-		dropped++
 	}
 
 	if err := tx.Commit(); err != nil {

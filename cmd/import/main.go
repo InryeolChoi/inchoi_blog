@@ -69,11 +69,20 @@ func main() {
 	// 본문에서 줄을 덜어낸 글. 표가 낡았는지 아래에서 대조한다.
 	bodyEdited := curation.BodyEditPageIDs()
 	var edited []string
+	// 사람이 이관에서 뺀 글. 아래에서 몇 건이 빠졌는지 찍는다.
+	var dropped []string
 
 	for _, path := range files {
 		dump, err := notion.LoadDump(path)
 		if err != nil {
 			failures = append(failures, failure{path, err})
+			continue
+		}
+
+		// 사람이 이관하지 않기로 한 글은 변환도 하지 않는다. DB에서 행만 지우면
+		// 다음 실행이 다시 넣는다(internal/curation).
+		if curation.Dropped(dump.Page.ID) {
+			dropped = append(dropped, dump.Page.ID)
 			continue
 		}
 
@@ -110,6 +119,7 @@ func main() {
 	}
 
 	printFullReport(reports, failures, *outDir)
+	printDroppedPosts(dropped)
 	printBodyEdits(edited, bodyEdited, *pages == "" && *limit == 0)
 
 	if *dbPath == "" {
@@ -626,6 +636,17 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 // 조용히 지우면 나중에 "이 문장이 왜 없지?" 하고 덤프를 뒤지게 된다.
 // full이면(전체를 돌린 실행이면) 표에 있는데 한 번도 안 걸린 항목도 짚는다 —
 // 그건 페이지가 사라졌거나 표가 낡았다는 뜻이다.
+// printDroppedPosts는 사람이 이관에서 뺀 글을 찍는다. 조용히 사라지면 안 된다.
+func printDroppedPosts(dropped []string) {
+	if len(dropped) == 0 {
+		return
+	}
+	fmt.Printf("\n■ 이관에서 뺀 글 (internal/curation)\n")
+	for _, id := range dropped {
+		fmt.Printf("  %s\n", id)
+	}
+}
+
 func printBodyEdits(edited []string, wanted map[string]bool, full bool) {
 	if len(wanted) == 0 {
 		return
