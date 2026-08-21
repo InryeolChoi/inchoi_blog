@@ -16,7 +16,9 @@ func render(t *testing.T, src string) string {
 
 func TestBasicMarkdown(t *testing.T) {
 	got := render(t, "# 제목\n\n본문 **굵게** 그리고 *기울임*.\n")
-	for _, want := range []string{"<h1", "제목", "<strong>굵게</strong>", "<em>기울임</em>"} {
+	// 본문 제목은 한 단계 내려간다 — 페이지의 <h1>은 템플릿이 그리는 글 제목이다
+	// (internal/markdown/heading.go).
+	for _, want := range []string{"<h2", "제목", "<strong>굵게</strong>", "<em>기울임</em>"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("%q가 없다:\n%s", want, got)
 		}
@@ -153,7 +155,8 @@ func TestBlockMathSurvivesSetextUnderline(t *testing.T) {
 
 	got := render(t, src)
 
-	if strings.Contains(got, "<h1") {
+	// `=` 줄이 setext 밑줄로 읽히면 h1이 되고, headingShift가 그걸 h2로 내린다.
+	if strings.Contains(got, "<h2") {
 		t.Errorf("수식 속 `=` 줄이 제목이 됐다:\n%s", got)
 	}
 	for _, want := range []string{`class="math math-display"`, `a\lambda^n`, `(\lambda - 1)`, `= 0`} {
@@ -194,7 +197,7 @@ func TestUnclosedBlockMathStopsAtBlankLine(t *testing.T) {
 func TestUnclosedBlockMathDoesNotEatHeading(t *testing.T) {
 	got := render(t, "$$\nx = 1\n\n## 제목\n\n$$\ny = 2\n$$\n")
 
-	if !strings.Contains(got, "<h2") || !strings.Contains(got, "제목") {
+	if !strings.Contains(got, "<h3") || !strings.Contains(got, "제목") {
 		t.Errorf("제목이 사라졌다:\n%s", got)
 	}
 	if !strings.Contains(got, "y = 2") {

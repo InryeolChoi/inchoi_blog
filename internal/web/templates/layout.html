@@ -238,11 +238,16 @@
      높이도 함께 묶는다. 가로로 넓은 도표는 max-height에 안 걸려서 그대로 넓다. */
   article img { max-width: 100%; max-height: 30rem; width: auto; height: auto; border-radius: .3rem; }
   article hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
-  /* 본문 제목은 위쪽 여백을 넉넉히 줘서 절이 눈으로 갈린다. */
-  article h1 { font-size: 1.35rem; margin: 2.4rem 0 .7rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
-  article h2 { font-size: 1.15rem; margin: 2rem 0 .55rem; }
-  article h3 { font-size: 1.02rem; margin: 1.6rem 0 .45rem; }
-  article h4 { font-size: 1rem; margin: 1.3rem 0 .4rem; color: var(--ink-dim); }
+  /* 본문 제목은 위쪽 여백을 넉넉히 줘서 절이 눈으로 갈린다.
+
+     **본문에는 h1이 없다.** 페이지의 <h1>은 템플릿이 그리는 글 제목이고,
+     본문 제목은 파서가 한 단계씩 내린다(internal/markdown/heading.go).
+     그래서 본문에서 가장 큰 제목은 h2다 — 아래 크기도 그만큼 밀어서 매겼다.
+     h2가 옛 h1 자리, h3이 옛 h2 자리… 하는 식이다. */
+  article h2 { font-size: 1.35rem; margin: 2.4rem 0 .7rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
+  article h3 { font-size: 1.15rem; margin: 2rem 0 .55rem; }
+  article h4 { font-size: 1.02rem; margin: 1.6rem 0 .45rem; }
+  article h5, article h6 { font-size: 1rem; margin: 1.3rem 0 .4rem; color: var(--ink-dim); }
   article > :first-child { margin-top: 0; }
   article mark { background: var(--mark-bg); color: inherit; padding: .05em .15em; border-radius: .15em; }
 
@@ -387,11 +392,15 @@
 
   .page-foot { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .76rem; color: var(--ink-dim); }
 </style>
-{{/* 수식은 브라우저에서 그린다. 변환기와 goldmark 확장은 원문 LaTeX를
-     .math 안에 넣어두기만 한다(internal/markdown/math.go).
+{{/* CDN에서 받는 것은 **그 페이지에 필요할 때만** 받는다. 무엇이 필요한지는
+     본문 HTML을 보고 정한다(internal/web/assets.go). 수식이 있는 글은 1408편 중
+     297편뿐인데 예전에는 모든 페이지가 스타일시트와 스크립트를 네 개씩 받았다.
 
      CDN에 무결성 해시를 걸어둔다. 파일이 바뀌면 브라우저가 실행을 거부한다.
      버전을 올릴 때 해시도 같이 바꿔야 한다 — 안 그러면 조용히 안 뜬다. */}}
+{{if .Assets.Math}}
+{{/* 수식은 브라우저에서 그린다. 변환기와 goldmark 확장은 원문 LaTeX를
+     .math 안에 넣어두기만 한다(internal/markdown/math.go). */}}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
       integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
       crossorigin="anonymous">
@@ -399,25 +408,34 @@
         integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
         crossorigin="anonymous"></script>
 <script defer src="/static/math.js"></script>
+{{end}}
+{{if .Assets.Code}}
 {{/* 코드 하이라이팅. 본문의 <pre><code class="language-xxx">를 색칠한다.
      common 묶음이 40여 개 언어를 담고 있어 python·c·r·bash·java 등 큰 것들을
-     덮는다. 거기 없는 것만 따로 붙인다(latex 16건, dockerfile 4, powershell 2). */}}
+     덮는다. 거기 없는 것만 그 언어가 실제로 나올 때 따로 받는다. */}}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/styles/github.min.css"
       integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L"
       crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js"
         integrity="sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix"
         crossorigin="anonymous"></script>
+{{if .Assets.Lang "latex"}}
 <script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/latex.min.js"
         integrity="sha384-wHW9Hcxw0oenHF2z8fGo1rhAe1jZwnp35Z6xzC29Vj/O+toSfBY9+7TrUfUnwFMD"
         crossorigin="anonymous"></script>
+{{end}}
+{{if .Assets.Lang "dockerfile"}}
 <script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/dockerfile.min.js"
         integrity="sha384-/zu1pI8+9j/v/qNlCRRyidiBhGdxfvGwOLXEPBXpKc77eFNUAhccr0WglEQ+x9La"
         crossorigin="anonymous"></script>
+{{end}}
+{{if .Assets.Lang "powershell"}}
 <script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/powershell.min.js"
         integrity="sha384-jigawbLJjSW9uklht6/lvMBC7b00t25Id0RQW+qORcsF6B+LARvlTLfzyIaNolYG"
         crossorigin="anonymous"></script>
+{{end}}
 <script defer src="/static/highlight-init.js"></script>
+{{end}}
 {{/* 사이드바 아코디언과 좁은 화면의 서랍. 스크립트가 못 떠도 지금 보고 있는
      곳까지는 서버가 이미 펼쳐서 보내므로 길이 막히지는 않는다. */}}
 <script defer src="/static/sidebar.js"></script>

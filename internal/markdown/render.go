@@ -13,6 +13,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/util"
 )
 
 // Renderer는 마크다운을 HTML로 바꾼다. 여러 고루틴에서 같이 써도 된다.
@@ -36,6 +37,10 @@ func New() *Renderer {
 			goldmark.WithParserOptions(
 				// 제목에 id를 달아 목차와 앵커 링크에 쓴다.
 				parser.WithAutoHeadingID(),
+				// 본문 제목을 한 단계 내린다. 페이지의 <h1>은 템플릿이 그리는
+				// 글 제목이라, 본문의 `# 제목`까지 <h1>이면 한 페이지에 <h1>이
+				// 여러 개가 된다 (heading.go 참고).
+				parser.WithASTTransformers(util.Prioritized(headingShift{}, 100)),
 			),
 			goldmark.WithRendererOptions(
 				// 변환기가 <details>, <u>, <br>, 빈 블록 주석을 그대로 넣는다.

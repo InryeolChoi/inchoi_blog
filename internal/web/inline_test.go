@@ -412,7 +412,8 @@ func TestPostPageHasOutline(t *testing.T) {
 			t.Errorf("%q로 가는 목차 링크가 없다", want)
 		}
 	}
-	for _, want := range []string{`<h2 id="하나">`, `<h2 id="둘">`, `<h3 id="셋">`} {
+	// 본문 제목은 한 단계 내려간다 (internal/markdown/heading.go).
+	for _, want := range []string{`<h3 id="하나">`, `<h3 id="둘">`, `<h4 id="셋">`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("본문 앵커 %q가 없다", want)
 		}

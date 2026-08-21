@@ -40,7 +40,17 @@ func (r *Renderer) Outline(source string) []Heading {
 			return gast.WalkContinue, nil
 		}
 		h, ok := n.(*gast.Heading)
-		if !ok || h.Level > outlineMaxLevel {
+		if !ok {
+			return gast.WalkContinue, nil
+		}
+		// AST의 단계는 headingShift가 내려둔 값이다. 목차에는 본문 기준
+		// 단계(1부터)를 돌려준다 — 템플릿이 toc-h{{.Level}}로 들여쓰기 때문에
+		// 여기서 되돌리지 않으면 들여쓰기가 통째로 한 칸 밀린다.
+		level := h.Level - headingOffset
+		if level < 1 {
+			level = 1
+		}
+		if level > outlineMaxLevel {
 			return gast.WalkContinue, nil
 		}
 		id, ok := h.AttributeString("id")
@@ -56,7 +66,7 @@ func (r *Renderer) Outline(source string) []Heading {
 		if text == "" {
 			return gast.WalkSkipChildren, nil
 		}
-		out = append(out, Heading{Level: h.Level, ID: string(idBytes), Text: text})
+		out = append(out, Heading{Level: level, ID: string(idBytes), Text: text})
 		return gast.WalkSkipChildren, nil
 	})
 	return out

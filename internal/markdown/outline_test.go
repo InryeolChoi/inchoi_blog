@@ -38,8 +38,9 @@ func TestOutlineIDsMatchRenderedHTML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// headingShift가 단계를 내리므로 본문 제목은 h2~h6로 나온다.
 	ids := map[string]bool{}
-	for _, m := range regexp.MustCompile(`<h[123] id="([^"]+)"`).FindAllStringSubmatch(string(html), -1) {
+	for _, m := range regexp.MustCompile(`<h[1-6] id="([^"]+)"`).FindAllStringSubmatch(string(html), -1) {
 		ids[m[1]] = true
 	}
 
