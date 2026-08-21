@@ -416,9 +416,12 @@
     width: 100%; height: 100%; fill: none; stroke: currentColor;
     stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
   }
-  /* 카드마다 조금씩 어긋나게 떠서 한 덩어리로 움직이지 않게 한다. */
-  .deck-card:nth-child(2) .deck-icon { animation-delay: -1.8s; }
-  .deck-card:nth-child(3) .deck-icon { animation-delay: -3.6s; }
+  /* 카드마다 조금씩 어긋나게 떠서 한 덩어리로 움직이지 않게 한다.
+     묶음이 다섯 장까지 있어서 그만큼 어긋나게 둔다. */
+  .deck-card:nth-child(2) .deck-icon { animation-delay: -1.1s; }
+  .deck-card:nth-child(3) .deck-icon { animation-delay: -2.2s; }
+  .deck-card:nth-child(4) .deck-icon { animation-delay: -3.3s; }
+  .deck-card:nth-child(5) .deck-icon { animation-delay: -4.4s; }
   @keyframes deck-float {
     0%, 100% { transform: translateZ(30px) translateY(0); }
     50%      { transform: translateZ(30px) translateY(-5px); }

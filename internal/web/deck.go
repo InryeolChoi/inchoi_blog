@@ -17,6 +17,9 @@ import (
 // deckCategories는 카드로 펼칠 분류의 slug다. 그 분류의 **하위 분류**가 카드가 된다.
 var deckCategories = map[string]bool{
 	"data-math": true,
+	"algorithm": true,
+	"cs-theory": true,
+	"dev":       true,
 }
 
 // cardArt는 카드 하나의 그림과 한 줄 설명이다. 키는 하위 분류의 slug다.
@@ -52,6 +55,97 @@ var cardArtBySlug = map[string]cardArt{
 			<circle cx="26" cy="13" r="3.5"/><circle cx="26" cy="35" r="3.5"/>
 			<circle cx="40" cy="24" r="3.5"/>
 			<path d="M13 22l10-7M13 26l10 7M29 15l9 7M29 33l9-7"/>
+		</svg>`),
+	},
+	"알고리즘-이론": {
+		Blurb: "정렬과 탐색, 그래프와 동적계획법이 왜 그렇게 도는지.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<circle cx="24" cy="10" r="4"/><circle cx="12" cy="30" r="4"/><circle cx="36" cy="30" r="4"/>
+			<circle cx="24" cy="42" r="3"/>
+			<path d="M21 13l-6 13M27 13l6 13M14 33l8 7M34 33l-8 7"/>
+		</svg>`),
+	},
+	"알고리즘-실전": {
+		Blurb: "백준과 프로그래머스에서 실제로 푼 것들.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="7" y="9" width="34" height="30" rx="3"/>
+			<path d="M14 20l5 4-5 4"/><path d="M24 28h10"/>
+		</svg>`),
+	},
+	"운영체제": {
+		Blurb: "프로세스와 메모리, 파일 시스템. 컴퓨터가 자기를 굴리는 방법.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="14" y="14" width="20" height="20" rx="3"/>
+			<rect x="20" y="20" width="8" height="8" rx="1"/>
+			<path d="M20 8v6M28 8v6M20 34v6M28 34v6M8 20h6M8 28h6M34 20h6M34 28h6"/>
+		</svg>`),
+	},
+	"네트워크": {
+		Blurb: "계층과 프로토콜. 패킷이 어디를 거쳐 어떻게 도착하는지.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<circle cx="24" cy="24" r="15"/>
+			<path d="M9 24h30"/><path d="M24 9c5 5 5 25 0 30M24 9c-5 5-5 25 0 30"/>
+		</svg>`),
+	},
+	"데이터베이스": {
+		Blurb: "SQL과 설계, 인덱싱과 트랜잭션.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<ellipse cx="24" cy="12" rx="14" ry="5"/>
+			<path d="M10 12v10c0 2.8 6.3 5 14 5s14-2.2 14-5V12"/>
+			<path d="M10 22v10c0 2.8 6.3 5 14 5s14-2.2 14-5V22"/>
+		</svg>`),
+	},
+	"컴퓨터-시스템": {
+		Blurb: "비트에서 프로그램까지. 하드웨어에 가까운 쪽.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="9" y="12" width="30" height="24" rx="3"/>
+			<path d="M9 20h8v8H9M39 20h-8M31 28h8"/>
+			<circle cx="24" cy="24" r="3"/>
+		</svg>`),
+	},
+	"가상화기술": {
+		Blurb: "도커와 컨테이너. 격리된 환경을 만들어 쓰는 일.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="8" y="26" width="10" height="10" rx="1.5"/>
+			<rect x="20" y="26" width="10" height="10" rx="1.5"/>
+			<rect x="20" y="14" width="10" height="10" rx="1.5"/>
+			<path d="M32 31h8"/>
+		</svg>`),
+	},
+	"language": {
+		Blurb: "C부터 파이썬까지. 언어마다의 문법과 버릇.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<path d="M17 14L7 24l10 10"/><path d="M31 14l10 10-10 10"/>
+			<path d="M27 10l-6 28"/>
+		</svg>`),
+	},
+	"웹-프로그래밍": {
+		Blurb: "브라우저와 서버 사이. 프런트와 백엔드 양쪽.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="7" y="10" width="34" height="28" rx="3"/>
+			<path d="M7 19h34"/>
+			<circle cx="13" cy="14.5" r="1.4" fill="currentColor" stroke="none"/>
+			<circle cx="18" cy="14.5" r="1.4" fill="currentColor" stroke="none"/>
+		</svg>`),
+	},
+	"리눅스-쉘": {
+		Blurb: "명령줄에서 하는 일. 스크립트와 시스템 관리.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="7" y="10" width="34" height="28" rx="3"/>
+			<path d="M14 20l6 5-6 5"/><path d="M24 30h10"/>
+		</svg>`),
+	},
+	"모바일-프로그래밍": {
+		Blurb: "손에 들고 쓰는 화면을 만드는 쪽.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="15" y="6" width="18" height="36" rx="4"/>
+			<path d="M21 11h6"/><circle cx="24" cy="36" r="1.8" fill="currentColor" stroke="none"/>
+		</svg>`),
+	},
+	"tooling": {
+		Blurb: "git과 개발 도구. 코드 밖에서 손이 가는 것들.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<path d="M31 9a9 9 0 0 0-11 11L9 31a3.5 3.5 0 0 0 5 5l11-11A9 9 0 0 0 36 14l-5 5-4-4 5-5z"/>
 		</svg>`),
 	},
 }
