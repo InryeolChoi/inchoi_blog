@@ -665,6 +665,22 @@ go run ./cmd/blog -db blog.db -addr 127.0.0.1:8080
 | `static/highlight-init.js` | 바이너리 | 〃 |
 | `static/sidebar.js` | 바이너리 | 사이드바 아코디언 + 좁은 화면의 서랍 |
 
+- **CDN에서 받는 것은 그 페이지에 필요할 때만 받는다** (`internal/web/assets.go`).
+  본문 HTML을 보고 정한다 — 서버가 이미 `.math`와 `language-*` 클래스를 붙여뒀으니
+  그 표시를 세면 되고, 원문을 다시 파싱할 필요가 없다. `render`가 한 곳에서 채우므로
+  핸들러마다 챙기지 않아도 된다(사이드바를 거기서 채우는 것과 같은 이유).
+
+  | | 받는 페이지 | 전체 |
+  |---|---:|---:|
+  | KaTeX | 215 | 1502 |
+  | highlight.js | 598 | 1502 |
+  | latex / dockerfile / powershell 묶음 | 5 / 4 / 1 | 1502 |
+
+  - **`skipLangs`는 `static/highlight-init.js`의 같은 목록과 맞춰야 한다.**
+    한쪽만 고치면 스크립트를 안 받았는데 칠할 것이 있거나, 받았는데 칠할 것이 없다.
+    `text`(265건)처럼 "칠하지 말라"는 뜻인 언어만 있는 글은 highlight.js를 안 받는다.
+  - 공통 묶음에 없는 언어(latex·dockerfile·powershell)는 그 언어가 실제로 나올 때만
+    받는다. 예전에는 코드가 있는 모든 페이지가 세 개를 다 받았다.
 - **CDN에는 무결성 해시(SRI)를 건다.** 버전을 올릴 때 해시도 같이 바꿔야 한다.
   안 바꾸면 브라우저가 **조용히** 실행을 거부한다. 해시는 이렇게 만든다:
   `curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A`

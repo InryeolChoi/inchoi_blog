@@ -106,6 +106,9 @@ type pageData struct {
 	HomeActive bool
 	// TotalPosts는 사이드바 머리에 찍는 전체 글 수다. render가 채운다.
 	TotalPosts int
+	// Assets는 이 페이지가 CDN에서 받아야 할 것이다. render가 Body를 보고 채운다
+	// (assets.go).
+	Assets assetNeeds
 }
 
 // TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
@@ -160,6 +163,9 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	for _, c := range nav {
 		data.TotalPosts += c.PostCount
 	}
+	// 이 페이지가 CDN에서 받을 것을 본문을 보고 정한다. 핸들러마다 챙기지
+	// 않도록 여기 한 곳에서 한다 — 사이드바를 여기서 채우는 것과 같은 이유다.
+	data.Assets = needsFor(data.Body)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
 		// 헤더를 이미 보냈을 수 있어서 상태 코드를 바꿀 수 없다. 로그만 남긴다.
