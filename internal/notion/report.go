@@ -20,22 +20,24 @@ const (
 type Kind string
 
 const (
-	KindUnknownBlock     Kind = "unknown-block"     // 변환기가 모르는 타입
-	KindUnsupportedBlock Kind = "unsupported-block" // 노션이 API로 안 주는 블록
-	KindExternalImage    Kind = "external-image"    // 로컬 파일 없이 외부 URL로 남은 이미지
-	KindMissingImage     Kind = "missing-image"     // 로컬 파일도 URL도 없는 이미지
-	KindExpiringURL      Kind = "expiring-url"      // 노션 호스팅 파일(URL 만료됨)
-	KindMissingURL       Kind = "missing-url"       // URL이 없는 링크/미디어 블록
-	KindOrphanTableRow   Kind = "orphan-table-row"  // 표 밖의 table_row
-	KindBadTable         Kind = "bad-table"         // 행이 없거나 이상한 표
-	KindTableNoHeader    Kind = "table-no-header"   // 헤더 없는 표에 빈 헤더를 넣음
-	KindFlattenedColumns Kind = "flattened-columns" // 단 레이아웃을 세로로 폄
-	KindDroppedTOC       Kind = "dropped-toc"       // 목차 블록 제거
-	KindChildLink        Kind = "child-link"        // 하위 페이지/DB 링크 (slug 재작성 필요)
-	KindSyncedCopy       Kind = "synced-copy"       // 사본 synced_block 건너뜀
-	KindEmbedAsLink      Kind = "embed-as-link"     // 임베드를 링크로 바꿈
-	KindNumberContinued  Kind = "number-continued"  // 끊긴 번호 목록을 이어감
-	KindEmptyBlock       Kind = "empty-block"       // 원본에서 이미 비어 있던 블록
+	KindUnknownBlock       Kind = "unknown-block"        // 변환기가 모르는 타입
+	KindUnsupportedBlock   Kind = "unsupported-block"    // 노션이 API로 안 주는 블록
+	KindExternalImage      Kind = "external-image"       // 로컬 파일 없이 외부 URL로 남은 이미지
+	KindMissingImage       Kind = "missing-image"        // 로컬 파일도 URL도 없는 이미지
+	KindExpiringURL        Kind = "expiring-url"         // 노션 호스팅 파일(URL 만료됨)
+	KindMissingURL         Kind = "missing-url"          // URL이 없는 링크/미디어 블록
+	KindOrphanTableRow     Kind = "orphan-table-row"     // 표 밖의 table_row
+	KindBadTable           Kind = "bad-table"            // 행이 없거나 이상한 표
+	KindTableNoHeader      Kind = "table-no-header"      // 헤더 없는 표에 빈 헤더를 넣음
+	KindFlattenedColumns   Kind = "flattened-columns"    // 단 레이아웃을 세로로 폄
+	KindDroppedTOC         Kind = "dropped-toc"          // 목차 블록 제거
+	KindDroppedTOCToggle   Kind = "dropped-toc-toggle"   // 목차만 들어 있던 토글째로 제거
+	KindDroppedEmptyToggle Kind = "dropped-empty-toggle" // 눌러도 아무것도 안 나오는 빈 토글 제거
+	KindChildLink          Kind = "child-link"           // 하위 페이지/DB 링크 (slug 재작성 필요)
+	KindSyncedCopy         Kind = "synced-copy"          // 사본 synced_block 건너뜀
+	KindEmbedAsLink        Kind = "embed-as-link"        // 임베드를 링크로 바꿈
+	KindNumberContinued    Kind = "number-continued"     // 끊긴 번호 목록을 이어감
+	KindEmptyBlock         Kind = "empty-block"          // 원본에서 이미 비어 있던 블록
 )
 
 // Issue는 블록 하나에서 발견한 문제다.

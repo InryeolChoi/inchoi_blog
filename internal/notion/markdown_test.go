@@ -266,6 +266,124 @@ func TestToggleBecomesDetails(t *testing.T) {
 	}
 }
 
+func TestToggleSummaryIsHTMLNotMarkdown(t *testing.T) {
+	// <details>는 raw HTML 블록이라 CommonMark가 안을 인라인 파싱하지 않는다.
+	// summary에 마크다운 기호를 넣으면 별표·백틱이 글자로 보인다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"toggle","has_children":true,
+	   "toggle":{"rich_text":[
+	     {"type":"text","plain_text":"목차","annotations":{"bold":true}},
+	     {"type":"text","plain_text":" 와 ","annotations":{}},
+	     {"type":"text","plain_text":"code()","annotations":{"code":true}}
+	   ]},
+	   "children":[
+	     {"id":"b2","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"안쪽","annotations":{}}]}}
+	   ]}
+	]`))
+
+	want := "<summary><strong>목차</strong> 와 <code>code()</code></summary>"
+	if !strings.Contains(md, want) {
+		t.Errorf("summary가 HTML이 아니다:\n%s", md)
+	}
+	for _, bad := range []string{"**목차**", "`code()`"} {
+		if strings.Contains(md, bad) {
+			t.Errorf("마크다운 기호 %q가 그대로 남았다:\n%s", bad, md)
+		}
+	}
+}
+
+func TestToggleSummaryEscapesHTML(t *testing.T) {
+	// 결과가 raw HTML 자리에 그대로 들어가므로 원문의 <, & 가 태그로 읽히면 안 된다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"toggle","has_children":true,
+	   "toggle":{"rich_text":[{"type":"text","plain_text":"a < b && c","annotations":{}}]},
+	   "children":[
+	     {"id":"b2","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"안쪽","annotations":{}}]}}
+	   ]}
+	]`))
+
+	if !strings.Contains(md, "<summary>a &lt; b &amp;&amp; c</summary>") {
+		t.Errorf("summary를 이스케이프하지 않았다:\n%s", md)
+	}
+}
+
+func TestTOCOnlyToggleIsDropped(t *testing.T) {
+	// 목차 블록을 버리고 나면 눌러도 아무것도 안 나오는 빈 껍데기만 남는다.
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"toggle","has_children":true,
+	   "toggle":{"rich_text":[{"type":"text","plain_text":"목차","annotations":{}}]},
+	   "children":[{"id":"b2","type":"table_of_contents","table_of_contents":{}}]},
+	  {"id":"b3","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"본문","annotations":{}}]}}
+	]`))
+
+	if strings.Contains(md, "<details>") {
+		t.Errorf("목차만 든 토글이 남았다:\n%s", md)
+	}
+	if !strings.Contains(md, "본문") {
+		t.Errorf("뒤따르는 본문이 사라졌다:\n%s", md)
+	}
+	if rep.CountKind(KindDroppedTOCToggle) != 1 {
+		t.Errorf("dropped-toc-toggle 기록이 없다: %+v", rep)
+	}
+}
+
+func TestToggleWithTOCAndContentStays(t *testing.T) {
+	// 목차 말고 다른 것도 들어 있으면 토글은 남는다. 목차만 빠진다.
+	md, _ := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"toggle","has_children":true,
+	   "toggle":{"rich_text":[{"type":"text","plain_text":"목차","annotations":{}}]},
+	   "children":[
+	     {"id":"b2","type":"table_of_contents","table_of_contents":{}},
+	     {"id":"b3","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"안쪽","annotations":{}}]}}
+	   ]}
+	]`))
+
+	if !strings.Contains(md, "<details>") || !strings.Contains(md, "안쪽") {
+		t.Errorf("내용이 있는 토글까지 지웠다:\n%s", md)
+	}
+}
+
+func TestEmptyToggleIsDropped(t *testing.T) {
+	// 펼쳐도 아무것도 안 나오는 껍데기는 이유를 가리지 않고 뺀다.
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"toggle","has_children":false,
+	   "toggle":{"rich_text":[{"type":"text","plain_text":"p.123","annotations":{}}]}},
+	  {"id":"b2","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"본문","annotations":{}}]}}
+	]`))
+
+	if strings.Contains(md, "<details>") {
+		t.Errorf("빈 토글이 남았다:\n%s", md)
+	}
+	if !strings.Contains(md, "본문") {
+		t.Errorf("뒤따르는 본문이 사라졌다:\n%s", md)
+	}
+	if rep.CountKind(KindDroppedEmptyToggle) != 1 {
+		t.Errorf("dropped-empty-toggle 기록이 없다: %+v", rep)
+	}
+	// 무엇이 같이 사라졌는지 리포트에 남아야 한다.
+	if iss := rep.IssuesOfKind(KindDroppedEmptyToggle); len(iss) != 1 || !strings.Contains(iss[0].Message, "p.123") {
+		t.Errorf("사라진 summary 글자가 기록에 없다: %+v", iss)
+	}
+}
+
+func TestToggleWithLostChildrenIsDroppedAndReported(t *testing.T) {
+	// 자식이 있었는데 변환 결과가 비었다면 변환기가 뭔가를 버렸다는 신호다.
+	// 토글은 빼되 기록은 남긴다.
+	md, rep := convertJSON(t, blocksJSON(`[
+	  {"id":"b1","type":"toggle","has_children":true,
+	   "toggle":{"rich_text":[{"type":"text","plain_text":"개념","annotations":{}}]},
+	   "children":[{"id":"b2","type":"table_of_contents","table_of_contents":{}},
+	               {"id":"b3","type":"table_of_contents","table_of_contents":{}}]}
+	]`))
+
+	if strings.Contains(md, "<details>") {
+		t.Errorf("빈 토글이 남았다:\n%s", md)
+	}
+	if rep.CountKind(KindDroppedTOCToggle) != 1 {
+		t.Errorf("목차만 든 토글로 기록되지 않았다: %+v", rep)
+	}
+}
+
 func TestQuoteAndCallout(t *testing.T) {
 	md, _ := convertJSON(t, blocksJSON(`[
 	  {"id":"b1","type":"quote","quote":{"rich_text":[{"type":"text","plain_text":"인용문","annotations":{}}]}},

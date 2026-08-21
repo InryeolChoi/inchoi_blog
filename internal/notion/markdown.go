@@ -2,6 +2,7 @@ package notion
 
 import (
 	"fmt"
+	"html"
 	"regexp"
 	"strings"
 )
@@ -418,12 +419,42 @@ func (c *converter) blockquote(b Block, path, prefix string) string {
 }
 
 // toggle은 마크다운에 대응이 없어서 <details>로 옮긴다. 접힘 상태가 유지된다.
+//
+// summary는 마크다운이 아니라 **HTML로** 낸다. <details>는 raw HTML 블록이고
+// CommonMark는 HTML 블록 안을 인라인 파싱하지 않아서, `**목차**`를 그대로 넣으면
+// 별표가 글자로 보인다. 덤프 전체에서 summary에 붙은 서식은 굵게 69개와 코드 6개다.
+//
+// 펼쳐도 아무것도 안 나오는 토글은 내보내지 않는다. 그런 껍데기가 35개인데
+// 이유가 셋으로 갈린다: 목차만 들어 있어서 25개, 노션에서 원래부터 비어 있어서
+// 8개, 자식은 있었지만 변환 결과가 비어서 2개. 화면에 나오는 모습은 셋 다
+// 같으므로 다 뺀다. 다만 **왜** 비었는지는 리포트에 종류를 나눠 남긴다 —
+// 마지막 2개는 변환기가 뭔가를 버렸다는 신호라 묻히면 안 된다.
+//
+// 뺄 때 summary에 적혀 있던 글자도 같이 사라진다. 대개 "p.123", "코드" 같은
+// 라벨이지만 문장인 것이 2개 있다. 리포트에 그 글자를 같이 찍어두는 이유가
+// 이것이다.
 func (c *converter) toggle(b Block, path string) string {
-	summary := c.richTextBody(b)
+	// 목차만 들어 있던 토글은 안을 렌더링해볼 것도 없이 뺀다. 렌더링하면 목차
+	// 블록이 제 몫의 dropped-toc 기록까지 남겨서 같은 일이 두 번 세어진다.
+	if len(b.Children) > 0 && onlyTOC(b.Children) {
+		c.note(b, path, KindDroppedTOCToggle, "목차만 들어 있던 토글이라 토글째로 뺐다")
+		return ""
+	}
+
+	children := joinChunks(c.renderBlocks(b.Children, path+">children"))
+	if children == "" {
+		reason := "노션에서도 비어 있던 토글이라 뺐다"
+		if len(b.Children) > 0 {
+			reason = "자식이 있었지만 변환 결과가 비어서 뺐다"
+		}
+		c.note(b, path, KindDroppedEmptyToggle, "%s (summary: %s)", reason, plainSummary(b))
+		return ""
+	}
+
+	summary := c.richTextBodyHTML(b)
 	if summary == "" {
 		summary = "펼치기"
 	}
-	children := joinChunks(c.renderBlocks(b.Children, path+">children"))
 
 	var sb strings.Builder
 	sb.WriteString("<details>\n<summary>")
@@ -435,6 +466,34 @@ func (c *converter) toggle(b Block, path string) string {
 	}
 	sb.WriteString("</details>")
 	return sb.String()
+}
+
+// plainSummary는 리포트에 찍을 summary 글자다. 토글을 통째로 뺄 때 무엇이
+// 같이 사라졌는지 남기려고 서식 없이 뽑는다.
+func plainSummary(b Block) string {
+	var body struct {
+		RichText []RichText `json:"rich_text"`
+	}
+	_ = b.decodeBody(&body)
+	var sb strings.Builder
+	for _, rt := range body.RichText {
+		sb.WriteString(rt.PlainText)
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+// onlyTOC는 자식이 전부 목차 블록인지 본다. 빈 목록은 false다 — 자식이 없는
+// 토글은 노션에서 원래 비어 있던 것이라 여기서 판단하지 않는다.
+func onlyTOC(children []Block) bool {
+	if len(children) == 0 {
+		return false
+	}
+	for _, ch := range children {
+		if ch.Type != "table_of_contents" {
+			return false
+		}
+	}
+	return true
 }
 
 // codeBlock은 코드 블록을 만든다. 내용에 백틱 울타리가 있으면 울타리를 더 길게 쓴다.
@@ -727,6 +786,67 @@ func renderRichTextOne(rt RichText) string {
 
 	if rt.Href != "" {
 		text = "[" + text + "](" + rt.Href + ")"
+	}
+	return text
+}
+
+// richTextBodyHTML은 블록 본문을 인라인 **HTML**로 바꾼다. <summary>처럼
+// 마크다운이 닿지 않는 자리에 쓴다.
+func (c *converter) richTextBodyHTML(b Block) string {
+	var body struct {
+		RichText []RichText `json:"rich_text"`
+	}
+	_ = b.decodeBody(&body)
+	return renderRichTextHTML(body.RichText)
+}
+
+// renderRichTextHTML은 rich_text 배열을 인라인 HTML로 바꾼다.
+//
+// renderRichText와 짝이다. 다른 점은 서식을 마크다운 기호가 아니라 태그로 내고,
+// 글자를 HTML 이스케이프한다는 것 — 결과가 raw HTML 자리에 그대로 들어가므로
+// 원문의 <, & 가 태그로 읽히면 안 된다.
+func renderRichTextHTML(rts []RichText) string {
+	var sb strings.Builder
+	for _, rt := range rts {
+		sb.WriteString(renderRichTextHTMLOne(rt))
+	}
+	return sb.String()
+}
+
+func renderRichTextHTMLOne(rt RichText) string {
+	// 수식은 마크다운 쪽과 달리 그릴 방법이 없다. 여기(<summary>)는 우리 수식
+	// 확장이 닿지 않는 raw HTML 자리라 $...$를 넣어봐야 글자로 보인다.
+	// 덤프 전체에서 summary에 수식이 든 경우는 0건이라 원문만 남긴다.
+	if rt.Type == "equation" && rt.Equation != nil {
+		return html.EscapeString(normalizeInlineMath(rt.Equation.Expression))
+	}
+
+	text := rt.PlainText
+	if text == "" {
+		return ""
+	}
+	text = html.EscapeString(text)
+
+	// 코드가 먼저다. 코드 안에서는 나머지 서식을 입히지 않는다.
+	if rt.Annotations.Code {
+		text = "<code>" + text + "</code>"
+	} else {
+		if rt.Annotations.Bold {
+			text = "<strong>" + text + "</strong>"
+		}
+		if rt.Annotations.Italic {
+			text = "<em>" + text + "</em>"
+		}
+		if rt.Annotations.Strikethrough {
+			text = "<del>" + text + "</del>"
+		}
+		if rt.Annotations.Underline {
+			text = "<u>" + text + "</u>"
+		}
+	}
+
+	if rt.Href != "" {
+		text = `<a href="` + html.EscapeString(rt.Href) + `">` + text + "</a>"
 	}
 	return text
 }
