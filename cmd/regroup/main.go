@@ -61,7 +61,7 @@ var groups = []group{
 		"알고리즘: 이론", "알고리즘: 실전",
 	}},
 	{slug: "cs-theory", name: "CS 이론", members: []string{
-		"운영체제", "네트워크", "컴퓨터 시스템", "데이터베이스", "가상화기술",
+		"운영체제", "네트워크", "데이터베이스", "가상화기술",
 	}},
 	{slug: "dev", name: "개발", members: []string{
 		"Language", "소프트스킬", "모바일 프로그래밍", "웹 프로그래밍", "리눅스 & 쉘",
@@ -73,7 +73,7 @@ var groups = []group{
 			"선형대수", "최적화이론", "수리통계1", "수리통계2", "확률과정론", "이산수학",
 		}},
 		{slug: "수리통계-응용", name: "수리/통계: 응용", members: []string{
-			"탐색적 자료분석", "회귀분석", "다변량분석", "빅데이터 분석기사",
+			"탐색적 자료분석", "회귀분석", "다변량분석",
 		}},
 		{slug: "머신러닝", name: "머신러닝", members: []string{
 			"핸즈온 머신러닝 2", "자연어처리 (1) : BERT와 GPT",
@@ -82,7 +82,7 @@ var groups = []group{
 	{slug: "project", name: "프로젝트", members: []string{
 		"école 42", "Projects",
 	}},
-	{slug: "career", name: "커리어", members: []string{"취업 준비"}},
+	{slug: "career", name: "커리어", members: []string{"취업 준비", "빅데이터 분석기사"}},
 	{slug: "life", name: "라이프", members: nil},
 }
 
@@ -110,6 +110,7 @@ type category struct {
 	slug       string
 	parentID   sql.NullInt64
 	sourceName sql.NullString
+	sortOrder  int
 	children   int
 	// grandchildren은 자식의 자식 수다. 이게 0보다 크면 서브트리 높이가 2라서
 	// 새 최상위 밑으로 넣으면 4단계가 된다.
@@ -189,7 +190,7 @@ func (c catalog) member(name string) (*category, bool) {
 
 func loadCategories(sqlDB *sql.DB) (*catalog, error) {
 	rows, err := sqlDB.Query(`
-		SELECT c.id, c.name, c.slug, c.parent_id, c.source_name,
+		SELECT c.id, c.name, c.slug, c.parent_id, c.source_name, c.sort_order,
 		       (SELECT count(*) FROM categories k WHERE k.parent_id = c.id),
 		       (SELECT count(*) FROM categories g
 		          JOIN categories k ON g.parent_id = k.id
@@ -220,7 +221,7 @@ func loadCategories(sqlDB *sql.DB) (*catalog, error) {
 	}
 	for rows.Next() {
 		var c category
-		if err := rows.Scan(&c.id, &c.name, &c.slug, &c.parentID, &c.sourceName,
+		if err := rows.Scan(&c.id, &c.name, &c.slug, &c.parentID, &c.sourceName, &c.sortOrder,
 			&c.children, &c.grandchildren, &c.posts); err != nil {
 			return nil, fmt.Errorf("categories 스캔: %w", err)
 		}
@@ -560,7 +561,7 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 			if !ok {
 				return fmt.Errorf("옮기려는 카테고리가 없다: %q", m)
 			}
-			if c.parentID.Valid && c.parentID.Int64 == groupID[g.slug] {
+			if c.parentID.Valid && c.parentID.Int64 == groupID[g.slug] && c.sortOrder == j {
 				continue // 이미 그 밑에 있다
 			}
 			if _, err := tx.Exec(
@@ -576,7 +577,7 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 				if !ok {
 					return fmt.Errorf("옮기려는 카테고리가 없다: %q", m)
 				}
-				if c.parentID.Valid && c.parentID.Int64 == subID[sub.slug] {
+				if c.parentID.Valid && c.parentID.Int64 == subID[sub.slug] && c.sortOrder == j {
 					continue
 				}
 				if _, err := tx.Exec(

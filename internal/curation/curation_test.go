@@ -64,7 +64,8 @@ func TestApplyBodyEditsFailsWhenLineMissing(t *testing.T) {
 // 실제 표가 도는지 본다. 소개 글 끝의 인라인 데이터베이스 링크를 덜어낸다.
 func TestApplyBodyEditsOnIntroPost(t *testing.T) {
 	const intro = "1080901b-87f1-80d2-811a-eba467c2c160"
-	body := "멈추지 않고 끊임없이 나아가는 개발자가 되고 싶습니다.\n\n" +
+	body := "![](/img/0f9f83dcd63eb36d2bbc1c616342d8a8d2edfc29b6ba318debc159bcbf336128)\n\n" +
+		"멈추지 않고 끊임없이 나아가는 개발자가 되고 싶습니다.\n\n" +
 		"[프로젝트](/p/fd9d12dc-83de-4424-9428-0f26582130bc)\n"
 	got, err := ApplyBodyEdits(intro, body)
 	if err != nil {
@@ -84,5 +85,12 @@ func TestBodyEditPageIDsAreKnown(t *testing.T) {
 		if !covers[id] {
 			t.Logf("표지 글이 아닌 글의 본문을 고친다: %s (문제는 아니다)", id)
 		}
+	}
+}
+
+func TestPortraitIsDroppedFromBodyAndImageImport(t *testing.T) {
+	const sha = "0f9f83dcd63eb36d2bbc1c616342d8a8d2edfc29b6ba318debc159bcbf336128"
+	if !DroppedImage(sha) {
+		t.Error("자기소개 사진이 이미지 이관 제외 대상이 아니다")
 	}
 }

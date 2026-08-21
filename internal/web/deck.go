@@ -3,13 +3,14 @@ package web
 import (
 	"html/template"
 	"net/url"
+	"strings"
 )
 
 // 분류 하나를 "아이콘 카드 묶음"으로 펼쳐 보여준다.
 //
 // 목록 한 줄짜리 링크로는 그 갈래가 무엇을 담고 있는지 알 수 없다. 갈래가 몇 개
 // 안 되고 성격이 뚜렷한 자리에서는 카드가 낫다. **아무 데나 쓰지 않는다** — 지금은
-// `데이터 & 수리` 한 곳뿐이고, 여기서 써보고 넓힐지 정한다.
+// `데이터 & 수리`에서 시작해 갈래가 분명한 최상위 분류로 넓혔다.
 //
 // **글 내용이 아니라 화면 장치다.** 그래서 표지 글 본문(DB)이 아니라 여기 코드에
 // 둔다. 본문에 넣으면 `import -db`가 덮어써서 사라진다.
@@ -22,15 +23,96 @@ var deckCategories = map[string]bool{
 	"dev":       true,
 }
 
+const projectSlug = "project"
+
 // cardArt는 카드 하나의 그림과 한 줄 설명이다. 키는 하위 분류의 slug다.
 type cardArt struct {
 	Blurb string
 	Icon  template.HTML
 }
 
+var languageBlurbs = map[string]string{
+	"C":          "메모리와 포인터를 직접 다루며 프로그램의 바닥을 익힌 기록.",
+	"C++":        "객체와 템플릿, 표준 라이브러리로 C 위에 구조를 세운 기록.",
+	"Java":       "객체지향 문법부터 컬렉션과 JVM 생태계까지.",
+	"Python":     "간결한 문법과 데이터 처리, 자동화에 쓴 파이썬 기록.",
+	"R":          "통계 계산과 데이터 분석을 중심으로 정리한 R 기록.",
+	"TypeScript": "자바스크립트에 타입을 더해 웹 코드를 단단하게 만든 기록.",
+}
+
+var languageIcon = template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+	<path d="M17 14L7 24l10 10M31 14l10 10-10 10M27 10l-6 28"/>
+</svg>`)
+
+// languageDeckFor는 `프로그래밍 언어` 한 장짜리 카드를 원본 경로에 남은
+// C·Java·Python 같은 실제 언어 갈래로 바꾼다. 마크업 분류는 별도 카드로
+// 남겨 Language 안의 다른 콘텐츠로 가는 길도 잃지 않는다.
+func languageDeckFor(basePath string, children []Category, branches []LanguageBranch) []DeckCard {
+	if len(branches) == 0 {
+		return nil
+	}
+	cards := make([]DeckCard, 0, len(branches)+1)
+	for _, branch := range branches {
+		blurb, ok := languageBlurbs[branch.Name]
+		if !ok {
+			continue
+		}
+		cards = append(cards, DeckCard{
+			Name: branch.Name, URL: "/p/" + url.PathEscape(branch.Slug), Count: branch.Count,
+			Blurb: blurb, Icon: languageIcon, Native: true,
+		})
+	}
+	for _, child := range children {
+		if child.Slug != "마크업-스타일링-표현식" {
+			continue
+		}
+		art := cardArtBySlug[child.Slug]
+		cards = append(cards, DeckCard{
+			Name: child.Name, URL: basePath + "/" + url.PathEscape(child.Slug), Count: child.PostCount,
+			Blurb: art.Blurb, Icon: art.Icon, Native: true,
+		})
+	}
+	return cards
+}
+
 // 아이콘은 인라인 SVG다. 파일로 두지 않는 이유: 카드마다 하나씩이라 요청을 늘릴
 // 값어치가 없고, currentColor를 쓰면 색을 카드가 정한다.
 var cardArtBySlug = map[string]cardArt{
+	"project-école-42": {
+		Blurb: "42 서울에서 통과한 과제와 시험, 구현하며 남긴 기록.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<path d="M8 12h13v12H8zM27 12h13v24H27zM8 30h13v6H8z"/>
+			<path d="M21 18h6M14 24v6"/>
+		</svg>`),
+	},
+	"project-where42": {
+		Blurb: "카뎃 활동을 한눈에 보는 서비스. 화면 구조를 따라가며 남긴 코드 분석.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<path d="M9 34c4-8 8-12 15-12s11 4 15 12"/>
+			<circle cx="24" cy="14" r="6"/>
+			<path d="M8 39h32M34 10l6 4-6 4"/>
+		</svg>`),
+	},
+	"project-심심조각": {
+		Blurb: "AI, 다이어리, 리포트까지. 기록을 조각처럼 모으는 서비스의 코드 분석.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<path d="M10 10h12v12H10zM26 10h12v12H26zM10 26h12v12H10z"/>
+			<path d="M32 27v10M27 32h10"/>
+		</svg>`),
+	},
+	"프로그래밍-언어": {
+		Blurb: "R, Python, Java, C, C++, TypeScript, Swift. 언어마다의 문법과 버릇.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<path d="M17 14L7 24l10 10M31 14l10 10-10 10M27 10l-6 28"/>
+		</svg>`),
+	},
+	"마크업-스타일링-표현식": {
+		Blurb: "HTML과 CSS, 정규식과 표현식. 구조를 적고 모양과 패턴을 다루는 법.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<path d="M8 12h32v24H8zM8 19h32"/>
+			<path d="M14 27l4 3-4 3M23 33h10"/>
+		</svg>`),
+	},
 	"수리통계-이론": {
 		Blurb: "정의에서 시작해 증명으로 이어지는 것들. 선형대수와 최적화, 확률과 수리통계.",
 		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
@@ -152,11 +234,12 @@ var cardArtBySlug = map[string]cardArt{
 
 // DeckCard는 템플릿이 그릴 카드 하나다.
 type DeckCard struct {
-	Name  string
-	URL   string
-	Count int
-	Blurb string
-	Icon  template.HTML
+	Name   string
+	URL    string
+	Count  int
+	Blurb  string
+	Icon   template.HTML
+	Native bool // JS 기울기 없이 링크와 CSS만으로 동작하는 카드
 }
 
 // deckFor는 카드로 펼칠 분류면 카드 목록을, 아니면 nil을 돌려준다.
@@ -175,12 +258,76 @@ func deckFor(slug, basePath string, children []Category) []DeckCard {
 			return nil
 		}
 		cards = append(cards, DeckCard{
-			Name:  c.Name,
-			URL:   basePath + "/" + url.PathEscape(c.Slug),
-			Count: c.PostCount,
-			Blurb: art.Blurb,
-			Icon:  art.Icon,
+			Name:   c.Name,
+			URL:    basePath + "/" + url.PathEscape(c.Slug),
+			Count:  c.PostCount,
+			Blurb:  art.Blurb,
+			Icon:   art.Icon,
+			Native: false,
 		})
 	}
 	return cards
+}
+
+// projectDeckFor는 프로젝트 첫 화면을 세 갈래로 정리한다.
+//
+// école 42는 이미 하위 카테고리라 그쪽으로 바로 보낸다. where42와 심심조각은
+// 노션의 `Projects` 표지 글 한 편 안에 두 절로 함께 들어 있으므로, DB 본문을
+// 다시 만들지 않고 그 절의 앵커로 보낸다. 링크 수도 같은 본문에서 세어 코드의
+// 숫자가 정본보다 앞서거나 뒤처지지 않게 한다.
+//
+// 필요한 분류나 두 절이 없으면 nil이다. 반쪽짜리 카드 묶음 대신 평소 목록으로
+// 돌아가는 편이 탐색 경로를 잃지 않는다.
+func projectDeckFor(basePath string, children []Category, projectsBody string) []DeckCard {
+	bySlug := make(map[string]Category, len(children))
+	for _, child := range children {
+		bySlug[child.Slug] = child
+	}
+	ecole, hasEcole := bySlug["école-42"]
+	projects, hasProjects := bySlug["projects"]
+	whereCount, pieceCount := projectSectionCounts(projectsBody)
+	if !hasEcole || !hasProjects || whereCount == 0 || pieceCount == 0 {
+		return nil
+	}
+
+	makeCard := func(name, target string, count int, artKey string) DeckCard {
+		art := cardArtBySlug[artKey]
+		return DeckCard{Name: name, URL: target, Count: count, Blurb: art.Blurb, Icon: art.Icon}
+	}
+	projectsURL := basePath + "/" + url.PathEscape(projects.Slug)
+	return []DeckCard{
+		makeCard("école 42", basePath+"/"+url.PathEscape(ecole.Slug), ecole.PostCount, "project-école-42"),
+		makeCard("where42", projectsURL+"#where42", whereCount, "project-where42"),
+		makeCard("심심조각", projectsURL+"#심심조각", pieceCount, "project-심심조각"),
+	}
+}
+
+// projectSectionCounts는 Projects 표지 글의 두 최상위 절에서 글 링크를 센다.
+// 변환된 HTML이 아니라 DB의 마크다운을 보는 이유는 이 숫자 역시 DB를 따라야
+// 하기 때문이다. 제목 단계는 중요하지 않고 제목 글자만 정확히 맞춘다.
+func projectSectionCounts(body string) (where42, piece int) {
+	section := ""
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			heading := strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+			switch {
+			case strings.EqualFold(heading, "where42"):
+				section = "where42"
+			case heading == "심심조각":
+				section = "심심조각"
+			default:
+				section = ""
+			}
+			continue
+		}
+		links := strings.Count(line, "](/p/")
+		switch section {
+		case "where42":
+			where42 += links
+		case "심심조각":
+			piece += links
+		}
+	}
+	return where42, piece
 }

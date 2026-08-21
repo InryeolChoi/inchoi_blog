@@ -34,8 +34,8 @@ type bodyFix struct {
 	Rows     int // 그렇게 드러난 글
 	Left     int // 짝을 못 찾아 그대로 둔 죽은 링크
 	Grouped  int // 낱개 링크를 묶어 만든 목록 상자
-	// Shown은 펼친 목록에 나온 글의 slug다. 카테고리 페이지에서 "하위 분류"가
-	// 본문과 겹치는지 볼 때 쓴다.
+	// Shown은 본문 링크와 펼친 목록에 나온 글의 slug다. 카테고리 페이지의
+	// 목차와 아래 목록이 겹치는지 볼 때 쓴다.
 	Shown map[string]bool
 }
 
@@ -50,6 +50,18 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 	titles, err := s.store.PostTitlesBySlug(targets)
 	if err != nil {
 		return "", fix, err
+	}
+	// 살아 있는 글 링크는 그 자체로 본문에 이미 보이는 길이다. 표지 글의 목차가
+	// 이런 링크를 여러 개 직접 쌓아 만든 경우도 있어서, 인라인 DB로 펼친 행만
+	// 세면 아래 "글" 목록과의 중복을 놓친다.
+	for _, target := range targets {
+		if _, live := titles[target]; !live {
+			continue
+		}
+		if fix.Shown == nil {
+			fix.Shown = map[string]bool{}
+		}
+		fix.Shown[target] = true
 	}
 
 	// 죽은 링크가 있을 때만 인라인 데이터베이스를 찾아본다. 대부분의 글은

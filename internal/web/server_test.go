@@ -67,7 +67,11 @@ func testServer(t *testing.T) http.Handler {
 		      VALUES (?, ?, ?, ?, 'unlisted', 'notion', ?, 0, ?, ?)`,
 			id, slug, title, body, catID, now, now)
 	}
-	post(1, "cover-language", "언어", "표지 본문", 2)
+	post(1, "cover-language", "언어", "표지 본문\n\n## 목차\n\n[목차 글](/p/toc-post)\n\n## 참고 동영상\n\n[영상](https://www.youtube.com/watch?v=fNk_zzaMoSs)", 2)
+	post(5, "category-post", "언어 글", "언어 글 본문", 2)
+	post(6, "toc-post", "목차 글", "목차 글 본문", 2)
+	post(7, "toc-child", "목차 글의 하위 글", "하위 글 본문", 2)
+	exec(`UPDATE posts SET parent_id = 6 WHERE id = 7`)
 	post(2, "list-post", "리스트", "# 리스트\n\n식은 $x_1 + y_2$ 이다.\n\n$$\n\\sum_{i=1}^{n} i\n$$\n", 3)
 	exec(`UPDATE categories SET cover_post_id = 1 WHERE id = 2`)
 
@@ -134,8 +138,8 @@ func TestIndexListsTopCategories(t *testing.T) {
 	if !strings.Contains(body, `href="/dev"`) {
 		t.Errorf("최상위 카테고리 링크가 없다:\n%s", body)
 	}
-	// 하위 글까지 세야 한다 (dev 아래 글 4건)
-	if !strings.Contains(body, "글 4건") {
+	// 하위 글까지 세야 한다 (dev 아래 글 7건)
+	if !strings.Contains(body, "글 7건") {
 		t.Errorf("하위 글 수가 안 세졌다:\n%s", body)
 	}
 }
@@ -159,11 +163,16 @@ func TestCategoryPageShowsChildrenAndPosts(t *testing.T) {
 	if !strings.Contains(body, `href="/dev/language/python"`) {
 		t.Errorf("3단계 링크가 없다:\n%s", body)
 	}
-	if !strings.Contains(body, `href="/p/cover-language"`) {
+	if !strings.Contains(body, `href="/p/category-post"`) {
 		t.Errorf("직속 글 링크가 없다:\n%s", body)
 	}
-	if !strings.Contains(body, "표지") {
-		t.Errorf("표지 표시가 없다:\n%s", body)
+	// 표지 글은 위에서 이미 본문으로 펼쳤으므로 목록과 "따로 보기" 링크로
+	// 한 번 더 내보내지 않는다.
+	if got := strings.Count(body, `href="/p/cover-language"`); got != 0 {
+		t.Errorf("표지 글 링크가 %d개 남았다:\n%s", got, body)
+	}
+	if strings.Contains(body, `<span class="cover">`) {
+		t.Errorf("표지 뱃지가 남아 있다:\n%s", body)
 	}
 }
 
@@ -474,12 +483,95 @@ func TestCategoryShowsCoverBody(t *testing.T) {
 	if !strings.Contains(body, "표지 본문") {
 		t.Errorf("표지 글 본문이 카테고리 페이지에 안 나온다:\n%s", body)
 	}
-	if !strings.Contains(body, `href="/p/cover-language"`) {
-		t.Errorf("표지 글로 가는 링크가 없다:\n%s", body)
+	if strings.Contains(mainOf(t, body), `href="/p/cover-language"`) {
+		t.Errorf("없애기로 한 표지 글 따로 보기 링크가 남았다:\n%s", body)
 	}
 
 	// 표지가 없는 카테고리는 <article>을 그리지 않는다.
 	if body := get(t, h, "/dev/tools").Body.String(); strings.Contains(body, "<article>") {
 		t.Errorf("표지가 없는데 본문 영역이 그려졌다:\n%s", body)
+	}
+}
+
+// TestCategoryDoesNotRepeatCoverTableOfContents는 표지 본문의 목차가 가리키는
+// 글 트리를 아래 "글" 목록에서 한 번 더 펼치지 않는지 본다.
+func TestCategoryDoesNotRepeatCoverTableOfContents(t *testing.T) {
+	body := mainOf(t, get(t, testServer(t), "/dev/language").Body.String())
+
+	// 목차 링크는 상단 본문에 한 번만 남는다.
+	if got := strings.Count(body, `href="/p/toc-post"`); got != 1 {
+		t.Errorf("목차 글 링크가 %d개다, 상단 목차 하나만 있어야 한다:\n%s", got, body)
+	}
+	// 목차가 가리킨 부모 아래의 하위 글도 하단 트리와 함께 빠진다.
+	if strings.Contains(body, `href="/p/toc-child"`) {
+		t.Errorf("목차 글의 하위 트리가 아래 목록에 다시 나왔다:\n%s", body)
+	}
+	// 표지에서 안내하지 않은 글은 길을 잃지 않도록 아래 목록에 남는다.
+	if !strings.Contains(body, `href="/p/category-post"`) {
+		t.Errorf("목차에 없는 글까지 목록에서 사라졌다:\n%s", body)
+	}
+}
+
+// TestCategoryMovesReferenceVideoBelowPosts는 카테고리에 펼친 표지 글의 참고
+// 동영상 절만 글 목록 뒤로 보내는지 본다. 상세 글의 본문 순서는 바꾸지 않는다.
+func TestCategoryMovesReferenceVideoBelowPosts(t *testing.T) {
+	h := testServer(t)
+
+	page := get(t, h, "/dev/language").Body.String()
+	body := mainOf(t, page)
+	intro := strings.Index(body, "표지 본문")
+	posts := strings.Index(body, `class="section-title">글</h2>`)
+	reference := strings.Index(body, "참고 동영상")
+	if intro < 0 || posts < 0 || reference < 0 {
+		t.Fatalf("표지 본문, 글 목록, 참고 동영상 절이 모두 있어야 한다:\n%s", body)
+	}
+	if !(intro < posts && posts < reference) {
+		t.Errorf("카테고리에서는 참고 동영상이 글 목록 뒤에 있어야 한다:\n%s", body)
+	}
+	if !strings.Contains(page, `src="/static/youtube.js"`) {
+		t.Errorf("아래로 옮긴 동영상에 필요한 스크립트가 빠졌다:\n%s", page)
+	}
+
+	detail := mainOf(t, get(t, h, "/p/cover-language").Body.String())
+	if strings.Index(detail, "표지 본문") > strings.Index(detail, "참고 동영상") {
+		t.Errorf("상세 글의 원래 본문 순서가 바뀌었다:\n%s", detail)
+	}
+}
+
+// TestMachineLearningCategoryIsListOnly는 머신러닝 첫 화면이 표지 본문을 펼치지
+// 않고 `수리/통계: 이론`처럼 하위 분류 목록만 보여주는지 본다.
+func TestMachineLearningCategoryIsListOnly(t *testing.T) {
+	sqlDB := testDB(t)
+	exec := execer(t, sqlDB)
+	exec(`INSERT INTO categories (id, name, slug, sort_order) VALUES (1, '데이터 & 수리', 'data-math', 0)`)
+	exec(`INSERT INTO categories (id, name, slug, parent_id, sort_order) VALUES
+		(2, '머신러닝', '머신러닝', 1, 0),
+		(3, '머신러닝: 기초이론', '머신러닝-기초이론', 2, 0),
+		(4, '자연어처리', '자연어처리', 2, 1)`)
+	now := time.Now().UTC()
+	exec(`INSERT INTO posts (id, slug, title, body, status, source, category_id, sort_order, created_at, updated_at)
+		VALUES (1, 'machine-cover', '머신러닝 & 딥러닝', '펼치지 않을 표지 본문', 'unlisted', 'notion', 2, 0, ?, ?)`, now, now)
+	exec(`UPDATE categories SET cover_post_id = 1 WHERE id = 2`)
+
+	srv, err := New(sqlDB)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	body := mainOf(t, get(t, srv.Handler(), "/data-math/머신러닝").Body.String())
+	for _, want := range []string{
+		`class="section-title">하위 분류</h2>`,
+		`href="/data-math/` + url.PathEscape("머신러닝") + `/` + url.PathEscape("머신러닝-기초이론") + `"`,
+		`href="/data-math/` + url.PathEscape("머신러닝") + `/` + url.PathEscape("자연어처리") + `"`,
+	} {
+		// html/template는 URL 문맥에서 새로 이스케이프한 조각의 16진수를
+		// 소문자로 낼 수 있다. 퍼센트 인코딩은 대소문자를 구분하지 않는다.
+		if !strings.Contains(strings.ToLower(body), strings.ToLower(want)) {
+			t.Errorf("머신러닝 목록형 첫 화면에 %q가 없다:\n%s", want, body)
+		}
+	}
+	for _, unwanted := range []string{"펼치지 않을 표지 본문", "이 글만 따로 보기", `class="section-title">글</h2>`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("머신러닝 목록형 첫 화면에 %q가 남았다:\n%s", unwanted, body)
+		}
 	}
 }

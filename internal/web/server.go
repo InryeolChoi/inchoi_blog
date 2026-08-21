@@ -94,6 +94,9 @@ type pageData struct {
 	Posts      []PostSummary
 	Post       *Post
 	Body       template.HTML
+	// AfterPosts는 카테고리 표지 글에서 글 목록 뒤로 보낼 참고 절이다.
+	// 상세 글에서는 원래 본문 순서를 그대로 쓰므로 비어 있다.
+	AfterPosts template.HTML
 	// Outline은 본문에서 뽑은 목차다. 짧은 글에는 안 붙인다.
 	Outline []markdown.Heading
 	// Nav는 사이드바에 그릴 카테고리 트리다. render가 채운다.
@@ -109,7 +112,7 @@ type pageData struct {
 	// Assets는 이 페이지가 CDN에서 받아야 할 것이다. render가 Body를 보고 채운다
 	// (assets.go).
 	Assets assetNeeds
-	// Deck은 하위 분류를 아이콘 카드로 펼칠 때 그릴 것이다 (deck.go).
+	// Deck은 갈래를 아이콘 카드로 펼칠 때 그릴 것이다 (deck.go).
 	// 비어 있으면 평소대로 목록을 그린다.
 	Deck []DeckCard
 }
@@ -168,7 +171,10 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	}
 	// 이 페이지가 CDN에서 받을 것을 본문을 보고 정한다. 핸들러마다 챙기지
 	// 않도록 여기 한 곳에서 한다 — 사이드바를 여기서 채우는 것과 같은 이유다.
-	data.Assets = needsFor(data.Body)
+	// 카테고리 표지의 참고 절을 목록 뒤로 떼어놓아도 그 안의 수식·코드·유튜브에
+	// 필요한 자산을 빠뜨리면 안 된다.
+	assetBody := template.HTML(string(data.Body) + string(data.AfterPosts))
+	data.Assets = needsFor(assetBody)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
 		// 헤더를 이미 보냈을 수 있어서 상태 코드를 바꿀 수 없다. 로그만 남긴다.
@@ -182,9 +188,10 @@ const outlineMinHeadings = 3
 
 // renderedBody는 본문 한 편을 그린 결과다.
 type renderedBody struct {
-	HTML    template.HTML
-	Outline []markdown.Heading
-	fix     bodyFix
+	HTML       template.HTML
+	AfterPosts template.HTML
+	Outline    []markdown.Heading
+	fix        bodyFix
 }
 
 // renderPostBody는 본문을 HTML로 바꾸고 목차를 함께 뽑는다.
@@ -205,6 +212,41 @@ func (s *Server) renderPostBody(post *Post) (renderedBody, error) {
 		out.Outline = heads
 	}
 	return out, nil
+}
+
+// referenceVideoHeading은 카테고리 표지 글에서 글 목록 뒤로 보낼 절의 시작이다.
+// 현재 이 제목을 쓰는 표지 글은 선형대수 하나뿐이다. 글 상세는 원문 순서를
+// 그대로 두고, 카테고리에서 펼칠 때만 이 절을 떼어낸다.
+var referenceVideoHeading = regexp.MustCompile(`(?m)^#{1,6}[ \t]+참고 동영상[ \t]*\r?$`)
+
+func splitReferenceVideoSection(source string) (before, after string) {
+	loc := referenceVideoHeading.FindStringIndex(source)
+	if loc == nil {
+		return source, ""
+	}
+	return strings.TrimRight(source[:loc[0]], "\r\n"), source[loc[0]:]
+}
+
+// renderCategoryCoverBody는 표지 글을 카테고리 페이지용으로 그린다.
+// `참고 동영상` 절은 글 목록을 먼저 훑은 뒤 볼 수 있도록 별도로 렌더링한다.
+func (s *Server) renderCategoryCoverBody(post *Post) (renderedBody, error) {
+	resolved, fix, err := s.resolveBody(post.Body, post.OriginalPath.String)
+	if err != nil {
+		return renderedBody{}, err
+	}
+	before, after := splitReferenceVideoSection(resolved)
+	beforeHTML, err := s.md.Render(before)
+	if err != nil {
+		return renderedBody{}, err
+	}
+	var afterHTML template.HTML
+	if after != "" {
+		afterHTML, err = s.md.Render(after)
+		if err != nil {
+			return renderedBody{}, err
+		}
+	}
+	return renderedBody{HTML: beforeHTML, AfterPosts: afterHTML, fix: fix}, nil
 }
 
 func (s *Server) fail(w http.ResponseWriter, err error) {
@@ -302,17 +344,20 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	// 그 분류의 알맹이인 경우가 있다. 한 번 더 눌러 들어가게 하지 않는다.
 	var cover renderedBody
 	var coverPost *Post
-	if current.CoverPostSlug != "" {
+	if current.CoverPostSlug != "" && !listOnlyCategory(current.Slug) {
 		coverPost, err = s.store.PostBySlug(current.CoverPostSlug)
 		if err != nil {
 			s.fail(w, err)
 			return
 		}
 		if coverPost != nil {
-			if cover, err = s.renderPostBody(coverPost); err != nil {
+			if cover, err = s.renderCategoryCoverBody(coverPost); err != nil {
 				s.fail(w, err)
 				return
 			}
+			// 표지 본문의 목차가 이미 가리키는 글 트리는 아래 "글" 목록에서
+			// 다시 보여주지 않는다. 상단 목차가 그 갈래의 입구다.
+			posts = dropShownPostTrees(posts, cover.fix.Shown)
 			if children, err = s.dropCoveredChildren(children, cover.fix.Shown); err != nil {
 				s.fail(w, err)
 				return
@@ -322,18 +367,82 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 
 	crumbList, basePath := crumbs(trail)
 	open, active := openTrail(trail)
+	deck := deckFor(current.Slug, basePath, children)
+	if current.Slug == "language" {
+		for _, child := range children {
+			if child.Slug != "프로그래밍-언어" {
+				continue
+			}
+			branches, branchErr := s.store.LanguageBranches(child.ID)
+			if branchErr != nil {
+				s.fail(w, branchErr)
+				return
+			}
+			deck = languageDeckFor(basePath, children, branches)
+			break
+		}
+	}
+	if current.Slug == projectSlug {
+		for _, child := range children {
+			if child.Slug != "projects" || child.CoverPostSlug == "" {
+				continue
+			}
+			projectsCover, deckErr := s.store.PostBySlug(child.CoverPostSlug)
+			if deckErr != nil {
+				s.fail(w, deckErr)
+				return
+			}
+			if projectsCover != nil {
+				deck = projectDeckFor(basePath, children, projectsCover.Body)
+			}
+			break
+		}
+	}
 	s.render(w, "category.html", pageData{
 		Title:      current.Name,
-		Deck:       deckFor(current.Slug, basePath, children),
+		Deck:       deck,
 		Trail:      crumbList,
 		BasePath:   basePath,
 		Categories: children,
 		Posts:      posts,
 		Post:       coverPost,
 		Body:       cover.HTML,
+		AfterPosts: cover.AfterPosts,
 		openCats:   open,
 		activeCat:  active,
 	})
+}
+
+// listOnlyCategories는 표지 글보다 하위 분류 자체가 첫 화면의 알맹이인 곳이다.
+//
+// 표지 지정은 DB의 분류 관계로 그대로 보존하되, 여기서는 본문을 펼치지 않는다.
+// PostsInCategory도 표지 글을 목록에서 빼므로 결과는 합성 중간층인
+// `수리/통계: 이론`처럼 하위 분류 목록만 남는다.
+var listOnlyCategories = map[string]bool{
+	"머신러닝": true,
+}
+
+func listOnlyCategory(slug string) bool {
+	return listOnlyCategories[slug]
+}
+
+// dropShownPostTrees는 표지 본문이 이미 링크한 글과 그 하위 트리를 목록에서 뺀다.
+// 부모 글이 목차에 있으면 그 상세 페이지에서 하위 글로 이어지므로, 카테고리
+// 화면에 같은 사슬을 한 벌 더 펼칠 필요가 없다. 상단에서 안내하지 않은 갈래는
+// 그대로 남겨 길을 잃지 않게 한다.
+func dropShownPostTrees(posts []PostSummary, shown map[string]bool) []PostSummary {
+	if len(posts) == 0 || len(shown) == 0 {
+		return posts
+	}
+	out := make([]PostSummary, 0, len(posts))
+	for _, post := range posts {
+		if shown[post.Slug] {
+			continue
+		}
+		post.Children = dropShownPostTrees(post.Children, shown)
+		out = append(out, post)
+	}
+	return out
 }
 
 // dropCoveredChildren은 표지 글 본문이 이미 통째로 펼쳐 보여준 하위 분류를

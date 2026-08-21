@@ -4,15 +4,16 @@
 </header>
 
 {{/* 갈래가 몇 개 안 되고 성격이 뚜렷한 분류는 목록 대신 아이콘 카드로 편다.
+     카드는 하위 분류뿐 아니라 한 표지 글 안의 절로도 이어질 수 있다.
      어디에 쓸지는 internal/web/deck.go가 정한다. */}}
 {{if .Deck}}
 <div class="deck">
   {{range .Deck}}
-  <a class="deck-card" href="{{.URL}}">
+  <a class="deck-card" href="{{.URL}}"{{if .Native}} data-native{{end}}>
     <span class="deck-icon" aria-hidden="true">{{.Icon}}</span>
     <span class="deck-name">{{.Name}}</span>
     <span class="deck-blurb">{{.Blurb}}</span>
-    <span class="deck-count">글 {{.Count}}건</span>
+    <span class="deck-count" data-i18n="postCount" data-count="{{.Count}}">글 {{.Count}}건</span>
   </a>
   {{end}}
 </div>
@@ -26,7 +27,6 @@
 <article>
 {{.Body}}
 </article>
-<p class="page-meta"><a href="/p/{{.Post.Slug}}">이 글만 따로 보기</a></p>
 {{end}}
 
 
@@ -37,7 +37,7 @@
   {{range .Categories}}
   <li>
     <a href="{{$.BasePath}}/{{.Slug}}">{{.Name}}</a>
-    <span class="count">글 {{.PostCount}}건</span>
+    <span class="count" data-i18n="postCount" data-count="{{.PostCount}}">글 {{.PostCount}}건</span>
   </li>
   {{end}}
 </ul>
@@ -48,7 +48,11 @@
 {{template "posttree" .Posts}}
 {{end}}
 
-{{if and (not .Categories) (not .Posts) (not .Deck)}}
-<p>비어 있다.</p>
+{{/* 표지 글의 참고 동영상 절은 글 목록을 먼저 훑은 뒤 보도록 아래에 둔다. */}}
+{{if and .AfterPosts (not .Deck)}}
+<article>
+{{.AfterPosts}}
+</article>
 {{end}}
+
 {{end}}

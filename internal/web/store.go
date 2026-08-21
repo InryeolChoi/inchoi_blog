@@ -32,7 +32,6 @@ type PostSummary struct {
 	Title     string
 	Status    string
 	SortOrder int
-	IsCover   bool
 	// CreatedAt은 노션 원본의 작성일이다(이관 시점이 아니다).
 	// sort_order가 이 값에서 나온 목록이 많아서, 순서가 이상해 보일 때
 	// 근거를 눈으로 확인할 수 있게 목록에 같이 찍는다.
@@ -71,6 +70,14 @@ type Post struct {
 type Image struct {
 	Data []byte
 	MIME string
+}
+
+// LanguageBranch는 `Language > 프로그래밍 언어` 안의 언어 한 갈래다.
+// URL은 그 언어의 표지 글로 가고 Count는 같은 언어 아래 전체 글 수다.
+type LanguageBranch struct {
+	Name  string
+	Slug  string
+	Count int
 }
 
 // store는 DB 조회를 모아둔 것이다.
@@ -161,10 +168,9 @@ func (s *store) CategoryBySlug(slug string, parentID sql.NullInt64) (*Category, 
 	return &cats[0], nil
 }
 
-// postColumns는 목록 한 줄에 필요한 컬럼이다. 표지 여부를 보려면 categories와
-// 조인해야 해서 c 별칭이 있는 쿼리에서만 쓴다.
+// postColumns는 목록 한 줄에 필요한 컬럼이다.
 const postColumns = `p.id, p.parent_id, p.slug, p.title, p.status, p.sort_order,
-	       (c.cover_post_id IS NOT NULL AND c.cover_post_id = p.id), p.original_created_at`
+	       p.original_created_at`
 
 func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	defer rows.Close()
@@ -172,7 +178,7 @@ func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	for rows.Next() {
 		var p PostSummary
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.IsCover, &p.CreatedAt); err != nil {
+			&p.SortOrder, &p.CreatedAt); err != nil {
 			return nil, fmt.Errorf("글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -181,7 +187,7 @@ func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 }
 
 // PostsInCategory는 카테고리에 직접 붙은 글을 sort_order 순으로 돌려준다.
-// 표지 글도 포함하되 IsCover로 표시한다. 하위 카테고리의 글은 포함하지 않는다.
+// 상단에 본문을 이미 펼친 표지 글은 목록에서 빼고, 하위 카테고리의 글도 포함하지 않는다.
 //
 // parent_id로 계층을 되살려 중첩된 형태로 돌려준다. 노션 계층이 카테고리 3단계보다
 // 깊었던 글들은 같은 카테고리 안에서 서로 부모-자식이라, 그냥 나열하면 한 층으로
@@ -192,6 +198,7 @@ func (s *store) PostsInCategory(categoryID int64) ([]PostSummary, error) {
 		FROM posts p
 		JOIN categories c ON c.id = p.category_id
 		WHERE p.category_id = ?
+		  AND (c.cover_post_id IS NULL OR p.id <> c.cover_post_id)
 		ORDER BY p.sort_order, p.title`, categoryID)
 	if err != nil {
 		return nil, fmt.Errorf("카테고리 글 조회: %w", err)
@@ -202,6 +209,67 @@ func (s *store) PostsInCategory(categoryID int64) ([]PostSummary, error) {
 	}
 	sortPosts(flat)
 	return nestPosts(flat), nil
+}
+
+// LanguageBranches는 평평한 `프로그래밍 언어` 카테고리를 original_path의
+// 세 번째 칸(C, C++, Java …)으로 다시 묶는다. 카테고리 트리는 3단계가 끝이라
+// 언어별 갈래가 categories에는 없지만, 원래 노션 경로에는 그대로 남아 있다.
+//
+// 내용 없는 표지 글만 있는 언어는 보여주지 않는다. 눌렀는데 빈 화면으로 가는
+// Swift 카드가 실제로 그 경우다.
+func (s *store) LanguageBranches(categoryID int64) ([]LanguageBranch, error) {
+	rows, err := s.db.Query(`
+		SELECT p.slug, p.body, p.original_path
+		FROM posts p
+		WHERE p.category_id = ?
+		ORDER BY p.sort_order, p.title`, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("언어별 글 조회: %w", err)
+	}
+	defer rows.Close()
+
+	type branchState struct {
+		rootSlug string
+		rootBody string
+		count    int
+	}
+	branches := map[string]*branchState{}
+	for rows.Next() {
+		var slug, body string
+		var path sql.NullString
+		if err := rows.Scan(&slug, &body, &path); err != nil {
+			return nil, fmt.Errorf("언어별 글 스캔: %w", err)
+		}
+		parts := strings.Split(path.String, " > ")
+		if len(parts) < 3 || parts[0] != "Language" || parts[1] != "프로그래밍 언어" {
+			continue
+		}
+		name := parts[2]
+		state := branches[name]
+		if state == nil {
+			state = &branchState{}
+			branches[name] = state
+		}
+		state.count++
+		if len(parts) == 3 {
+			state.rootSlug = slug
+			state.rootBody = body
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	order := []string{"C", "C++", "Java", "Python", "R", "TypeScript", "Swift"}
+	out := make([]LanguageBranch, 0, len(order))
+	for _, name := range order {
+		state := branches[name]
+		if state == nil || state.rootSlug == "" || strings.TrimSpace(state.rootBody) == "" {
+			continue
+		}
+		out = append(out, LanguageBranch{Name: name, Slug: state.rootSlug, Count: state.count})
+	}
+	return out, nil
 }
 
 // leadingNumber는 제목 맨 앞의 번호를 잡는다. "10. 다중공선성" → 10.
@@ -357,7 +425,7 @@ func (s *store) PostAncestors(postID int64) ([]PostSummary, error) {
 		var p PostSummary
 		var depth int
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.IsCover, &p.CreatedAt, &depth); err != nil {
+			&p.SortOrder, &p.CreatedAt, &depth); err != nil {
 			return nil, fmt.Errorf("상위 글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -498,7 +566,7 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 		var p PostSummary
 		var path string
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.IsCover, &p.CreatedAt, &path); err != nil {
+			&p.SortOrder, &p.CreatedAt, &path); err != nil {
 			return nil, fmt.Errorf("인라인 데이터베이스 스캔: %w", err)
 		}
 		rest := strings.Split(strings.TrimPrefix(path, prefix), " > ")

@@ -22,7 +22,7 @@ type Move struct {
 	// SourceName은 옮길 카테고리의 source_name이다.
 	// 경로에서 온 이름이라 사람이 이름을 바꿔도 그대로다.
 	SourceName string
-	// ToSlug는 새 부모 카테고리의 slug다. 최상위 분류여야 한다.
+	// ToSlug는 새 부모 카테고리의 slug다. 사람이 만든 최상위나 중간 분류를 가리킨다.
 	ToSlug string
 	Why    string
 }
@@ -42,7 +42,7 @@ var Moves = []Move{
 	{SourceName: "탐색적 자료분석", ToSlug: "수리통계-응용", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 	{SourceName: "회귀분석", ToSlug: "수리통계-응용", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 	{SourceName: "다변량분석", ToSlug: "수리통계-응용", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
-	{SourceName: "빅데이터 분석기사", ToSlug: "수리통계-응용", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
+	{SourceName: "빅데이터 분석기사", ToSlug: "career", Why: "자격증 학습 기록이라 수리/통계보다 커리어에 두기로 했다"},
 	{SourceName: "핸즈온 머신러닝 2", ToSlug: "머신러닝", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 	{SourceName: "자연어처리 (1) : BERT와 GPT", ToSlug: "머신러닝", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 }
@@ -135,6 +135,18 @@ var DropCategories = []DropCategory{
 	{
 		SourceName: "프로젝트",
 		Why:        "/project 밑에 같은 이름이라 프로젝트 > 프로젝트로 겹친다. 글은 PostMoves로 위로 올렸다",
+	},
+	{
+		SourceName: "시스템 프로그래밍",
+		Why:        "컴퓨터 시스템 분류 전체를 내용 부족으로 없애기로 했다. 글은 DropPosts로 뺐다",
+	},
+	{
+		SourceName: "컴퓨터 구조 : 이론",
+		Why:        "컴퓨터 시스템 분류 전체를 내용 부족으로 없애기로 했다. 세 글 모두 빈 페이지라 DropPosts로 뺐다",
+	},
+	{
+		SourceName: "컴퓨터 시스템",
+		Why:        "내용이 너무 적어 CS 이론의 독립 갈래로 남기지 않기로 했다. 하위 분류와 글을 먼저 뺐다",
 	},
 	{
 		SourceName: "머신러닝 : 기초이론",
@@ -378,12 +390,64 @@ var DropPosts = []DropPost{
 		Title:        "행렬식",
 		Why:          "선형대수 : 이론 밑의 빈 껍데기(0바이트 draft). 같은 제목의 알맹이가 최적화이론에서 옮겨와 있어 목록에 두 벌로 보였다",
 	},
+
+	// 핸즈온 머신러닝 2 표지 끝의 한 건짜리 `연습문제 2` 절. 표지 본문에서
+	// 제목과 링크도 BodyEdits로 함께 덜어내므로 상세 글도 이관하지 않는다.
+	{
+		NotionPageID: "358b2929-84e3-406f-8575-0e19534153d0",
+		Title:        "교차검증과 과대적합",
+		Why:          "핸즈온 머신러닝 2 끝의 한 건짜리 연습문제 2 절을 없애기로 했다",
+	},
+
+	// `컴퓨터 시스템` 전체. 표지 한 편과 시스템 프로그래밍 13편,
+	// 컴퓨터 구조의 빈 페이지 3편뿐이라 독립 갈래를 통째로 없앤다.
+	{NotionPageID: "e849a962-3039-446d-b187-0bad30806c94", Title: "컴퓨터 시스템", Why: "내용이 너무 적어 컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "ddbdbae0-05c1-4448-bca6-9077d49fe917", Title: "공유 메모리", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "acc837f3-86ef-48f9-ae92-194a89ac3830", Title: "멀티 프로세스", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "cde2478b-cf91-4f8c-9c2c-cc4d539f8d69", Title: "메모리 매핑", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "42763dc8-dc5c-4788-8d44-2a0084f5e23e", Title: "세마포어", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "2ee4aa56-d58d-4594-8038-81e051a82c51", Title: "시그널", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "ba54d5a3-31ac-4637-a55e-420f113498a0", Title: "시스템 정보 확인", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "f5c628f7-8450-447a-960e-09a01edb7a49", Title: "시스템 프로그래밍이란?", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "7b1b64ba-bd37-4202-b38a-c17afe380a29", Title: "파이프", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "3f6a30ce-bf2b-457a-8ee9-7a4d98ff1659", Title: "파일 입출력", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "db5009e7-55a7-4614-aff9-22a09faaec15", Title: "파일과 디렉토리", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "df8aed14-9c58-4e35-a68f-2ad82f70ed74", Title: "파일이란?", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "730fefc8-33ec-4021-87c1-5282904c05c7", Title: "표준 입출력", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "d46052e4-26b7-4004-a0e8-6bcb91f8feda", Title: "프로세스 : 개요", Why: "컴퓨터 시스템 분류 전체를 없애기로 했다"},
+	{NotionPageID: "2c224d59-221f-4fdf-8428-998ff9c8df0d", Title: "(제목 없음)", Why: "컴퓨터 구조 : 이론 밑의 빈 페이지다"},
+	{NotionPageID: "b9a67d80-4be7-473f-a715-cd0b6310b520", Title: "(제목 없음)", Why: "컴퓨터 구조 : 이론 밑의 빈 페이지다"},
+	{NotionPageID: "dfd45512-9cf2-4e24-be50-2759963c7141", Title: "(제목 없음)", Why: "컴퓨터 구조 : 이론 밑의 빈 페이지다"},
 }
 
 // Dropped는 이 글을 이관에서 빼야 하는지다.
 func Dropped(pageID string) bool {
 	for _, d := range DropPosts {
 		if d.NotionPageID == pageID {
+			return true
+		}
+	}
+	return false
+}
+
+// DropImage는 덤프에는 남아 있지만 블로그 DB에는 넣지 않을 이미지다.
+// 본문 참조만 지우면 `/img/{sha256}`를 아는 경우 파일은 계속 열리므로,
+// 공개하지 않기로 한 개인 사진은 BLOB도 함께 제외한다.
+type DropImage struct {
+	SHA256 string
+	Why    string
+}
+
+var DropImages = []DropImage{
+	{
+		SHA256: "0f9f83dcd63eb36d2bbc1c616342d8a8d2edfc29b6ba318debc159bcbf336128",
+		Why:    "자기소개에서 증명사진을 공개하지 않기로 했다. BodyEdits가 본문 참조도 지운다",
+	},
+}
+
+func DroppedImage(sha256 string) bool {
+	for _, image := range DropImages {
+		if image.SHA256 == sha256 {
 			return true
 		}
 	}
@@ -414,6 +478,12 @@ type BodyEdit struct {
 
 var BodyEdits = []BodyEdit{
 	{
+		NotionPageID: "1080901b-87f1-80d2-811a-eba467c2c160",
+		Remove:       "![](/img/0f9f83dcd63eb36d2bbc1c616342d8a8d2edfc29b6ba318debc159bcbf336128)",
+		Title:        "최인렬 (Inryeol Choi)",
+		Why:          "블로그 자기소개에서 증명사진을 노출하지 않기로 했다",
+	},
+	{
 		NotionPageID: "ad1ef256-4567-4b9f-b57e-6f16486d0606",
 		Remove:       "[Untitled](/p/1e8accad-7dac-4eb2-8da7-383a404b3ee5)",
 		Title:        "선형대수",
@@ -432,6 +502,18 @@ var BodyEdits = []BodyEdit{
 		Title:        "최인렬 (Inryeol Choi)",
 		Why: "자기소개 끝의 인라인 데이터베이스 링크다. 홈이 이 글을 통째로 " +
 			"펴는데, 프로젝트로 가는 길은 사이드바에 이미 있어서 자리만 차지한다",
+	},
+	{
+		NotionPageID: "226b7998-bd88-4892-88aa-1227dc89b5f0",
+		Remove:       "## 연습문제 2",
+		Title:        "핸즈온 머신러닝 2",
+		Why:          "끝의 한 건짜리 연습문제 2 절을 없애기로 했다",
+	},
+	{
+		NotionPageID: "226b7998-bd88-4892-88aa-1227dc89b5f0",
+		Remove:       "[교차검증과 과대적합](/p/358b2929-84e3-406f-8575-0e19534153d0)",
+		Title:        "핸즈온 머신러닝 2",
+		Why:          "연습문제 2 절과 그 안의 유일한 링크를 함께 없앤다",
 	},
 }
 
@@ -469,6 +551,10 @@ func removeLine(body, target string) (string, bool) {
 		// 지운 자리에서 빈 줄이 겹치면 하나로 줄인다.
 		if i > 0 && i < len(lines) && lines[i-1] == "" && lines[i] == "" {
 			lines = append(lines[:i:i], lines[i+1:]...)
+		}
+		// 첫 줄을 지웠다면 그 뒤의 문단 구분용 빈 줄도 필요 없다.
+		if i == 0 && len(lines) > 0 && lines[0] == "" {
+			lines = lines[1:]
 		}
 		return strings.Join(lines, "\n"), true
 	}

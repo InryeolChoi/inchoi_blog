@@ -3,7 +3,7 @@
      늘 열어두고 있어서, 첫 화면까지 목록이면 같은 것을 두 번 보여주게 된다. */}}
 <header class="page-head">
   <h1>{{.Post.Title}}</h1>
-  <p class="page-meta">노트 {{.TotalPostsText}}편 · 분류 {{len .Nav}}개</p>
+  <p class="page-meta" data-i18n="noteMeta" data-count="{{.TotalPostsText}}" data-categories="{{len .Nav}}">노트 {{.TotalPostsText}}편 · 분류 {{len .Nav}}개</p>
 </header>
 
 <article>

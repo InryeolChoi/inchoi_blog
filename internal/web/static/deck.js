@@ -30,7 +30,8 @@
   }
 
   function init() {
-    var cards = document.querySelectorAll(".deck-card");
+    // data-native 카드는 HTML 링크와 CSS hover만 쓴다(Language).
+    var cards = document.querySelectorAll(".deck-card:not([data-native])");
     for (var i = 0; i < cards.length; i++) bind(cards[i]);
   }
 

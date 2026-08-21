@@ -12,12 +12,12 @@
      접고 펴는 것은 <details>가 한다. 스크립트를 쓰지 않는 이유는 사이드바와
      같다 — CDN이 막히거나 JS가 꺼져도 목차는 그대로 펴진 채로 읽힌다. */}}
 {{with .Outline}}
-<nav class="toc" aria-label="목차">
+<nav class="toc" aria-label="목차" data-i18n-aria-label="toc">
   <details open>
     <summary class="toc-title">
       {{/* 삼각형은 사이드바와 같은 것을 쓴다. 접힘 상태가 한눈에 같아 보여야 한다. */}}
       <svg class="toc-twist" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1l4 4-4 4z"/></svg>
-      목차
+      <span data-i18n="toc">목차</span>
     </summary>
     <ul>
       {{range .}}<li class="toc-h{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>

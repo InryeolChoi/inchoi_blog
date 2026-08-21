@@ -1,17 +1,17 @@
 {{define "content"}}
 {{/* 소개 표지 글이 없을 때만 쓰는 대비책이다. 평소 홈은 home.html이다. */}}
 <header class="page-head">
-  <h1>분류</h1>
-  <p class="page-meta">노트 {{.TotalPostsText}}편</p>
+  <h1 data-i18n="categories">분류</h1>
+  <p class="page-meta" data-i18n="notes" data-count="{{.TotalPostsText}}">노트 {{.TotalPostsText}}편</p>
 </header>
 <ul class="list">
   {{range .Categories}}
   <li>
     <a href="/{{.Slug}}">{{.Name}}</a>
-    <span class="count">글 {{.PostCount}}건</span>
+    <span class="count" data-i18n="postCount" data-count="{{.PostCount}}">글 {{.PostCount}}건</span>
   </li>
   {{else}}
-  <li>카테고리가 없다.</li>
+  <li data-i18n="noCategories">카테고리가 없다.</li>
   {{end}}
 </ul>
 {{end}}

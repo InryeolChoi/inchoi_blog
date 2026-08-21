@@ -135,6 +135,12 @@ func main() {
 	fmt.Println("DB 이관")
 	fmt.Println(rule)
 	fmt.Printf("\nposts  %d건\nimages %d건\n→ %s\n", res.posts, res.images, *dbPath)
+	if res.dropped > 0 {
+		fmt.Printf("제외 글 %d건을 기존 DB에서도 삭제했다.\n", res.dropped)
+	}
+	if res.droppedImages > 0 {
+		fmt.Printf("제외 이미지 %d건을 기존 DB에서도 삭제했다.\n", res.droppedImages)
+	}
 	if res.overwrote > 0 {
 		fmt.Printf("\n!! 이번에 넣은 글 중 %d건은 이미 있던 글이라 본문을 덮어썼다.\n", res.overwrote)
 		fmt.Println("   본문은 변환기가 만든 것으로 돌아갔으므로, 링크를 slug로 바꿔뒀다면")
@@ -513,10 +519,12 @@ func parseNotionTime(s string) *time.Time {
 
 // importResult는 DB 이관 결과 요약이다.
 type importResult struct {
-	posts     int
-	images    int
-	overwrote int      // 이번 실행 전에 이미 있던 글 수
-	skipped   []string // status CSV에 없어서 건너뛴 페이지
+	posts         int
+	images        int
+	dropped       int      // curation.DropPosts에 따라 기존 DB에서도 지운 글 수
+	droppedImages int      // curation.DropImages에 따라 기존 DB에서도 지운 이미지 수
+	overwrote     int      // 이번 실행 전에 이미 있던 글 수
+	skipped       []string // status CSV에 없어서 건너뛴 페이지
 }
 
 // runImport는 변환된 글과 이미지 파일을 DB에 넣는다.
@@ -564,6 +572,28 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 
 	now := time.Now().UTC()
 	res := &importResult{overwrote: existing}
+
+	// DropPosts는 변환을 건너뛰는 것만으로는 이미 DB에 들어간 행을 없애지 못한다.
+	// 같은 트랜잭션 안에서 먼저 지워서, 새 DB뿐 아니라 기존 DB도 curation 표와
+	// 같은 상태가 되게 한다. 자식이 남은 글이면 FK가 막아 전체를 롤백한다.
+	for _, dropped := range curation.DropPosts {
+		result, err := tx.Exec(`DELETE FROM posts WHERE notion_page_id = ?`, dropped.NotionPageID)
+		if err != nil {
+			return nil, fmt.Errorf("제외 글 삭제(%s %q): %w", dropped.NotionPageID, dropped.Title, err)
+		}
+		if n, err := result.RowsAffected(); err == nil {
+			res.dropped += int(n)
+		}
+	}
+	for _, dropped := range curation.DropImages {
+		result, err := tx.Exec(`DELETE FROM images WHERE sha256 = ?`, dropped.SHA256)
+		if err != nil {
+			return nil, fmt.Errorf("제외 이미지 삭제(%s): %w", dropped.SHA256, err)
+		}
+		if n, err := result.RowsAffected(); err == nil {
+			res.droppedImages += int(n)
+		}
+	}
 
 	for _, cp := range converted {
 		m, ok := meta[cp.pageID]
@@ -614,6 +644,9 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 			return nil, fmt.Errorf("이미지 읽기(%s): %w", name, err)
 		}
 		sha := strings.TrimSuffix(name, filepath.Ext(name))
+		if curation.DroppedImage(sha) {
+			continue
+		}
 		if err := importer.UpsertImage(tx, importer.Image{
 			SHA256:      sha,
 			Data:        data,
