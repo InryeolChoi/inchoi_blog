@@ -56,7 +56,9 @@ type rename struct {
 // groups는 새 최상위 분류와 그 아래로 내릴 기존 카테고리다.
 // 순서가 곧 sort_order다.
 var groups = []group{
-	{slug: "intro", name: "소개", members: []string{"최인렬 (Inryeol Choi)"}},
+	// 소개 밑에는 노션에서 온 층을 두지 않는다. 자기소개 글 한 편이 곧 이 분류의
+	// 표지라 하위 분류를 만들면 같은 글로 되돌아오는 갈래가 하나 생긴다.
+	{slug: "intro", name: "소개", members: nil},
 	{slug: "algorithm", name: "알고리즘", members: []string{
 		"알고리즘: 이론", "알고리즘: 실전",
 	}},
@@ -64,7 +66,7 @@ var groups = []group{
 		"운영체제", "네트워크", "데이터베이스", "가상화기술",
 	}},
 	{slug: "dev", name: "개발", members: []string{
-		"Language", "소프트스킬", "모바일 프로그래밍", "웹 프로그래밍", "리눅스 & 쉘",
+		"Language", "리눅스 & 쉘", "소프트스킬", "웹 프로그래밍", "모바일 프로그래밍",
 	}},
 	// 노션 최상위 "수학 & 통계" 하나에 이론·응용·머신러닝이 다 들어 있어서
 	// 사람이 세 갈래로 갈랐다. 갈래 이름은 노션에 없는 것이라 source_name이 NULL이다.

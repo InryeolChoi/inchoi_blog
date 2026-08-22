@@ -1,6 +1,11 @@
 package curation
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestRemoveLineCollapsesBlank(t *testing.T) {
 	body := "앞 문단\n\n[프로젝트](/p/abc)\n"
@@ -77,6 +82,97 @@ func TestApplyBodyEditsOnIntroPost(t *testing.T) {
 	}
 }
 
+func TestApplyBodyEditsRenamesMathStatsTwoReferenceLinks(t *testing.T) {
+	const pageID = "59d18904-4ed5-4f0a-ba61-17ec86d9fc7b"
+	body := "## 참고자료\n\n" +
+		"[분포별 가능도함수 (1)](/p/df333507-a679-4beb-b165-285ae3bf42fc)\n\n" +
+		"[확률함수와 커널 (1)](/p/805825dd-084e-4612-9465-a2054a0d2004)\n\n" +
+		"[수리통계2 - 과제 (1)](/p/d9fe0a39-89cd-48b6-84ee-0efaa78cf67b)\n\n" +
+		"[수리통계2 - 시험 (1)](/p/1f3d0731-e367-4d0d-8239-94d92d6d02d5)\n"
+	got, err := ApplyBodyEdits(pageID, body)
+	if err != nil {
+		t.Fatalf("ApplyBodyEdits: %v", err)
+	}
+	if strings.Contains(got, " (1)]") {
+		t.Errorf("링크 문구에 (1)이 남았다:\n%s", got)
+	}
+	for _, want := range []string{
+		"[분포별 가능도함수](/p/df333507-a679-4beb-b165-285ae3bf42fc)",
+		"[확률함수와 커널](/p/805825dd-084e-4612-9465-a2054a0d2004)",
+		"[수리통계2 - 과제](/p/d9fe0a39-89cd-48b6-84ee-0efaa78cf67b)",
+		"[수리통계2 - 시험](/p/1f3d0731-e367-4d0d-8239-94d92d6d02d5)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("바뀐 링크가 없다: %s", want)
+		}
+	}
+}
+
+func TestAppendBodyIsIdempotent(t *testing.T) {
+	const appendix = "## 해답\n\n<details>\n<summary>해답 보기</summary>\n\n풀이\n\n</details>"
+	got, err := appendBody("문제\n", "## 해답", appendix)
+	if err != nil {
+		t.Fatalf("appendBody: %v", err)
+	}
+	if strings.Count(got, "## 해답") != 1 {
+		t.Fatalf("해답이 한 번 붙지 않았다:\n%s", got)
+	}
+	again, err := appendBody(got, "## 해답", appendix)
+	if err != nil {
+		t.Fatalf("두 번째 appendBody: %v", err)
+	}
+	if again != got {
+		t.Errorf("두 번째 적용에서 본문이 바뀌었다:\n%s", again)
+	}
+	if _, err := appendBody("문제\n\n## 해답\n\n다른 풀이\n", "## 해답", appendix); err == nil {
+		t.Error("같은 marker의 다른 내용이 있는데 통과했다")
+	}
+}
+
+func TestProbabilityProcessExamSolutionsAreCollapsible(t *testing.T) {
+	const pageID = "eb9b0b6c-697e-4ebe-b8b5-34a44e59095f"
+	body := "**중간고사**\n\n![](/img/midterm)\n\n**기말고사**\n\n![](/img/final)\n"
+	got, err := ApplyBodyEdits(pageID, body)
+	if err != nil {
+		t.Fatalf("ApplyBodyEdits: %v", err)
+	}
+	for _, want := range []string{
+		"<summary><strong>중간고사 해답 보기</strong></summary>",
+		"<summary><strong>기말고사 해답 보기</strong></summary>",
+		`\frac{8263}{180000}`,
+		`\operatorname{Var}(Z_3)=1875`,
+		`-\frac{41}{160}`,
+		`P(X_\infty=2)=\pi_2=\frac49`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("해답에 %q가 없다", want)
+		}
+	}
+	if strings.Count(got, "<details>") != 2 || strings.Count(got, "</details>") != 2 {
+		t.Errorf("중간·기말 접기 영역이 정확히 두 개가 아니다")
+	}
+	if strings.Count(got, "## 중간고사 해답") != 1 {
+		t.Errorf("중간고사 해답 marker가 한 번이 아니다")
+	}
+}
+
+func TestMachineLearningCoverDropsBrokenHereAndThereLink(t *testing.T) {
+	const pageID = "226b7998-bd88-4892-88aa-1227dc89b5f0"
+	body := "- 통계와 수학에 관한 지식이 많이 필요하다. 모르면 [여기, 저기](/0d24cebd0bc1496b99b64885cb5be2a6) [클릭!](/5d2a5e480d854fc594d3280cbeef87ee)\n\n" +
+		"## 연습문제 2\n\n[교차검증과 과대적합](/p/358b2929-84e3-406f-8575-0e19534153d0)\n"
+	got, err := ApplyBodyEdits(pageID, body)
+	if err != nil {
+		t.Fatalf("ApplyBodyEdits: %v", err)
+	}
+	want := "- 통계와 수학에 관한 지식이 많이 필요하다. 모르면 [클릭!](/5d2a5e480d854fc594d3280cbeef87ee)"
+	if !strings.Contains(got, want) {
+		t.Errorf("정리한 링크 문장이 없다:\n%s", got)
+	}
+	if strings.Contains(got, "여기, 저기") || strings.Contains(got, "/0d24cebd0bc1496b99b64885cb5be2a6") {
+		t.Errorf("깨진 링크가 남았다:\n%s", got)
+	}
+}
+
 // 표의 키가 실제로 다른 표와 같은 글을 가리키는지 본다. 소개 글은 intro
 // 분류의 표지이기도 하다 — 둘이 어긋나면 한쪽이 낡은 것이다.
 func TestBodyEditPageIDsAreKnown(t *testing.T) {
@@ -92,5 +188,135 @@ func TestPortraitIsDroppedFromBodyAndImageImport(t *testing.T) {
 	const sha = "0f9f83dcd63eb36d2bbc1c616342d8a8d2edfc29b6ba318debc159bcbf336128"
 	if !DroppedImage(sha) {
 		t.Error("자기소개 사진이 이미지 이관 제외 대상이 아니다")
+	}
+}
+
+func TestEcole42EntryPostsBecomeChildCategoryCovers(t *testing.T) {
+	want := map[string]string{
+		"c":              "c7bcee75-28c5-4945-b5c3-f8e24e79e5e7",
+		"cpp-part-1":     "5c84aeb4-c3d9-4341-a66b-acc71487be94",
+		"netpractice":    "0016e85a-614f-426c-ae62-f46427a7b719",
+		"shell":          "5b239f6c-32bb-4a4a-921b-00db117abc3d",
+		"born2beroot":    "c4e6e521-2c48-460b-91d8-54d8452f2096",
+		"cub3d":          "92ab7921-feb3-4604-b9ce-171a3b8a4629",
+		"exam02":         "90a0bf6c-e299-4158-8e13-d367d96298e5",
+		"exam03":         "96b38479-74a3-4983-a9d9-c5530a9b94c8",
+		"fdf-fil-de-fer": "f6ceedec-0c40-4a30-8b97-05c05868e6f7",
+		"ft-irc-server":  "97c6e452-91e6-4c19-9769-802b6be9a982",
+		"ft-printf":      "62d53e5d-77fb-4a4e-b789-9a59ef3a70e4",
+		"get-next-line":  "38315c40-5daf-4387-bae3-bde27387b43f",
+		"inception":      "4786e824-c744-4c32-8886-729e8e8c9bc6",
+		"libft":          "dcbbd10e-b50a-4a1d-8a4a-237426aa7249",
+		"minishell":      "518ea6e1-306c-4cfa-8b3e-6ac182c16e14",
+		"philosopher":    "cdf4ecb8-ecdb-4cda-9dbc-d74722213449",
+		"pipex":          "250631b1-6ac8-4e58-8dc2-eec4ecaca254",
+	}
+	moves := PostMoveBySlug()
+	covers := make(map[string]string, len(Covers))
+	for _, cover := range Covers {
+		if _, exists := covers[cover.Slug]; exists {
+			t.Errorf("중복 표지 slug: %s", cover.Slug)
+		}
+		covers[cover.Slug] = cover.NotionPageID
+	}
+	for slug, id := range want {
+		if got := moves[id]; got != slug {
+			t.Errorf("%s 이동 목적지=%q, want %q", id, got, slug)
+		}
+		if got := covers[slug]; got != id {
+			t.Errorf("%s 표지=%q, want %q", slug, got, id)
+		}
+	}
+}
+
+func TestLinearAlgebraMetadataIsCompleteAndOrdered(t *testing.T) {
+	if got, want := len(PostMetadataEdits), 11; got != want {
+		t.Fatalf("선형대수 메타데이터가 %d건이다, want %d", got, want)
+	}
+	moves := PostMoveBySlug()
+	seen := map[string]bool{}
+	start := time.Date(2022, 3, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2022, 8, 31, 23, 59, 59, 0, time.UTC)
+	for i, edit := range PostMetadataEdits {
+		if seen[edit.NotionPageID] {
+			t.Errorf("중복 notion_page_id: %s", edit.NotionPageID)
+		}
+		seen[edit.NotionPageID] = true
+		wantPrefix := fmt.Sprintf("%d. ", i+1)
+		if len(edit.Title) < len(wantPrefix) || edit.Title[:len(wantPrefix)] != wantPrefix {
+			t.Errorf("%d번째 제목이 번호로 시작하지 않는다: %q", i+1, edit.Title)
+		}
+		if edit.SortOrder != i {
+			t.Errorf("%q sort_order=%d, want %d", edit.Title, edit.SortOrder, i)
+		}
+		date, err := time.Parse("2006-01-02", edit.OriginalCreatedAt)
+		if err != nil {
+			t.Errorf("%q 날짜 파싱: %v", edit.Title, err)
+			continue
+		}
+		if date.Before(start) || date.After(end) {
+			t.Errorf("%q 날짜가 2022년 3~8월 밖이다: %s", edit.Title, date)
+		}
+		if moves[edit.NotionPageID] != "선형대수" {
+			t.Errorf("%q가 선형대수 이동 대상이 아니다", edit.Title)
+		}
+	}
+	if got := PostMetadataEdits[3].Title; got != "4. 벡터공간" {
+		t.Errorf("벡터공간 번호가 다르다: %q", got)
+	}
+}
+
+func TestOptimizationPostsStayOutOfLinearAlgebra(t *testing.T) {
+	moves := PostMoveBySlug()
+	for _, id := range []string{
+		"404c96b3-e53c-4edb-88ee-8ef0f717ce79",
+		"ad882859-b0f2-41d9-9552-c7c14cf0b559",
+		"ff7a1343-68d1-4465-9df0-ea48a0a2565b",
+		"e96b9abf-d1de-4790-8656-7ba4a57c4d89",
+		"eedb3add-e5e1-4b8a-a1d3-41bc80e00162",
+	} {
+		if got := moves[id]; got != "최적화이론" {
+			t.Errorf("최적화 글 %s의 목적지가 %q다", id, got)
+		}
+	}
+}
+
+func TestApplyPostMetadata(t *testing.T) {
+	edit := PostMetadataEdits[3]
+	original := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	title, created, order, err := ApplyPostMetadata(edit.NotionPageID, edit.OriginalTitle, &original)
+	if err != nil {
+		t.Fatalf("ApplyPostMetadata: %v", err)
+	}
+	if title != "4. 벡터공간" || created.Format("2006-01-02") != "2022-04-23" || *order != 3 {
+		t.Errorf("got title=%q date=%s order=%d", title, created.Format("2006-01-02"), *order)
+	}
+	if _, _, _, err := ApplyPostMetadata(edit.NotionPageID, "엉뚱한 제목", &original); err == nil {
+		t.Error("원본 제목이 다른데 통과했다")
+	}
+}
+
+func TestMathStatsTwoReferenceTitlesDropDuplicateSuffix(t *testing.T) {
+	if got, want := len(PostTitleEdits), 4; got != want {
+		t.Fatalf("수리통계2 제목 수정이 %d건이다, want %d", got, want)
+	}
+	seen := map[string]bool{}
+	for _, edit := range PostTitleEdits {
+		if seen[edit.NotionPageID] {
+			t.Errorf("중복 notion_page_id: %s", edit.NotionPageID)
+		}
+		seen[edit.NotionPageID] = true
+		if strings.HasSuffix(edit.Title, " (1)") {
+			t.Errorf("수정 제목에 (1)이 남았다: %q", edit.Title)
+		}
+
+		original := time.Date(2023, 7, 22, 14, 26, 0, 0, time.UTC)
+		title, created, order, err := ApplyPostMetadata(edit.NotionPageID, edit.OriginalTitle, &original)
+		if err != nil {
+			t.Fatalf("ApplyPostMetadata(%q): %v", edit.OriginalTitle, err)
+		}
+		if title != edit.Title || !created.Equal(original) || order != nil {
+			t.Errorf("title=%q created=%v order=%v", title, created, order)
+		}
 	}
 }

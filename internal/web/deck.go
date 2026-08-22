@@ -15,15 +15,55 @@ import (
 // **글 내용이 아니라 화면 장치다.** 그래서 표지 글 본문(DB)이 아니라 여기 코드에
 // 둔다. 본문에 넣으면 `import -db`가 덮어써서 사라진다.
 
-// deckCategories는 카드로 펼칠 분류의 slug다. 그 분류의 **하위 분류**가 카드가 된다.
-var deckCategories = map[string]bool{
-	"data-math": true,
-	"algorithm": true,
-	"cs-theory": true,
-	"dev":       true,
+const (
+	projectSlug  = "project"
+	languageSlug = "language"
+)
+
+// deckSource는 한 분류의 카드 묶음을 만드는 방법이다.
+//
+// 카드가 필요한 분류마다 재료가 다르다. 대부분은 하위 분류만 있으면 되지만,
+// Language는 원본 경로에서 다시 묶은 언어 갈래가, 프로젝트는 표지 글 본문이
+// 더 있어야 한다. 그 차이를 핸들러의 if 문으로 늘어놓는 대신 방법을 분류마다
+// 하나씩 두고 slug로 찾는다. 새 카드 묶음은 아래 표에 한 줄이면 된다.
+//
+// 카드를 만들 수 없으면 error가 아니라 nil을 돌려준다. 그러면 화면이 평소
+// 목록으로 돌아간다 — 반쪽짜리 카드 묶음보다 그쪽이 길을 잃지 않는다.
+// error는 DB 조회가 실패했을 때만이다.
+type deckSource interface {
+	cards(s *Server, basePath string, children []Category) ([]DeckCard, error)
 }
 
-const projectSlug = "project"
+// deckSources는 카드로 펼칠 분류의 slug다. **아무 데나 쓰지 않는다** —
+// 갈래가 몇 개 안 되고 성격이 뚜렷한 자리에서만 목록보다 카드가 낫다.
+var deckSources = map[string]deckSource{
+	"data-math":  childDeck{},
+	"algorithm":  childDeck{},
+	"cs-theory":  childDeck{},
+	"dev":        childDeck{},
+	languageSlug: languageDeck{},
+	projectSlug:  projectDeck{},
+}
+
+// deckFor는 카드로 펼칠 분류면 카드 목록을, 아니면 nil을 돌려준다.
+func (s *Server) deckFor(slug, basePath string, children []Category) ([]DeckCard, error) {
+	source, ok := deckSources[slug]
+	if !ok || len(children) == 0 {
+		return nil, nil
+	}
+	return source.cards(s, basePath, children)
+}
+
+// childBySlug는 하위 분류 하나를 slug로 찾는다. 카드 묶음마다 "이 분류가
+// 있어야 성립한다"는 재료가 있어서 세 곳이 같은 일을 한다.
+func childBySlug(children []Category, slug string) (Category, bool) {
+	for _, child := range children {
+		if child.Slug == slug {
+			return child, true
+		}
+	}
+	return Category{}, false
+}
 
 // cardArt는 카드 하나의 그림과 한 줄 설명이다. 키는 하위 분류의 slug다.
 type cardArt struct {
@@ -62,10 +102,7 @@ func languageDeckFor(basePath string, children []Category, branches []LanguageBr
 			Blurb: blurb, Icon: languageIcon, Native: true,
 		})
 	}
-	for _, child := range children {
-		if child.Slug != "마크업-스타일링-표현식" {
-			continue
-		}
+	if child, ok := childBySlug(children, "마크업-스타일링-표현식"); ok {
 		art := cardArtBySlug[child.Slug]
 		cards = append(cards, DeckCard{
 			Name: child.Name, URL: basePath + "/" + url.PathEscape(child.Slug), Count: child.PostCount,
@@ -242,20 +279,19 @@ type DeckCard struct {
 	Native bool // JS 기울기 없이 링크와 CSS만으로 동작하는 카드
 }
 
-// deckFor는 카드로 펼칠 분류면 카드 목록을, 아니면 nil을 돌려준다.
+// childDeck은 하위 분류를 그대로 한 장씩 펴는 기본 방식이다.
 //
 // **그림이 없는 하위 분류가 하나라도 있으면 통째로 포기한다.** 반은 카드고 반은
 // 목록이면 어느 쪽도 아니게 된다. 하위 분류가 늘면 cardArtBySlug에 그림을
 // 더해주면 된다.
-func deckFor(slug, basePath string, children []Category) []DeckCard {
-	if !deckCategories[slug] || len(children) == 0 {
-		return nil
-	}
+type childDeck struct{}
+
+func (childDeck) cards(_ *Server, basePath string, children []Category) ([]DeckCard, error) {
 	cards := make([]DeckCard, 0, len(children))
 	for _, c := range children {
 		art, ok := cardArtBySlug[c.Slug]
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		cards = append(cards, DeckCard{
 			Name:   c.Name,
@@ -266,7 +302,42 @@ func deckFor(slug, basePath string, children []Category) []DeckCard {
 			Native: false,
 		})
 	}
-	return cards
+	return cards, nil
+}
+
+// languageDeck은 평평한 `프로그래밍 언어` 한 장을 실제 언어 갈래로 바꾼다.
+// 그 하위 분류가 없으면 카드를 만들지 않는다.
+type languageDeck struct{}
+
+func (languageDeck) cards(s *Server, basePath string, children []Category) ([]DeckCard, error) {
+	child, ok := childBySlug(children, "프로그래밍-언어")
+	if !ok {
+		return nil, nil
+	}
+	branches, err := s.store.LanguageBranches(child.ID)
+	if err != nil {
+		return nil, err
+	}
+	return languageDeckFor(basePath, children, branches), nil
+}
+
+// projectDeck은 `Projects` 표지 글 본문에서 where42·심심조각 두 절을 읽어야
+// 성립한다. 그 분류나 표지 글이 없으면 카드를 만들지 않는다.
+type projectDeck struct{}
+
+func (projectDeck) cards(s *Server, basePath string, children []Category) ([]DeckCard, error) {
+	child, ok := childBySlug(children, "projects")
+	if !ok || child.CoverPostSlug == "" {
+		return nil, nil
+	}
+	cover, err := s.store.PostBySlug(child.CoverPostSlug)
+	if err != nil {
+		return nil, err
+	}
+	if cover == nil {
+		return nil, nil
+	}
+	return projectDeckFor(basePath, children, cover.Body), nil
 }
 
 // projectDeckFor는 프로젝트 첫 화면을 세 갈래로 정리한다.
@@ -279,12 +350,8 @@ func deckFor(slug, basePath string, children []Category) []DeckCard {
 // 필요한 분류나 두 절이 없으면 nil이다. 반쪽짜리 카드 묶음 대신 평소 목록으로
 // 돌아가는 편이 탐색 경로를 잃지 않는다.
 func projectDeckFor(basePath string, children []Category, projectsBody string) []DeckCard {
-	bySlug := make(map[string]Category, len(children))
-	for _, child := range children {
-		bySlug[child.Slug] = child
-	}
-	ecole, hasEcole := bySlug["école-42"]
-	projects, hasProjects := bySlug["projects"]
+	ecole, hasEcole := childBySlug(children, "école-42")
+	projects, hasProjects := childBySlug(children, "projects")
 	whereCount, pieceCount := projectSectionCounts(projectsBody)
 	if !hasEcole || !hasProjects || whereCount == 0 || pieceCount == 0 {
 		return nil

@@ -139,8 +139,8 @@ func TestIndexListsTopCategories(t *testing.T) {
 		t.Errorf("최상위 카테고리 링크가 없다:\n%s", body)
 	}
 	// 하위 글까지 세야 한다 (dev 아래 글 7건)
-	if !strings.Contains(body, "글 7건") {
-		t.Errorf("하위 글 수가 안 세졌다:\n%s", body)
+	if !strings.Contains(body, `class="home-field-meta">7 notes`) {
+		t.Errorf("하위 글 수가 홈 카드에 안 세졌다:\n%s", body)
 	}
 }
 

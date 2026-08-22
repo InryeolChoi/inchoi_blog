@@ -9,6 +9,7 @@ import (
 func TestPreferencesControlsAreOnEveryPage(t *testing.T) {
 	body := get(t, testServer(t), "/dev/language").Body.String()
 	for _, want := range []string{
+		`id="prefs-shell"`,
 		`id="prefs-toggle"`,
 		`id="prefs-panel"`,
 		`data-language="es"`,
@@ -42,12 +43,15 @@ func TestPreferencesScriptIsServed(t *testing.T) {
 	}
 }
 
-func TestPreferencesOpenStateMorphsAtBottomRight(t *testing.T) {
+func TestPreferencesCircleMorphsIntoPanelAtBottomRight(t *testing.T) {
 	body := get(t, testServer(t), "/dev/language").Body.String()
 	for _, want := range []string{
 		`right: max(1rem, env(safe-area-inset-right))`,
+		`.prefs-shell[data-open="true"] {`,
+		`width: min(19rem, calc(100vw - 2rem))`,
+		`height: min(17.5rem, calc(100vh - 2rem))`,
+		`border-radius: 1.375rem`,
 		`.prefs-toggle[aria-expanded="true"] {`,
-		`width: 4.4rem; border-radius: 1rem`,
 		`.prefs-toggle[aria-expanded="true"] .prefs-glyph span:nth-child(1)`,
 		`transform-origin: right bottom`,
 	} {

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"html/template"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -12,6 +13,26 @@ import (
 	"github.com/inryeol/blog"
 	"github.com/inryeol/blog/internal/db"
 )
+
+func TestLinkCoveredChildCategoriesRewritesAndDeduplicates(t *testing.T) {
+	body := template.HTML(`<p><a href="/p/c-cover">C</a></p><p><a href="/p/other">기타</a></p>`)
+	children := []Category{
+		{ID: 1, Name: "C", Slug: "c", CoverPostSlug: "c-cover"},
+		{ID: 2, Name: "비어 있음", Slug: "empty"},
+		{ID: 3, Name: "본문에 없음", Slug: "missing", CoverPostSlug: "missing-cover"},
+	}
+
+	gotBody, gotChildren := linkCoveredChildCategories(body, children, "/project/%C3%A9cole-42")
+	if strings.Contains(string(gotBody), `href="/p/c-cover"`) {
+		t.Errorf("표지 글 링크가 남았다: %s", gotBody)
+	}
+	if !strings.Contains(string(gotBody), `href="/project/%C3%A9cole-42/c"`) {
+		t.Errorf("분류 링크로 바뀌지 않았다: %s", gotBody)
+	}
+	if len(gotChildren) != 2 || gotChildren[0].Slug != "empty" || gotChildren[1].Slug != "missing" {
+		t.Errorf("본문이 실제로 가리킨 분류만 빠져야 한다: %+v", gotChildren)
+	}
+}
 
 // inlineFixture는 "탐색적 자료분석" 글의 모양을 그대로 흉내낸 서버를 만든다.
 //

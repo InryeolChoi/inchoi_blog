@@ -139,6 +139,44 @@ func TestUpsertPostUpdatesBodyKeepsCreatedAt(t *testing.T) {
 	}
 }
 
+func TestUpsertPostPreservesRecoveredSortOrderUnlessExplicit(t *testing.T) {
+	sqlDB := migratedDB(t)
+	now := time.Now().UTC()
+	p := samplePost()
+
+	if err := inTx(t, sqlDB, func(tx *sql.Tx) error { return UpsertPost(tx, p, now) }); err != nil {
+		t.Fatalf("첫 UpsertPost: %v", err)
+	}
+	if _, err := sqlDB.Exec(`UPDATE posts SET sort_order = 27 WHERE notion_page_id = 'abc-123'`); err != nil {
+		t.Fatalf("sort_order 준비: %v", err)
+	}
+
+	// 일반 재이관은 sortorder가 복원한 값을 지우면 안 된다.
+	if err := inTx(t, sqlDB, func(tx *sql.Tx) error { return UpsertPost(tx, p, now) }); err != nil {
+		t.Fatalf("두 번째 UpsertPost: %v", err)
+	}
+	var got int
+	if err := sqlDB.QueryRow(`SELECT sort_order FROM posts WHERE notion_page_id = 'abc-123'`).Scan(&got); err != nil {
+		t.Fatalf("조회: %v", err)
+	}
+	if got != 27 {
+		t.Fatalf("일반 재이관이 복원 순서를 덮었다: got %d, want 27", got)
+	}
+
+	// 사람이 명시한 값은 재이관 때 고정한다.
+	manual := 4
+	p.SortOrder = &manual
+	if err := inTx(t, sqlDB, func(tx *sql.Tx) error { return UpsertPost(tx, p, now) }); err != nil {
+		t.Fatalf("수동 순서 UpsertPost: %v", err)
+	}
+	if err := sqlDB.QueryRow(`SELECT sort_order FROM posts WHERE notion_page_id = 'abc-123'`).Scan(&got); err != nil {
+		t.Fatalf("조회: %v", err)
+	}
+	if got != 4 {
+		t.Errorf("수동 순서가 적용되지 않았다: got %d, want 4", got)
+	}
+}
+
 func TestUpsertPostRejectsBadStatus(t *testing.T) {
 	sqlDB := migratedDB(t)
 	p := samplePost()

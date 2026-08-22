@@ -5,10 +5,11 @@
   "use strict";
 
   var root = document.documentElement;
+  var shell = document.getElementById("prefs-shell");
   var toggle = document.getElementById("prefs-toggle");
   var panel = document.getElementById("prefs-panel");
   var translationStatus = document.getElementById("translation-status");
-  if (!toggle || !panel) return;
+  if (!shell || !toggle || !panel) return;
 
   var messages = {
     ko: {
@@ -21,6 +22,7 @@
       childPosts: "하위 글",
       toc: "목차", noteMeta: "노트 {count}편 · 분류 {categories}개",
       postCount: "글 {count}건", noCategories: "카테고리가 없다.",
+      personalSite: "최인렬의 개인 페이지",
       translating: "본문을 기기에서 번역하는 중…",
       translationUnavailable: "이 브라우저는 기기 내 본문 번역을 지원하지 않습니다."
     },
@@ -34,6 +36,7 @@
       childPosts: "Child posts",
       toc: "Contents", noteMeta: "{count} notes · {categories} categories",
       postCount: "{count} posts", noCategories: "No categories.",
+      personalSite: "Inryeol Choi's personal site",
       translating: "Translating the post on this device…",
       translationUnavailable: "This browser does not support on-device post translation."
     },
@@ -47,6 +50,7 @@
       childPosts: "Artículos relacionados",
       toc: "Contenido", noteMeta: "{count} notas · {categories} categorías",
       postCount: "{count} artículos", noCategories: "No hay categorías.",
+      personalSite: "Sitio personal de Inryeol Choi",
       translating: "Traduciendo el artículo en este dispositivo…",
       translationUnavailable: "Este navegador no admite la traducción local del artículo."
     }
@@ -175,7 +179,7 @@
     save("blog-theme", theme);
   }
 
-  function isOpen() { return panel.dataset.open === "true"; }
+  function isOpen() { return shell.dataset.open === "true"; }
 
   function syncToggleLabel() {
     var lang = messages[root.lang] ? root.lang : "ko";
@@ -184,6 +188,7 @@
   }
 
   function setOpen(open, restoreFocus) {
+    shell.dataset.open = open ? "true" : "false";
     panel.dataset.open = open ? "true" : "false";
     panel.setAttribute("aria-hidden", open ? "false" : "true");
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
@@ -204,7 +209,7 @@
     if (theme) applyTheme(theme.dataset.themeChoice);
   });
   document.addEventListener("pointerdown", function (event) {
-    if (isOpen() && !panel.contains(event.target) && !toggle.contains(event.target)) setOpen(false, false);
+    if (isOpen() && !shell.contains(event.target)) setOpen(false, false);
   });
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && isOpen()) setOpen(false, true);

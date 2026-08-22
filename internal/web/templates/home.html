@@ -1,12 +1,130 @@
 {{define "content"}}
-{{/* 홈은 소개 카테고리의 표지 글을 그대로 편다. 분류로 가는 길은 사이드바가
-     늘 열어두고 있어서, 첫 화면까지 목록이면 같은 것을 두 번 보여주게 된다. */}}
-<header class="page-head">
-  <h1>{{.Post.Title}}</h1>
-  <p class="page-meta" data-i18n="noteMeta" data-count="{{.TotalPostsText}}" data-categories="{{len .Nav}}">노트 {{.TotalPostsText}}편 · 분류 {{len .Nav}}개</p>
-</header>
+{{/* 홈은 소개 글의 복사본이 아니라 아카이브의 입구다.
+     인터랙션은 링크와 details/summary라는 HTML 기본 기능으로 만들고,
+     움직임과 깊이만 CSS로 보탠다. 이 페이지 전용 JavaScript는 없다. */}}
+<section class="home-hero" aria-labelledby="home-title">
+  <div class="home-sky" aria-hidden="true">
+    <span>Go</span>
+    <span>DB</span>
+    <span>Σ</span>
+    <span>CS</span>
+    <span>42</span>
+    <span>λ</span>
+  </div>
 
-<article>
-{{.Body}}
-</article>
+  <div class="home-hero-copy">
+    <p class="home-kicker">PERSONAL KNOWLEDGE ARCHIVE</p>
+    <h1 id="home-title">배운 것을 연결하고,<br><em>만든 것으로 남깁니다.</em></h1>
+    <p class="home-lead">개발, 컴퓨터과학, 데이터와 수학을 오가며 쌓은 기록입니다.<br>정답보다 이해의 과정과 다시 찾아갈 길을 남깁니다.</p>
+    <nav class="home-actions" aria-label="빠른 시작">
+      <a class="home-action-primary" href="#archive-map">기록 탐색하기 <span aria-hidden="true">↘</span></a>
+      <a class="home-action-quiet" href="/intro">소개 보기 <span aria-hidden="true">→</span></a>
+    </nav>
+  </div>
+
+  <dl class="home-stats" aria-label="아카이브 규모">
+    <div>
+      <dt>notes</dt>
+      <dd>{{.TotalPostsText}}</dd>
+    </div>
+    <div>
+      <dt>fields</dt>
+      <dd>{{len .Categories}}</dd>
+    </div>
+    <div>
+      <dt>source</dt>
+      <dd>DB</dd>
+    </div>
+  </dl>
+</section>
+
+<section class="home-atlas" id="archive-map" aria-labelledby="archive-title">
+  <header class="home-section-head">
+    <p>01 / ARCHIVE MAP</p>
+    <h2 id="archive-title">기록의 지도</h2>
+    <span>분야를 고르면 그 안의 목차와 글로 이어집니다.</span>
+  </header>
+
+  <nav aria-label="최상위 분야">
+    <ul class="home-atlas-grid">
+      {{range .Categories}}
+      <li class="home-field" data-home-field="{{.Slug}}">
+        <a href="/{{.Slug}}">
+          <span class="home-field-mark" aria-hidden="true">
+            {{- if eq .Slug "intro"}}人
+            {{- else if eq .Slug "algorithm"}}A*
+            {{- else if eq .Slug "cs-theory"}}01
+            {{- else if eq .Slug "dev"}}&lt;/&gt;
+            {{- else if eq .Slug "data-math"}}Σ
+            {{- else if eq .Slug "project"}}↗
+            {{- else if eq .Slug "career"}}CV
+            {{- else}}…{{end -}}
+          </span>
+          <span class="home-field-body">
+            <strong>{{.Name}}</strong>
+            <span>
+              {{- if eq .Slug "intro"}}배경, 관심사, 지금 향하는 곳.
+              {{- else if eq .Slug "algorithm"}}문제 해결의 원리와 반복 훈련.
+              {{- else if eq .Slug "cs-theory"}}운영체제·네트워크·데이터베이스.
+              {{- else if eq .Slug "dev"}}언어·리눅스·도구·웹과 모바일.
+              {{- else if eq .Slug "data-math"}}수학·통계에서 머신러닝까지.
+              {{- else if eq .Slug "project"}}école 42와 구현의 흔적.
+              {{- else if eq .Slug "career"}}취업 준비와 자격증 기록.
+              {{- else}}아직 비어 있는 느린 기록.{{end -}}
+            </span>
+          </span>
+          <span class="home-field-meta">{{.PostCount}} notes <b aria-hidden="true">↗</b></span>
+        </a>
+      </li>
+      {{end}}
+    </ul>
+  </nav>
+</section>
+
+<section class="home-routes" aria-labelledby="routes-title">
+  <header class="home-section-head">
+    <p>02 / STARTING ROUTES</p>
+    <h2 id="routes-title">어디서부터 볼까요?</h2>
+    <span>관심사에 가까운 경로를 열어 바로 시작할 수 있습니다.</span>
+  </header>
+
+  <div class="home-route-grid">
+    <details class="home-route">
+      <summary>
+        <span>BUILD</span>
+        <strong>만드는 쪽에서 시작하기</strong>
+        <small>언어에서 실제 구현까지</small>
+      </summary>
+      <nav aria-label="만드는 쪽 탐색 경로">
+        <a href="/dev">개발</a>
+        <a href="/project">프로젝트</a>
+        <a href="/career">커리어</a>
+      </nav>
+    </details>
+
+    <details class="home-route">
+      <summary>
+        <span>DEPTH</span>
+        <strong>원리부터 파고들기</strong>
+        <small>문제를 푸는 법과 시스템의 안쪽</small>
+      </summary>
+      <nav aria-label="원리 탐색 경로">
+        <a href="/algorithm">알고리즘</a>
+        <a href="/cs-theory">CS 이론</a>
+      </nav>
+    </details>
+
+    <details class="home-route">
+      <summary>
+        <span>DATA</span>
+        <strong>데이터의 언어 따라가기</strong>
+        <small>수학에서 분석과 모델링까지</small>
+      </summary>
+      <nav aria-label="데이터 탐색 경로">
+        <a href="/data-math">데이터 &amp; 수리</a>
+        <a href="/career/%EB%B9%85%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%B6%84%EC%84%9D%EA%B8%B0%EC%82%AC">빅데이터 분석기사</a>
+      </nav>
+    </details>
+  </div>
+</section>
 {{end}}

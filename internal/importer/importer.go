@@ -82,6 +82,9 @@ type Post struct {
 	NotionPageID      string
 	OriginalPath      string
 	OriginalCreatedAt *time.Time
+	// SortOrder가 nil이면 기존에 sortorder 도구로 복원한 값을 보존한다.
+	// 사람이 명시한 순서만 포인터로 넘겨 재이관 때도 같은 값으로 고정한다.
+	SortOrder *int
 }
 
 // validStatus는 스키마의 CHECK 제약과 같은 값들이다.
@@ -104,8 +107,8 @@ func UpsertPost(tx *sql.Tx, p Post, now time.Time) error {
 		INSERT INTO posts (
 			slug, title, body, status, source,
 			notion_page_id, original_path, original_created_at,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			sort_order, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 0), ?, ?)
 		ON CONFLICT (notion_page_id) DO UPDATE SET
 			slug                = excluded.slug,
 			title               = excluded.title,
@@ -113,10 +116,11 @@ func UpsertPost(tx *sql.Tx, p Post, now time.Time) error {
 			status              = excluded.status,
 			original_path       = excluded.original_path,
 			original_created_at = excluded.original_created_at,
+			sort_order          = CASE WHEN ? IS NULL THEN posts.sort_order ELSE excluded.sort_order END,
 			updated_at          = excluded.updated_at`,
 		p.Slug, p.Title, p.Body, p.Status, p.Source,
 		p.NotionPageID, nullString(p.OriginalPath), nullTime(p.OriginalCreatedAt),
-		now, now)
+		nullInt(p.SortOrder), now, now, nullInt(p.SortOrder))
 	if err != nil {
 		return fmt.Errorf("posts upsert(%s): %w", p.NotionPageID, err)
 	}
@@ -186,4 +190,11 @@ func nullTime(t *time.Time) any {
 		return nil
 	}
 	return *t
+}
+
+func nullInt(n *int) any {
+	if n == nil {
+		return nil
+	}
+	return *n
 }

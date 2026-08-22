@@ -115,6 +115,8 @@ type pageData struct {
 	// Deck은 갈래를 아이콘 카드로 펼칠 때 그릴 것이다 (deck.go).
 	// 비어 있으면 평소대로 목록을 그린다.
 	Deck []DeckCard
+	// Links는 이 화면에서 아카이브 바깥으로 나가는 링크다 (links.go).
+	Links []SiteLink
 }
 
 // TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
@@ -254,52 +256,22 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
-// homeCategorySlug는 홈에 펼칠 표지 글을 가진 카테고리다.
-// curation.Covers가 이 분류에 자기소개 글을 표지로 붙여둔다.
-const homeCategorySlug = "intro"
-
-// handleIndex는 홈이다. **카테고리 목록이 아니라 자기소개를 편다.**
+// handleIndex는 아카이브의 탐색 허브다.
 //
-// 분류로 들어가는 길은 이제 사이드바가 늘 열어두고 있어서, 첫 화면까지
-// 목록이면 같은 것을 두 번 보여주는 셈이다. 소개 카테고리의 표지 글이 곧
-// 그 자리에 놓을 글이다.
-//
-// 표지가 없으면(이관 상태에 따라 비어 있을 수 있다) 예전처럼 최상위 분류
-// 목록을 보여준다. 홈이 빈 화면이 되는 것보다 낫다.
+// 자기소개는 /intro가 전담한다. 홈까지 같은 글을 펼치면 사이드바의 "홈"과
+// "소개"가 이름만 다른 중복 페이지가 된다. 홈은 최상위 분류와 전체 글 수만
+// 받아 HTML 자체의 링크와 details로 시작점을 만든다.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	slug, err := s.store.CoverPostSlugOf(homeCategorySlug)
+	categories, err := s.store.TopCategories()
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	if slug != "" {
-		post, err := s.store.PostBySlug(slug)
-		if err != nil {
-			s.fail(w, err)
-			return
-		}
-		if post != nil {
-			rendered, err := s.renderPostBody(post)
-			if err != nil {
-				s.fail(w, err)
-				return
-			}
-			s.render(w, "home.html", pageData{
-				Title:      post.Title,
-				Post:       post,
-				Body:       rendered.HTML,
-				HomeActive: true,
-			})
-			return
-		}
-	}
-
-	cats, err := s.store.TopCategories()
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	s.render(w, "index.html", pageData{Title: "카테고리", Categories: cats, HomeActive: true})
+	s.render(w, "home.html", pageData{
+		Title:      "최인렬.기록",
+		Categories: categories,
+		HomeActive: true,
+	})
 }
 
 // handleCategory는 1~3단계 카테고리를 모두 처리한다.
@@ -339,6 +311,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	crumbList, basePath := crumbs(trail)
 
 	// 표지 글이 있으면 본문을 목록 위에 펼친다. 소개처럼 목록이 아니라 글 자체가
 	// 그 분류의 알맹이인 경우가 있다. 한 번 더 눌러 들어가게 하지 않는다.
@@ -355,6 +328,10 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 				s.fail(w, err)
 				return
 			}
+			// 표지 본문의 글 링크가 같은 이름의 하위 분류 표지라면 분류 링크로
+			// 바꾼다. 그러면 소개 본문과 그 아래 모든 글을 한 번에 볼 수 있고,
+			// 부모 화면의 별도 하위 분류 목록은 중복이라 뺄 수 있다.
+			cover.HTML, children = linkCoveredChildCategories(cover.HTML, children, basePath)
 			// 표지 본문의 목차가 이미 가리키는 글 트리는 아래 "글" 목록에서
 			// 다시 보여주지 않는다. 상단 목차가 그 갈래의 입구다.
 			posts = dropShownPostTrees(posts, cover.fix.Shown)
@@ -365,38 +342,11 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	crumbList, basePath := crumbs(trail)
 	open, active := openTrail(trail)
-	deck := deckFor(current.Slug, basePath, children)
-	if current.Slug == "language" {
-		for _, child := range children {
-			if child.Slug != "프로그래밍-언어" {
-				continue
-			}
-			branches, branchErr := s.store.LanguageBranches(child.ID)
-			if branchErr != nil {
-				s.fail(w, branchErr)
-				return
-			}
-			deck = languageDeckFor(basePath, children, branches)
-			break
-		}
-	}
-	if current.Slug == projectSlug {
-		for _, child := range children {
-			if child.Slug != "projects" || child.CoverPostSlug == "" {
-				continue
-			}
-			projectsCover, deckErr := s.store.PostBySlug(child.CoverPostSlug)
-			if deckErr != nil {
-				s.fail(w, deckErr)
-				return
-			}
-			if projectsCover != nil {
-				deck = projectDeckFor(basePath, children, projectsCover.Body)
-			}
-			break
-		}
+	deck, err := s.deckFor(current.Slug, basePath, children)
+	if err != nil {
+		s.fail(w, err)
+		return
 	}
 	s.render(w, "category.html", pageData{
 		Title:      current.Name,
@@ -408,9 +358,37 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		Post:       coverPost,
 		Body:       cover.HTML,
 		AfterPosts: cover.AfterPosts,
+		Links:      linksFor(current.Slug),
 		openCats:   open,
 		activeCat:  active,
 	})
+}
+
+// linkCoveredChildCategories는 부모 표지 본문이 하위 분류의 표지 글을 직접
+// 가리킬 때 그 링크를 하위 분류 URL로 바꾸고, 같은 분류를 아래 목록에서 뺀다.
+// 글 상세로 보내면 그 분류의 나머지 글로 이어지지 않지만 분류로 보내면 표지 본문과
+// 전체 글 목록을 함께 볼 수 있다. 표지 글 링크가 실제로 없으면 아무것도 빼지 않는다.
+func linkCoveredChildCategories(body template.HTML, children []Category, basePath string) (template.HTML, []Category) {
+	if body == "" || len(children) == 0 {
+		return body, children
+	}
+
+	html := string(body)
+	remaining := make([]Category, 0, len(children))
+	for _, child := range children {
+		if child.CoverPostSlug == "" {
+			remaining = append(remaining, child)
+			continue
+		}
+		from := `href="/p/` + template.HTMLEscapeString(child.CoverPostSlug) + `"`
+		if !strings.Contains(html, from) {
+			remaining = append(remaining, child)
+			continue
+		}
+		to := `href="` + template.HTMLEscapeString(basePath+"/"+url.PathEscape(child.Slug)) + `"`
+		html = strings.ReplaceAll(html, from, to)
+	}
+	return template.HTML(html), remaining
 }
 
 // listOnlyCategories는 표지 글보다 하위 분류 자체가 첫 화면의 알맹이인 곳이다.

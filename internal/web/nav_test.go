@@ -89,21 +89,33 @@ func TestMarkNavHandlesEmptyTree(t *testing.T) {
 	}
 }
 
-// 홈은 소개 표지 글을 편다. 표지가 없으면 최상위 분류 목록으로 물러선다.
-func TestHomeFallsBackToCategoryList(t *testing.T) {
-	// testServer에는 intro 분류가 없다.
+// 홈은 소개 글이 아니라 최상위 분류로 들어가는 아카이브 허브다.
+func TestHomeIsArchiveHub(t *testing.T) {
 	rec := get(t, testServer(t), "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("상태 코드 %d", rec.Code)
 	}
-	if !strings.Contains(mainOf(t, rec.Body.String()), `href="/dev"`) {
-		t.Errorf("대비책인 분류 목록이 안 나온다:\n%s", rec.Body.String())
+	body := mainOf(t, rec.Body.String())
+	for _, want := range []string{
+		`id="home-title"`,
+		`href="/dev"`,
+		`<details class="home-route">`,
+		`id="archive-map"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("홈 허브에 %q가 없다:\n%s", want, body)
+		}
+	}
+	if n := strings.Count(body, `<details class="home-route">`); n != 3 {
+		t.Errorf("HTML 기본 details 탐색 경로가 %d개다, want 3", n)
+	}
+	if strings.Contains(rec.Body.String(), `/static/home.js`) {
+		t.Error("홈 효과에 전용 JavaScript를 넣었다")
 	}
 }
 
-// 홈의 본래 모습: intro 분류의 표지 글을 본문 자리에 편다.
-// 실제 데이터에서 curation.Covers가 intro에 자기소개 글을 붙여둔다.
-func TestHomeShowsIntroCoverPost(t *testing.T) {
+// 소개 표지 글은 /intro만 전담한다. 홈에는 소개로 가는 카드만 둔다.
+func TestHomeKeepsIntroSeparate(t *testing.T) {
 	sqlDB := testDB(t)
 	exec := execer(t, sqlDB)
 
@@ -122,8 +134,11 @@ func TestHomeShowsIntroCoverPost(t *testing.T) {
 		t.Fatalf("상태 코드 %d", rec.Code)
 	}
 	body := mainOf(t, rec.Body.String())
-	if !strings.Contains(body, "늘 우직하게 도전하는 개발자입니다.") {
-		t.Errorf("소개 본문이 홈에 안 펼쳐졌다:\n%s", body)
+	if strings.Contains(body, "늘 우직하게 도전하는 개발자입니다.") {
+		t.Errorf("소개 본문이 홈에 중복됐다:\n%s", body)
+	}
+	if !strings.Contains(body, `href="/intro"`) {
+		t.Errorf("소개로 가는 링크가 없다:\n%s", body)
 	}
 	// 사이드바는 여전히 나와야 한다.
 	if !strings.Contains(sideOf(t, rec.Body.String()), `href="/intro"`) {

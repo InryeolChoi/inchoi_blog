@@ -56,6 +56,22 @@ func TestDetailsPassesThrough(t *testing.T) {
 	}
 }
 
+func TestDetailsRendersMarkdownAndMathInside(t *testing.T) {
+	got := render(t, "<details>\n<summary><strong>해답 보기</strong></summary>\n\n### 풀이\n\n$$\nx^2=1\n$$\n\n</details>\n")
+	for _, want := range []string{
+		"<details>",
+		"<summary><strong>해답 보기</strong></summary>",
+		"<h4",
+		"풀이",
+		`class="math math-display"`,
+		"x^2=1",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%q가 없다:\n%s", want, got)
+		}
+	}
+}
+
 // ---------- 수식 ----------
 
 // TestInlineMathKeepsLatexIntact는 마크다운 파서가 LaTeX를 건드리지 않는지 본다.

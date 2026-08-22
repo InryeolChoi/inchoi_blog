@@ -644,64 +644,103 @@ func verify(sqlDB *sql.DB, p *plan) error {
 	}
 	// 사람이 붙인 표지(internal/curation)는 categorize의 계획 밖이다.
 	//
-	// 계획이 이미 표지를 두는 카테고리에 사람이 다시 붙이면 총수가 그대로지만
-	// (소개 ← 최인렬 페이지가 그렇다), **계획에 표지가 없던 카테고리**에 붙이면
-	// 그만큼 늘어난다. 사람이 노션 2단계 분류에 목차 글을 표지로 달면서 이렇게 됐다.
-	// 그래서 겹치지 않는 것만 더해서 센다.
+	// 계획이 이미 표지를 두는 카테고리의 글을 사람이 다른 곳으로 옮길 수도 있고
+	// (소개 ← 최인렬 페이지가 그렇다), 계획에 없던 카테고리에 새 표지를 붙일 수도
+	// 있다. 그래서 총수만 비교하지 않고 카테고리와 글의 정확한 대응을 본다.
 	// **이름이 아니라 DB의 id로 센다.** 사람이 분류 이름을 바꾸면 계획의 이름과
 	// 실제 slug가 갈라지기 때문이다(핸즈온 머신러닝 2 → 머신러닝: 기초이론).
-	want := map[int64]bool{}
-	for name := range p.coverByCategory {
-		var id int64
-		switch err := sqlDB.QueryRow(
-			`SELECT id FROM categories WHERE source_name = ?`, name).Scan(&id); err {
-		case nil:
-			want[id] = true
-		case sql.ErrNoRows: // 없앤 카테고리다
-		default:
-			return fmt.Errorf("표지 카테고리 조회(%s): %w", name, err)
-		}
-	}
+	// want는 최종적으로 허용되는 카테고리 → 표지 글이다. categorize가 직접
+	// 붙이는 표지와 regroup이 붙이는 사람 지정 표지를 모두 담는다. 다만 후자는
+	// 아직 regroup을 돌리기 전이어도 정상이다. 새 Covers를 추가한 직후
+	// categorize → regroup 순서로 실행할 수 있어야 하기 때문이다.
+	want := map[int64]int64{}
+	required := map[int64]bool{}
 	humanPages := map[string]bool{}
 	for _, cv := range curation.Covers {
 		humanPages[cv.NotionPageID] = true
-		var id int64
+	}
+	for name := range p.coverByCategory {
+		pageID := p.coverByCategory[name]
+		if humanPages[pageID] {
+			// 이 글은 사람이 다른 분류의 표지로 옮긴다. categorize가 원래
+			// 자리에 다시 붙이면 cover_post_id의 UNIQUE 제약과 싸운다.
+			continue
+		}
+		var id, postID int64
+		switch err := sqlDB.QueryRow(
+			`SELECT id FROM categories WHERE source_name = ?`, name).Scan(&id); err {
+		case nil:
+		case sql.ErrNoRows: // 없앤 카테고리다
+			continue
+		default:
+			return fmt.Errorf("표지 카테고리 조회(%s): %w", name, err)
+		}
+		if err := sqlDB.QueryRow(
+			`SELECT id FROM posts WHERE notion_page_id = ?`, pageID).Scan(&postID); err != nil {
+			return fmt.Errorf("표지 글 조회(%s): %w", pageID, err)
+		}
+		want[id] = postID
+		required[id] = true
+	}
+	for _, cv := range curation.Covers {
+		var id, postID int64
 		switch err := sqlDB.QueryRow(
 			`SELECT id FROM categories WHERE slug = ?`, cv.Slug).Scan(&id); err {
 		case nil:
-			want[id] = true
 		case sql.ErrNoRows:
 			return fmt.Errorf("표지를 붙일 카테고리가 없다: %q", cv.Slug)
 		default:
 			return fmt.Errorf("표지 카테고리 조회(%s): %w", cv.Slug, err)
 		}
-	}
-	// **한 글은 한 카테고리의 표지만 될 수 있다**(cover_post_id가 UNIQUE다).
-	// 사람이 어떤 글을 다른 분류의 표지로 가져가면, 경로가 그 글을 표지로 두려던
-	// 카테고리는 표지를 잃는다. `최인렬 (Inryeol Choi)`가 그렇다 — 그 글은
-	// `/intro`의 표지다.
-	for name, pageID := range p.coverByCategory {
-		if !humanPages[pageID] {
-			continue
-		}
-		var id int64
 		if err := sqlDB.QueryRow(
-			`SELECT id FROM categories WHERE source_name = ?`, name).Scan(&id); err == nil {
-			var used int
-			_ = sqlDB.QueryRow(
-				`SELECT count(*) FROM categories WHERE cover_post_id =
-				   (SELECT id FROM posts WHERE notion_page_id = ?) AND id = ?`, pageID, id).Scan(&used)
-			if used == 0 {
-				delete(want, id)
-			}
+			`SELECT id FROM posts WHERE notion_page_id = ?`, cv.NotionPageID).Scan(&postID); err != nil {
+			return fmt.Errorf("사람 지정 표지 글 조회(%s): %w", cv.NotionPageID, err)
+		}
+		want[id] = postID
+	}
+
+	rows, err := sqlDB.Query(`SELECT id, cover_post_id FROM categories WHERE cover_post_id IS NOT NULL`)
+	if err != nil {
+		return fmt.Errorf("표지 글 배치 조회: %w", err)
+	}
+	actual := map[int64]int64{}
+	for rows.Next() {
+		var categoryID, postID int64
+		if err := rows.Scan(&categoryID, &postID); err != nil {
+			rows.Close()
+			return fmt.Errorf("표지 글 배치 읽기: %w", err)
+		}
+		actual[categoryID] = postID
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("표지 글 배치 닫기: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("표지 글 배치 순회: %w", err)
+	}
+
+	badPlacement := 0
+	for categoryID, postID := range actual {
+		if want[categoryID] != postID {
+			badPlacement++
 		}
 	}
-	extra := len(want) - len(p.coverByCategory)
-	wantCovers := len(want)
-	fmt.Printf("표지 글이 이어진 카테고리: %d개 (계획 %d개 + 사람이 정한 것 중 새로 붙는 %d개)%s\n",
-		coverCount, len(p.coverByCategory), extra, mark(coverCount == wantCovers))
-	if coverCount != wantCovers {
-		return fmt.Errorf("표지 글 수가 계획과 다르다")
+	missingRequired := 0
+	for categoryID := range required {
+		if actual[categoryID] != want[categoryID] {
+			missingRequired++
+		}
+	}
+	pendingHuman := len(want) - len(actual)
+	if pendingHuman < 0 {
+		pendingHuman = 0
+	}
+	coverOK := badPlacement == 0 && missingRequired == 0
+	fmt.Printf("표지 글이 이어진 카테고리: %d개 (최종 계획 %d개, regroup 대기 %d개)%s\n",
+		coverCount, len(want), pendingHuman, mark(coverOK))
+	if !coverOK {
+		return fmt.Errorf("표지 글 배치가 계획과 다르다 (잘못된 배치 %d, 필수 누락 %d)",
+			badPlacement, missingRequired)
 	}
 	fmt.Printf("없는 글을 가리키는 표지: %d개%s\n", coverBad, mark(coverBad == 0))
 	if coverBad != 0 {

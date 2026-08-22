@@ -66,7 +66,7 @@ func main() {
 	converted := make([]convertedPage, 0, len(files))
 	var failures []failure
 
-	// 본문에서 줄을 덜어낸 글. 표가 낡았는지 아래에서 대조한다.
+	// 사람이 본문을 고친 글. 표가 낡았는지 아래에서 대조한다.
 	bodyEdited := curation.BodyEditPageIDs()
 	var edited []string
 	// 사람이 이관에서 뺀 글. 아래에서 몇 건이 빠졌는지 찍는다.
@@ -88,7 +88,7 @@ func main() {
 
 		md, report := notion.Convert(dump)
 
-		// 사람이 본문에서 덜어내기로 한 줄을 여기서 뺀다. **out/에 쓰기 전에**
+		// 사람이 정한 본문 수정·추가를 여기서 적용한다. **out/에 쓰기 전에**
 		// 해야 검토용 파일과 DB에 들어가는 것이 같아진다.
 		md, err = curation.ApplyBodyEdits(dump.Page.ID, md)
 		if err != nil {
@@ -602,15 +602,21 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 			res.skipped = append(res.skipped, cp.pageID)
 			continue
 		}
+		title, originalCreatedAt, sortOrder, err := curation.ApplyPostMetadata(
+			cp.pageID, m.Title, cp.createdAt)
+		if err != nil {
+			return nil, err
+		}
 		post := importer.Post{
 			Slug:              cp.pageID, // 지금은 페이지 ID 그대로. 나중에 제목 기반으로 다시 쓴다.
-			Title:             m.Title,
+			Title:             title,
 			Body:              cp.markdown,
 			Status:            m.Status,
 			Source:            "notion",
 			NotionPageID:      cp.pageID,
 			OriginalPath:      m.FullPath,
-			OriginalCreatedAt: cp.createdAt,
+			OriginalCreatedAt: originalCreatedAt,
+			SortOrder:         sortOrder,
 		}
 		if err := importer.UpsertPost(tx, post, now); err != nil {
 			return nil, err
@@ -664,7 +670,7 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 	return res, nil
 }
 
-// printBodyEdits는 본문에서 덜어낸 줄을 리포트에 남긴다.
+// printBodyEdits는 curation으로 본문을 고친 글을 리포트에 남긴다.
 //
 // 조용히 지우면 나중에 "이 문장이 왜 없지?" 하고 덤프를 뒤지게 된다.
 // full이면(전체를 돌린 실행이면) 표에 있는데 한 번도 안 걸린 항목도 짚는다 —
@@ -684,7 +690,7 @@ func printBodyEdits(edited []string, wanted map[string]bool, full bool) {
 	if len(wanted) == 0 {
 		return
 	}
-	fmt.Printf("\n■ 본문에서 덜어낸 줄 (internal/curation)\n")
+	fmt.Printf("\n■ 본문을 고친 글 (internal/curation)\n")
 	if len(edited) == 0 {
 		fmt.Println("  이번 실행에서는 해당 글이 없었다")
 	}

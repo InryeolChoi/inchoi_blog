@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/inryeol/blog/internal/curation"
 	"github.com/inryeol/blog/internal/db"
 	"github.com/inryeol/blog/internal/importer"
 	"github.com/inryeol/blog/internal/notion"
@@ -33,6 +34,7 @@ type source string
 const (
 	srcChildPage source = "childpage" // 부모 blocks 배열의 위치 (정확)
 	srcCreated   source = "created"   // created_time 순위 (차선)
+	srcManual    source = "manual"    // 사람이 internal/curation에서 정한 순서
 	srcNone      source = "none"      // 정할 근거 없음
 )
 
@@ -44,7 +46,8 @@ type assignment struct {
 	src     source
 	groupID string // 형제 묶음의 식별자 (컨테이너 id 또는 데이터베이스 id)
 	// tied는 이 글이 같은 순위를 가진 다른 글과 묶여 있는지다.
-	tied bool
+	tied    bool
+	skipGap bool // 일부 형제를 수동 묶음으로 떼어내 원본 순위에 빈칸이 생긴 묶음
 }
 
 func main() {
@@ -76,6 +79,9 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+	if *only == "all" {
+		assigns = applyManualOrders(assigns)
 	}
 
 	selected := filterBySource(assigns, *only)
@@ -220,6 +226,33 @@ func filterBySource(all []assignment, only string) []assignment {
 	return out
 }
 
+// applyManualOrders는 노션에서 복원한 순서보다 사람이 직접 정한 순서를 우선한다.
+// import도 같은 표를 적용하므로 어느 도구를 나중에 실행해도 결과가 같다.
+func applyManualOrders(assigns []assignment) []assignment {
+	edits := curation.PostMetadataByID()
+	out := append([]assignment(nil), assigns...)
+	fragmented := map[string]bool{}
+	for _, a := range out {
+		if _, ok := edits[a.pageID]; ok && a.groupID != "" {
+			fragmented[a.groupID] = true
+		}
+	}
+	for i := range out {
+		originalGroup := out[i].groupID
+		edit, ok := edits[out[i].pageID]
+		if !ok {
+			out[i].skipGap = fragmented[originalGroup]
+			continue
+		}
+		out[i].title = edit.Title
+		out[i].order = edit.SortOrder
+		out[i].src = srcManual
+		out[i].tied = false
+		out[i].groupID = "manual:linear-algebra"
+	}
+	return out
+}
+
 func printPlan(assigns []assignment, topLevel []assignment, only string) {
 	fmt.Println(rule)
 	fmt.Printf("sort_order 계획  (-only %s)\n", only)
@@ -232,6 +265,7 @@ func printPlan(assigns []assignment, topLevel []assignment, only string) {
 
 	cp := bySrc[srcChildPage]
 	cr := bySrc[srcCreated]
+	mm := bySrc[srcManual]
 	nn := bySrc[srcNone]
 
 	fmt.Printf("\n대상 %d건\n", len(assigns))
@@ -248,6 +282,9 @@ func printPlan(assigns []assignment, topLevel []assignment, only string) {
 		fmt.Printf("  created_time 순위 (차선)      : %d건, 묶음 %d개\n", len(cr), countGroups(cr))
 		fmt.Printf("      그중 같은 시각과 묶인 글   : %d건 (%.1f%%)\n",
 			tied, float64(tied)*100/float64(len(cr)))
+	}
+	if len(mm) > 0 {
+		fmt.Printf("  사람이 정한 순서             : %d건, 묶음 %d개\n", len(mm), countGroups(mm))
 	}
 	if len(nn) > 0 {
 		fmt.Printf("  근거 없음 → 0으로 둠          : %d건\n", len(nn))
@@ -448,7 +485,7 @@ func verify(sqlDB *sql.DB, assigns []assignment) error {
 	gaps := 0
 	byGroup := map[string][]int{}
 	for _, a := range assigns {
-		if a.src == srcNone {
+		if a.src == srcNone || a.skipGap {
 			continue
 		}
 		byGroup[a.groupID] = append(byGroup[a.groupID], a.order)

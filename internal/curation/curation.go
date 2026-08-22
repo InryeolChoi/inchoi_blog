@@ -15,6 +15,7 @@ package curation
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Move는 노션 2단계 카테고리를 경로가 정한 곳이 아닌 다른 분류 밑으로 옮긴 것이다.
@@ -60,13 +61,21 @@ type PostMove struct {
 	Title  string // 사람이 읽으라고 적어두는 것. 대조에 쓰지 않는다.
 }
 
-// PostMoves는 사람이 정한 글 이동이다.
-//
-// 아래 6건은 노션에서 자기소개 페이지 밑 "프로젝트" 목록에 있던 껍데기다.
-// 본문이 0바이트고, 실제 내용은 école 42 밑의 별도 글에 있다. 그래도 지우지
-// 않는다(이 프로젝트는 글을 지우지 않는다). 과제 목록 링크 모음 성격이라
-// 프로젝트 최상위에 직접 붙인다.
+// PostMoves는 사람이 정한 글 이동이다. 왜 옮기는지는 묶음마다 적어둔다.
 var PostMoves = []PostMove{
+	// 자기소개 한 편은 `소개` 분류에 직접 붙인다.
+	//
+	// 노션 최상위 페이지 `최인렬 (Inryeol Choi)`가 categorize를 거치면 같은 이름의
+	// 카테고리가 되는데, 그 밑에 남는 글은 이 자기소개 한 편뿐이다. 그러면 `소개`를
+	// 눌렀을 때 본문이 펴지고 그 아래 "하위 분류"에 같은 글 한 건짜리 갈래가 또
+	// 나온다 — 눌러도 같은 글로 되돌아오는 길이다. 글을 `소개`에 직접 붙이면
+	// 표지 글이라 목록에서도 빠지고, 빈 껍데기가 된 카테고리는 DropCategories가 지운다.
+	{NotionPageID: "1080901b-87f1-80d2-811a-eba467c2c160", ToSlug: "intro", Title: "최인렬 (Inryeol Choi)"},
+
+	// 아래 6건은 노션에서 자기소개 페이지 밑 "프로젝트" 목록에 있던 껍데기다.
+	// 본문이 0바이트고, 실제 내용은 école 42 밑의 별도 글에 있다. 그래도 지우지
+	// 않는다(이 프로젝트는 글을 지우지 않는다). 과제 목록 링크 모음 성격이라
+	// 프로젝트 최상위에 직접 붙인다.
 	{NotionPageID: "f4847474-a809-47a4-a9a7-7db997b66bf1", ToSlug: "project", Title: "FT_IRC"},
 	{NotionPageID: "ddd3c9db-d3e4-40f7-8878-8da7f5c9d1fd", ToSlug: "project", Title: "Inception"},
 	{NotionPageID: "1080901b-87f1-80d6-82e2-c81d4d9b4401", ToSlug: "project", Title: "MiniShell"},
@@ -74,14 +83,35 @@ var PostMoves = []PostMove{
 	{NotionPageID: "5fd73f8a-648d-4b15-88be-c3612e0c3262", ToSlug: "project", Title: "Where42"},
 	{NotionPageID: "e210fa33-6030-430e-8a7b-58d1026b1ba7", ToSlug: "project", Title: "심심조각"},
 
-	// 노션에서 `최적화이론 > 수업 : 통수 & 선계`에 있던 글이다. 그 수업이 통계수학과
-	// 선형계획을 같이 다뤄서 선형대수 내용까지 최적화이론 밑에 들어가 있었다.
-	// 최적화(라그랑주·심플렉스·쌍대정리)는 그대로 두고 선형대수만 옮긴다.
+	// école 42 표지에는 아래 17편이 하위 분류의 입구처럼 적혀 있지만, 경로만 보면
+	// école 42에 직접 붙는 글이라 같은 이름의 하위 분류와 화면에서 두 벌로 보였다.
+	// 각 글을 제 하위 분류로 옮겨 표지로 쓴다(Covers 참고).
+	{NotionPageID: "c7bcee75-28c5-4945-b5c3-f8e24e79e5e7", ToSlug: "c", Title: "C"},
+	{NotionPageID: "5c84aeb4-c3d9-4341-a66b-acc71487be94", ToSlug: "cpp-part-1", Title: "Cpp part.1"},
+	{NotionPageID: "0016e85a-614f-426c-ae62-f46427a7b719", ToSlug: "netpractice", Title: "Netpractice"},
+	{NotionPageID: "5b239f6c-32bb-4a4a-921b-00db117abc3d", ToSlug: "shell", Title: "Shell"},
+	{NotionPageID: "c4e6e521-2c48-460b-91d8-54d8452f2096", ToSlug: "born2beroot", Title: "born2beroot"},
+	{NotionPageID: "92ab7921-feb3-4604-b9ce-171a3b8a4629", ToSlug: "cub3d", Title: "cub3D"},
+	{NotionPageID: "90a0bf6c-e299-4158-8e13-d367d96298e5", ToSlug: "exam02", Title: "exam02"},
+	{NotionPageID: "96b38479-74a3-4983-a9d9-c5530a9b94c8", ToSlug: "exam03", Title: "exam03"},
+	{NotionPageID: "f6ceedec-0c40-4a30-8b97-05c05868e6f7", ToSlug: "fdf-fil-de-fer", Title: "fdf (fil de fer)"},
+	{NotionPageID: "97c6e452-91e6-4c19-9769-802b6be9a982", ToSlug: "ft-irc-server", Title: "ft_irc (server)"},
+	{NotionPageID: "62d53e5d-77fb-4a4e-b789-9a59ef3a70e4", ToSlug: "ft-printf", Title: "ft_printf"},
+	{NotionPageID: "38315c40-5daf-4387-bae3-bde27387b43f", ToSlug: "get-next-line", Title: "get_next_line"},
+	{NotionPageID: "4786e824-c744-4c32-8886-729e8e8c9bc6", ToSlug: "inception", Title: "inception"},
+	{NotionPageID: "dcbbd10e-b50a-4a1d-8a4a-237426aa7249", ToSlug: "libft", Title: "libft"},
+	{NotionPageID: "518ea6e1-306c-4cfa-8b3e-6ac182c16e14", ToSlug: "minishell", Title: "minishell"},
+	{NotionPageID: "cdf4ecb8-ecdb-4cda-9dbc-d74722213449", ToSlug: "philosopher", Title: "philosopher"},
+	{NotionPageID: "250631b1-6ac8-4e58-8dc2-eec4ecaca254", ToSlug: "pipex", Title: "pipex"},
+
+	// 노션에서 `최적화이론 > 수업 : 통수 & 선계`에 섞여 있던 글 16편이다. 그중
+	// 선형대수 11편만 선형대수로 옮기고, 선형계획·심플렉스·쌍대정리·라그랑주는
+	// 최적화이론에 둔다. 최적화 표지의 옛 수업 묶음 링크 자체는 BodyEdits로 뺀다.
 	//
-	// 선형대수 카테고리에는 같은 제목의 글이 이미 있지만 **전부 본문이 0바이트인
-	// 껍데기다**(노션에서 목차만 만들고 내용을 안 쓴 것). 내용이 있는 쪽이 이쪽이라
-	// 옮기면 그 분류가 비로소 알맹이를 갖는다. 껍데기는 지우지 않고 그대로 둔다 —
-	// 이 프로젝트는 글을 지우지 않는다.
+	// `수학적 최적화`에는 같은 제목의 별도 draft가 일부 있지만 대부분 본문이
+	// 0바이트인 껍데기다(노션에서 목차만 만들고 내용을 안 쓴 것). 내용이 있는 이
+	// 선형대수 글은 선형대수로 옮기고, 내용 있는 최적화 글과 별도 draft는 모두
+	// 최적화이론에 둔다 — 이 프로젝트는 글을 지우지 않는다.
 	{NotionPageID: "2cb48833-6e6e-4b48-9f74-2855ef3c63db", ToSlug: "선형대수", Title: "고유값과 대각화"},
 	{NotionPageID: "c520daf4-6db6-44cd-9767-d0f0c560caa2", ToSlug: "선형대수", Title: "내적공간"},
 	{NotionPageID: "f69e826a-2112-4dbe-861d-8b61e0c136a5", ToSlug: "선형대수", Title: "벡터"},
@@ -93,6 +123,11 @@ var PostMoves = []PostMove{
 	{NotionPageID: "9e966d0e-e821-46e5-b5d4-64aae905748d", ToSlug: "선형대수", Title: "피봇연산과 역행렬"},
 	{NotionPageID: "7555c053-d6d0-404c-9282-43b737a4c063", ToSlug: "선형대수", Title: "행렬"},
 	{NotionPageID: "4e2f7f05-8d33-46bb-8285-833973dd7747", ToSlug: "선형대수", Title: "행렬식과 역행렬"},
+	{NotionPageID: "404c96b3-e53c-4edb-88ee-8ef0f717ce79", ToSlug: "최적화이론", Title: "라그랑주 승수법"},
+	{NotionPageID: "ad882859-b0f2-41d9-9552-c7c14cf0b559", ToSlug: "최적화이론", Title: "선형계획법"},
+	{NotionPageID: "ff7a1343-68d1-4465-9df0-ea48a0a2565b", ToSlug: "최적화이론", Title: "심플렉스 알고리즘"},
+	{NotionPageID: "e96b9abf-d1de-4790-8656-7ba4a57c4d89", ToSlug: "최적화이론", Title: "쌍대정리: 선형"},
+	{NotionPageID: "eedb3add-e5e1-4b8a-a1d3-41bc80e00162", ToSlug: "최적화이론", Title: "심플렉스와 n분위수"},
 
 	// 아래 열다섯 건은 노션 2단계 페이지의 **목차 글**이다. 사람이 "데이터 & 수리"를
 	// 세 갈래로 가르면서 이 글들이 붙어 있던 중간층(`수학 & 통계`,
@@ -118,6 +153,95 @@ var PostMoves = []PostMove{
 	{NotionPageID: "86071a86-939b-49f0-8b73-b8a96a04afc1", ToSlug: "머신러닝", Title: "머신러닝 & 딥러닝"},
 }
 
+// PostMetadataEdit는 노션 원본과 다르게 공개 아카이브에서 쓸 제목·작성일·순서다.
+// notion_page_id가 멱등 키라 다시 이관해도 같은 글에 적용된다. `OriginalTitle`은
+// 표를 잘못 적었거나 덤프 제목이 바뀌었을 때 조용히 엉뚱한 글을 고치지 않게 한다.
+type PostMetadataEdit struct {
+	NotionPageID      string
+	OriginalTitle     string
+	Title             string
+	OriginalCreatedAt string // YYYY-MM-DD, UTC
+	SortOrder         int
+}
+
+// PostMetadataEdits의 선형대수 순서는 일반적인 교과서 흐름을 따른다:
+// 벡터 → 행렬/소거 → 벡터공간 → 선형변환 → 역행렬 → 내적 → 고유값 → SVD.
+// 최적화 주제는 넣지 않는다. 날짜는 사용자의 요청대로 2022년 3~8월 안에서 순서가
+// 뒤집히지 않게 임의로 배정했다.
+var PostMetadataEdits = []PostMetadataEdit{
+	{NotionPageID: "f69e826a-2112-4dbe-861d-8b61e0c136a5", OriginalTitle: "벡터", Title: "1. 벡터", OriginalCreatedAt: "2022-03-12", SortOrder: 0},
+	{NotionPageID: "7555c053-d6d0-404c-9282-43b737a4c063", OriginalTitle: "행렬", Title: "2. 행렬", OriginalCreatedAt: "2022-03-26", SortOrder: 1},
+	{NotionPageID: "c76070b0-c71d-45ba-82d7-a542f7dbab89", OriginalTitle: "피봇연산", Title: "3. 피봇연산", OriginalCreatedAt: "2022-04-09", SortOrder: 2},
+	{NotionPageID: "8ef5464f-7a44-41c5-9850-f9804ff9cf2f", OriginalTitle: "벡터공간", Title: "4. 벡터공간", OriginalCreatedAt: "2022-04-23", SortOrder: 3},
+	{NotionPageID: "2275909f-ed86-40c7-ba47-198768145ded", OriginalTitle: "선형변환", Title: "5. 선형변환", OriginalCreatedAt: "2022-05-07", SortOrder: 4},
+	{NotionPageID: "4e2f7f05-8d33-46bb-8285-833973dd7747", OriginalTitle: "행렬식과 역행렬", Title: "6. 행렬식과 역행렬", OriginalCreatedAt: "2022-05-21", SortOrder: 5},
+	{NotionPageID: "9e966d0e-e821-46e5-b5d4-64aae905748d", OriginalTitle: "피봇연산과 역행렬", Title: "7. 피봇연산과 역행렬", OriginalCreatedAt: "2022-06-04", SortOrder: 6},
+	{NotionPageID: "c520daf4-6db6-44cd-9767-d0f0c560caa2", OriginalTitle: "내적공간", Title: "8. 내적공간", OriginalCreatedAt: "2022-06-18", SortOrder: 7},
+	{NotionPageID: "2cb48833-6e6e-4b48-9f74-2855ef3c63db", OriginalTitle: "고유값과 대각화", Title: "9. 고유값과 대각화", OriginalCreatedAt: "2022-07-02", SortOrder: 8},
+	{NotionPageID: "5ef93000-4852-4af7-84cf-37c78b9b3774", OriginalTitle: "피봇연산과 대각화", Title: "10. 피봇연산과 대각화", OriginalCreatedAt: "2022-07-16", SortOrder: 9},
+	{NotionPageID: "f77c0e4e-dd54-4a4a-9534-e9f8ca1846a8", OriginalTitle: "특이값 분해", Title: "11. 특이값 분해", OriginalCreatedAt: "2022-07-30", SortOrder: 10},
+}
+
+// PostTitleEdit는 작성일과 순서는 그대로 두고 제목만 바꾸는 예외다.
+// 노션 원본 제목을 덮어쓰므로 import를 다시 돌려도 같은 제목을 유지한다.
+type PostTitleEdit struct {
+	NotionPageID  string
+	OriginalTitle string
+	Title         string
+}
+
+// PostTitleEdits의 네 건은 수리통계2 참고자료 제목 끝에 붙은 불필요한 `(1)`을 뺀다.
+var PostTitleEdits = []PostTitleEdit{
+	{NotionPageID: "df333507-a679-4beb-b165-285ae3bf42fc", OriginalTitle: "분포별 가능도함수 (1)", Title: "분포별 가능도함수"},
+	{NotionPageID: "805825dd-084e-4612-9465-a2054a0d2004", OriginalTitle: "확률함수와 커널 (1)", Title: "확률함수와 커널"},
+	{NotionPageID: "d9fe0a39-89cd-48b6-84ee-0efaa78cf67b", OriginalTitle: "수리통계2 - 과제 (1)", Title: "수리통계2 - 과제"},
+	{NotionPageID: "1f3d0731-e367-4d0d-8239-94d92d6d02d5", OriginalTitle: "수리통계2 - 시험 (1)", Title: "수리통계2 - 시험"},
+}
+
+// PostTitleByID는 제목만 바꾸는 예외를 notion_page_id로 찾는다.
+func PostTitleByID() map[string]PostTitleEdit {
+	out := make(map[string]PostTitleEdit, len(PostTitleEdits))
+	for _, edit := range PostTitleEdits {
+		out[edit.NotionPageID] = edit
+	}
+	return out
+}
+
+// PostMetadataByID는 수동 메타데이터를 notion_page_id로 찾는다.
+func PostMetadataByID() map[string]PostMetadataEdit {
+	out := make(map[string]PostMetadataEdit, len(PostMetadataEdits))
+	for _, edit := range PostMetadataEdits {
+		out[edit.NotionPageID] = edit
+	}
+	return out
+}
+
+// ApplyPostMetadata는 import가 DB에 넣기 직전에 수동 제목·날짜·순서를 적용한다.
+// 적용 대상이 아니면 받은 값을 그대로 돌려준다.
+func ApplyPostMetadata(pageID, title string, createdAt *time.Time) (string, *time.Time, *int, error) {
+	edit, ok := PostMetadataByID()[pageID]
+	if !ok {
+		if titleEdit, titleOK := PostTitleByID()[pageID]; titleOK {
+			if title != titleEdit.OriginalTitle && title != titleEdit.Title {
+				return "", nil, nil, fmt.Errorf("%s: 제목 표의 원본 제목 %q와 실제 제목 %q가 다르다",
+					pageID, titleEdit.OriginalTitle, title)
+			}
+			return titleEdit.Title, createdAt, nil, nil
+		}
+		return title, createdAt, nil, nil
+	}
+	if title != edit.OriginalTitle && title != edit.Title {
+		return "", nil, nil, fmt.Errorf("%s: 메타데이터 표의 원본 제목 %q와 실제 제목 %q가 다르다",
+			pageID, edit.OriginalTitle, title)
+	}
+	date, err := time.Parse("2006-01-02", edit.OriginalCreatedAt)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%s: 수동 작성일 %q: %w", pageID, edit.OriginalCreatedAt, err)
+	}
+	order := edit.SortOrder
+	return edit.Title, &date, &order, nil
+}
+
 // DropCategory는 사람이 없애기로 한 카테고리다.
 //
 // 이 프로젝트는 글을 지우지 않지만 카테고리는 분류일 뿐이라 지울 수 있다.
@@ -132,6 +256,12 @@ type DropCategory struct {
 }
 
 var DropCategories = []DropCategory{
+	{
+		SourceName: "최인렬 (Inryeol Choi)",
+		Why: "사람이 만든 `소개` 분류와 이름만 다른 같은 층이다. 자기소개 글은 " +
+			"PostMoves로 소개에 직접 붙였고, 프로젝트 글 여섯 건은 이미 /project로 " +
+			"올라가 남는 것이 없다",
+	},
 	{
 		SourceName: "프로젝트",
 		Why:        "/project 밑에 같은 이름이라 프로젝트 > 프로젝트로 겹친다. 글은 PostMoves로 위로 올렸다",
@@ -209,6 +339,27 @@ var Covers = []Cover{
 	{Slug: "다변량분석", NotionPageID: "cb02b6b8-6f29-479d-a791-25f1cd748b78", Why: "다변량분석 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
 	{Slug: "빅데이터-분석기사", NotionPageID: "a2f4b890-1f50-4390-acfc-871e612dce31", Why: "빅데이터 분석기사 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
 	{Slug: "머신러닝-기초이론", NotionPageID: "226b7998-bd88-4892-88aa-1227dc89b5f0", Why: "핸즈온 머신러닝 2 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
+
+	// école 42 표지의 원형별 목차와 같은 이름의 하위 분류가 따로 보여 중복됐다.
+	// 입구 글을 해당 분류의 표지로 삼으면 부모 목차는 분류로 바로 들어가고,
+	// 하위 분류에서는 소개 본문과 세부 글을 한 화면에서 볼 수 있다.
+	{Slug: "c", NotionPageID: "c7bcee75-28c5-4945-b5c3-f8e24e79e5e7", Why: "école 42의 C 입구 글을 C 분류 표지로 쓴다"},
+	{Slug: "cpp-part-1", NotionPageID: "5c84aeb4-c3d9-4341-a66b-acc71487be94", Why: "école 42의 Cpp part.1 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "netpractice", NotionPageID: "0016e85a-614f-426c-ae62-f46427a7b719", Why: "école 42의 Netpractice 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "shell", NotionPageID: "5b239f6c-32bb-4a4a-921b-00db117abc3d", Why: "école 42의 Shell 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "born2beroot", NotionPageID: "c4e6e521-2c48-460b-91d8-54d8452f2096", Why: "école 42의 born2beroot 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "cub3d", NotionPageID: "92ab7921-feb3-4604-b9ce-171a3b8a4629", Why: "école 42의 cub3D 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "exam02", NotionPageID: "90a0bf6c-e299-4158-8e13-d367d96298e5", Why: "école 42의 exam02 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "exam03", NotionPageID: "96b38479-74a3-4983-a9d9-c5530a9b94c8", Why: "école 42의 exam03 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "fdf-fil-de-fer", NotionPageID: "f6ceedec-0c40-4a30-8b97-05c05868e6f7", Why: "école 42의 fdf 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "ft-irc-server", NotionPageID: "97c6e452-91e6-4c19-9769-802b6be9a982", Why: "école 42의 ft_irc 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "ft-printf", NotionPageID: "62d53e5d-77fb-4a4e-b789-9a59ef3a70e4", Why: "école 42의 ft_printf 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "get-next-line", NotionPageID: "38315c40-5daf-4387-bae3-bde27387b43f", Why: "école 42의 get_next_line 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "inception", NotionPageID: "4786e824-c744-4c32-8886-729e8e8c9bc6", Why: "école 42의 inception 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "libft", NotionPageID: "dcbbd10e-b50a-4a1d-8a4a-237426aa7249", Why: "école 42의 libft 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "minishell", NotionPageID: "518ea6e1-306c-4cfa-8b3e-6ac182c16e14", Why: "école 42의 minishell 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "philosopher", NotionPageID: "cdf4ecb8-ecdb-4cda-9dbc-d74722213449", Why: "école 42의 philosopher 입구 글을 해당 분류 표지로 쓴다"},
+	{Slug: "pipex", NotionPageID: "250631b1-6ac8-4e58-8dc2-eec4ecaca254", Why: "école 42의 pipex 입구 글을 해당 분류 표지로 쓴다"},
 }
 
 // MovedSourceNames는 사람이 옮긴 카테고리의 source_name 집합이다.
@@ -454,7 +605,7 @@ func DroppedImage(sha256 string) bool {
 	return false
 }
 
-// BodyEdit는 사람이 본문에서 덜어내기로 한 줄이다.
+// BodyEdit는 사람이 본문에서 지우거나 바꾸기로 한 줄이다.
 //
 // 위의 표들과 달리 이건 분류가 아니라 **본문**을 고친다. 그래서 보는 쪽도
 // 다르다 — cmd/import가 변환 직후에 적용한다(categorize·regroup이 아니다).
@@ -468,15 +619,24 @@ func DroppedImage(sha256 string) bool {
 type BodyEdit struct {
 	// NotionPageID는 고칠 글이다. posts의 멱등 키라 slug보다 안정적이다.
 	NotionPageID string
-	// Remove는 지울 줄이다. 변환 결과에 **그 줄 전체가 정확히** 있어야 한다.
+	// Remove는 지우거나 바꿀 원본 줄이다. 변환 결과에 **그 줄 전체가 정확히**
+	// 있어야 한다.
 	// 조각이 아니라 줄 단위인 이유: 문장 중간을 지우면 앞뒤가 어떻게 이어지는지
 	// 표만 보고는 알 수 없다.
 	Remove string
-	Title  string // 사람이 읽으라고 적어두는 것. 대조에 쓰지 않는다.
-	Why    string
+	// Replace가 비어 있으면 Remove 줄을 지우고, 값이 있으면 그 줄로 바꾼다.
+	Replace string
+	Title   string // 사람이 읽으라고 적어두는 것. 대조에 쓰지 않는다.
+	Why     string
 }
 
 var BodyEdits = []BodyEdit{
+	{
+		NotionPageID: "660e3d79-427d-40f7-b98a-6f8be0a5f787",
+		Remove:       "[수업 : 통수 & 선계](/p/5f629e77-097e-40c4-a7d8-bbaa492c782f)",
+		Title:        "최적화이론",
+		Why:          "옛 수업 묶음은 없애고 선형대수 11편과 최적화 5편을 각 분류에서 직접 노출한다",
+	},
 	{
 		NotionPageID: "1080901b-87f1-80d2-811a-eba467c2c160",
 		Remove:       "![](/img/0f9f83dcd63eb36d2bbc1c616342d8a8d2edfc29b6ba318debc159bcbf336128)",
@@ -515,9 +675,44 @@ var BodyEdits = []BodyEdit{
 		Title:        "핸즈온 머신러닝 2",
 		Why:          "연습문제 2 절과 그 안의 유일한 링크를 함께 없앤다",
 	},
+	{
+		NotionPageID: "226b7998-bd88-4892-88aa-1227dc89b5f0",
+		Remove:       "- 통계와 수학에 관한 지식이 많이 필요하다. 모르면 [여기, 저기](/0d24cebd0bc1496b99b64885cb5be2a6) [클릭!](/5d2a5e480d854fc594d3280cbeef87ee)",
+		Replace:      "- 통계와 수학에 관한 지식이 많이 필요하다. 모르면 [클릭!](/5d2a5e480d854fc594d3280cbeef87ee)",
+		Title:        "핸즈온 머신러닝 2",
+		Why:          "404가 나는 여기, 저기 링크를 없애고 정상적인 데이터 & 수리 링크 하나만 남긴다",
+	},
+	{
+		NotionPageID: "59d18904-4ed5-4f0a-ba61-17ec86d9fc7b",
+		Remove:       "[분포별 가능도함수 (1)](/p/df333507-a679-4beb-b165-285ae3bf42fc)",
+		Replace:      "[분포별 가능도함수](/p/df333507-a679-4beb-b165-285ae3bf42fc)",
+		Title:        "수리통계2",
+		Why:          "참고자료 제목 끝의 불필요한 (1)을 뺀다",
+	},
+	{
+		NotionPageID: "59d18904-4ed5-4f0a-ba61-17ec86d9fc7b",
+		Remove:       "[확률함수와 커널 (1)](/p/805825dd-084e-4612-9465-a2054a0d2004)",
+		Replace:      "[확률함수와 커널](/p/805825dd-084e-4612-9465-a2054a0d2004)",
+		Title:        "수리통계2",
+		Why:          "참고자료 제목 끝의 불필요한 (1)을 뺀다",
+	},
+	{
+		NotionPageID: "59d18904-4ed5-4f0a-ba61-17ec86d9fc7b",
+		Remove:       "[수리통계2 - 과제 (1)](/p/d9fe0a39-89cd-48b6-84ee-0efaa78cf67b)",
+		Replace:      "[수리통계2 - 과제](/p/d9fe0a39-89cd-48b6-84ee-0efaa78cf67b)",
+		Title:        "수리통계2",
+		Why:          "참고자료 제목 끝의 불필요한 (1)을 뺀다",
+	},
+	{
+		NotionPageID: "59d18904-4ed5-4f0a-ba61-17ec86d9fc7b",
+		Remove:       "[수리통계2 - 시험 (1)](/p/1f3d0731-e367-4d0d-8239-94d92d6d02d5)",
+		Replace:      "[수리통계2 - 시험](/p/1f3d0731-e367-4d0d-8239-94d92d6d02d5)",
+		Title:        "수리통계2",
+		Why:          "참고자료 제목 끝의 불필요한 (1)을 뺀다",
+	},
 }
 
-// ApplyBodyEdits는 한 페이지의 변환 결과에서 BodyEdits에 적힌 줄을 덜어낸다.
+// ApplyBodyEdits는 한 페이지의 변환 결과에 BodyEdits와 BodyAppends를 적용한다.
 //
 // 지운 줄 자리에 빈 줄이 겹치면 하나로 줄인다. 안 그러면 마크다운에 빈 줄이
 // 둘 남아 문단 사이가 벌어진다.
@@ -530,14 +725,65 @@ func ApplyBodyEdits(pageID, body string) (string, error) {
 		if e.NotionPageID != pageID {
 			continue
 		}
-		next, ok := removeLine(out, e.Remove)
+		var next string
+		var ok bool
+		if e.Replace == "" {
+			next, ok = removeLine(out, e.Remove)
+		} else {
+			next, ok = replaceLine(out, e.Remove, e.Replace)
+		}
 		if !ok {
-			return "", fmt.Errorf("본문에서 지울 줄을 못 찾았다 (%s %q): %q",
+			return "", fmt.Errorf("본문에서 고칠 줄을 못 찾았다 (%s %q): %q",
 				e.NotionPageID, e.Title, e.Remove)
 		}
 		out = next
 	}
+	for _, e := range BodyAppends {
+		if e.NotionPageID != pageID {
+			continue
+		}
+		next, err := appendBody(out, e.Marker, e.Markdown)
+		if err != nil {
+			return "", fmt.Errorf("본문에 덧붙일 내용을 적용하지 못했다 (%s %q): %w",
+				e.NotionPageID, e.Title, err)
+		}
+		out = next
+	}
 	return out, nil
+}
+
+// appendBody는 본문 끝에 마크다운을 한 번만 덧붙인다. 같은 결과에 다시 적용해도
+// 중복되지 않아야 하고, marker만 있는데 내용이 다르면 사람이 고쳐둔 것을 덮지 않고
+// 에러로 멈춘다.
+func appendBody(body, marker, markdown string) (string, error) {
+	appendix := strings.TrimSpace(markdown)
+	if marker == "" || appendix == "" {
+		return "", fmt.Errorf("marker와 markdown은 비어 있을 수 없다")
+	}
+	if strings.Contains(body, marker) {
+		if strings.HasSuffix(strings.TrimSpace(body), appendix) {
+			return body, nil
+		}
+		return "", fmt.Errorf("marker %q가 이미 있지만 덧붙일 내용과 다르다", marker)
+	}
+	base := strings.TrimRight(body, "\n")
+	if base == "" {
+		return appendix + "\n", nil
+	}
+	return base + "\n\n" + appendix + "\n", nil
+}
+
+// replaceLine은 줄 하나를 정확히 찾아 바꾼다. 첫 번째 것만 바꾼다.
+func replaceLine(body, target, replacement string) (string, bool) {
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		if strings.TrimRight(line, " \t") != target {
+			continue
+		}
+		lines[i] = replacement
+		return strings.Join(lines, "\n"), true
+	}
+	return body, false
 }
 
 // removeLine은 그 줄 하나를 지운다. 첫 번째 것만 지운다.
@@ -564,8 +810,11 @@ func removeLine(body, target string) (string, bool) {
 // BodyEditPageIDs는 본문을 고칠 글의 notion_page_id 집합이다.
 // 표가 낡았는지 보려고 cmd/import가 쓴다.
 func BodyEditPageIDs() map[string]bool {
-	out := make(map[string]bool, len(BodyEdits))
+	out := make(map[string]bool, len(BodyEdits)+len(BodyAppends))
 	for _, e := range BodyEdits {
+		out[e.NotionPageID] = true
+	}
+	for _, e := range BodyAppends {
 		out[e.NotionPageID] = true
 	}
 	return out

@@ -29,7 +29,14 @@
 </article>
 {{end}}
 
-
+{{/* 아카이브 바깥으로 나가는 링크다. 지금은 소개 화면의 개인 페이지 하나다
+     (internal/web/links.go). 본문 안의 외부 링크와 같은 카드 모양을 써서
+     "여기서 나간다"는 신호를 한 가지로 유지한다. */}}
+{{if .Links}}
+<div class="pagelinks">
+  {{range .Links}}<a class="extcard" rel="noreferrer" href="{{.URL}}"><span class="extcard-ico" aria-hidden="true">{{.Icon}}</span><span class="extcard-txt"><span class="extcard-t" data-i18n="{{.I18n}}">{{.Title}}</span><span class="extcard-h">{{.Host}}</span></span><span class="extcard-go" aria-hidden="true">&#8599;</span></a>{{end}}
+</div>
+{{end}}
 
 {{if and .Categories (not .Deck)}}
 <h2 class="section-title">하위 분류</h2>
