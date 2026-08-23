@@ -38,6 +38,12 @@ type PostSummary struct {
 	CreatedAt sql.NullTime
 	// Children은 이 글에 달린 하위 글이다. nestPosts가 채운다.
 	Children []PostSummary
+	// Hidden은 이 글이 남에게 안 보이는 글(draft)이라는 표시다.
+	//
+	// **목록 조회는 애초에 이런 글을 안 돌려준다.** 이 자리가 필요한 곳은
+	// 본문 링크를 풀 때뿐이다 — 링크 대상이 "숨긴 글"인지 "아예 없는 것"인지
+	// 구별해야 하기 때문이다. inline.go 참고.
+	Hidden bool
 }
 
 // Date는 목록에 찍을 날짜다. 값이 없으면 빈 문자열이라 템플릿에서 저절로 빠진다.
@@ -81,21 +87,63 @@ type LanguageBranch struct {
 }
 
 // store는 DB 조회를 모아둔 것이다.
-type store struct{ db *sql.DB }
+//
+// **draft를 가리는 판정은 여기 한 곳에만 둔다.** 핸들러마다 챙기게 하면 새 조회를
+// 더할 때마다 구멍이 하나씩 생긴다 — 사이드바를 render가 한 번에 채우는 것과 같은
+// 이유다. showDrafts가 참이면(로컬 `-drafts`) 예전처럼 전부 보인다.
+type store struct {
+	db         *sql.DB
+	showDrafts bool
+}
 
-// subtreePostCount는 카테고리와 그 하위 전체의 글 수를 세는 SQL 조각이다.
+// hidden은 "이 글은 남에게 안 보인다"를 판정하는 SQL 조각이다.
+// alias는 posts 테이블의 별칭이다. 보이는 것만 원하면 notHidden을 쓴다.
+func (s *store) notHidden(alias string) string {
+	if s.showDrafts {
+		return "1=1"
+	}
+	return alias + `.status <> 'draft'`
+}
+
+// subtreePostCount는 카테고리와 그 하위 전체의 **보이는** 글 수를 세는 SQL 조각이다.
 // 카테고리는 3단계까지라 재귀 CTE로 아래를 훑는다.
-const subtreePostCount = `
-	(SELECT count(*) FROM posts p WHERE p.category_id IN (
+//
+// **숫자와 실제로 보이는 목록이 어긋나면 숫자가 거짓말이 된다.** 사이드바의
+// `노트 N편`도 이 값을 최상위끼리 더한 것이라 같이 따라온다.
+func (s *store) subtreePostCount() string {
+	return `
+	(SELECT count(*) FROM posts p WHERE ` + s.notHidden("p") + ` AND p.category_id IN (
 		WITH RECURSIVE sub(id) AS (
 			SELECT c2.id FROM categories c2 WHERE c2.id = c.id
 			UNION ALL
 			SELECT k.id FROM categories k JOIN sub ON k.parent_id = sub.id
 		) SELECT id FROM sub
 	))`
+}
+
+// visibleCategory는 화면에 내보낼 분류인지 판정하는 SQL 조각이다.
+//
+// **하위까지 보이는 글이 0인 노션 유래 분류는 감춘다.** draft를 가리면
+// `알고리즘 : 기초 (1)`처럼 통째로 비는 마디가 생기는데, 목록에 `0`으로 남겨두면
+// 눌러도 빈 화면인 막다른 길이 된다. 그런 마디는 덤프가 만든 것이지 사람이
+// 세운 것이 아니다.
+//
+// **사람이 만든 분류(`source_name IS NULL`)는 비어도 남긴다.** `라이프`가
+// 그렇다 — 앞으로 채울 자리로 일부러 만든 선반이라, 비었다고 치우면 그
+// 약속까지 지우는 셈이다. 이 구분은 schema에 이미 있는 것을 그대로 쓴다.
+func (s *store) visibleCategory() string {
+	return `(c.source_name IS NULL OR ` + s.subtreePostCount() + ` > 0)`
+}
 
 // coverSlug는 카테고리의 표지 글 slug를 가져오는 SQL 조각이다.
-const coverSlug = `(SELECT p.slug FROM posts p WHERE p.id = c.cover_post_id)`
+//
+// **표지가 숨긴 글이면 빈 값을 준다.** 표지는 본문을 목록 위에 통째로 펼치므로,
+// 안 거르면 draft 본문이 그대로 공개된다. 빈 값이면 핸들러가 표지 없는 분류로
+// 다루어 평소 목록을 그린다. 현재 pipex·Shell 두 곳이 여기 해당한다.
+func (s *store) coverSlug() string {
+	return `(SELECT p.slug FROM posts p WHERE p.id = c.cover_post_id AND ` +
+		s.notHidden("p") + `)`
+}
 
 func (s *store) scanCategories(rows *sql.Rows) ([]Category, error) {
 	defer rows.Close()
@@ -115,9 +163,9 @@ func (s *store) scanCategories(rows *sql.Rows) ([]Category, error) {
 // TopCategories는 최상위 카테고리를 sort_order 순으로 돌려준다.
 func (s *store) TopCategories() ([]Category, error) {
 	rows, err := s.db.Query(`
-		SELECT c.id, c.name, c.slug, c.parent_id, ` + subtreePostCount + `, ` + coverSlug + `
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `
 		FROM categories c
-		WHERE c.parent_id IS NULL
+		WHERE c.parent_id IS NULL AND ` + s.visibleCategory() + `
 		ORDER BY c.sort_order, c.name`)
 	if err != nil {
 		return nil, fmt.Errorf("최상위 카테고리 조회: %w", err)
@@ -128,9 +176,9 @@ func (s *store) TopCategories() ([]Category, error) {
 // ChildCategories는 주어진 카테고리의 바로 아래 자식들을 돌려준다.
 func (s *store) ChildCategories(parentID int64) ([]Category, error) {
 	rows, err := s.db.Query(`
-		SELECT c.id, c.name, c.slug, c.parent_id, `+subtreePostCount+`, `+coverSlug+`
+		SELECT c.id, c.name, c.slug, c.parent_id, `+s.subtreePostCount()+`, `+s.coverSlug()+`
 		FROM categories c
-		WHERE c.parent_id = ?
+		WHERE c.parent_id = ? AND `+s.visibleCategory()+`
 		ORDER BY c.sort_order, c.name`, parentID)
 	if err != nil {
 		return nil, fmt.Errorf("하위 카테고리 조회: %w", err)
@@ -142,13 +190,13 @@ func (s *store) ChildCategories(parentID int64) ([]Category, error) {
 // /a/b 경로의 b가 정말 a의 자식일 때만 찾히게 한다.
 func (s *store) CategoryBySlug(slug string, parentID sql.NullInt64) (*Category, error) {
 	q := `
-		SELECT c.id, c.name, c.slug, c.parent_id, ` + subtreePostCount + `, ` + coverSlug + `
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `
 		FROM categories c
 		WHERE c.slug = ? AND c.parent_id IS NULL`
 	args := []any{slug}
 	if parentID.Valid {
 		q = `
-		SELECT c.id, c.name, c.slug, c.parent_id, ` + subtreePostCount + `, ` + coverSlug + `
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `
 		FROM categories c
 		WHERE c.slug = ? AND c.parent_id = ?`
 		args = append(args, parentID.Int64)
@@ -197,7 +245,7 @@ func (s *store) PostsInCategory(categoryID int64) ([]PostSummary, error) {
 		SELECT `+postColumns+`
 		FROM posts p
 		JOIN categories c ON c.id = p.category_id
-		WHERE p.category_id = ?
+		WHERE p.category_id = ? AND `+s.notHidden("p")+`
 		  AND (c.cover_post_id IS NULL OR p.id <> c.cover_post_id)
 		ORDER BY p.sort_order, p.title`, categoryID)
 	if err != nil {
@@ -221,7 +269,7 @@ func (s *store) LanguageBranches(categoryID int64) ([]LanguageBranch, error) {
 	rows, err := s.db.Query(`
 		SELECT p.slug, p.body, p.original_path
 		FROM posts p
-		WHERE p.category_id = ?
+		WHERE p.category_id = ? AND `+s.notHidden("p")+`
 		ORDER BY p.sort_order, p.title`, categoryID)
 	if err != nil {
 		return nil, fmt.Errorf("언어별 글 조회: %w", err)
@@ -291,6 +339,74 @@ func postNumber(title string) (int, bool) {
 	return n, true
 }
 
+// naturalCompare는 제목 둘을 자연 정렬로 견준다. a<b면 음수다.
+//
+// 제목을 **숫자 덩어리와 글자 덩어리로 갈라** 앞에서부터 맞춰 본다. 숫자끼리는
+// 값으로, 글자끼리는 글자로 견주고, 숫자와 글자가 만나면 숫자가 앞이다.
+//
+// 그냥 글자로 견주면 `practice problem 10`이 `practice problem 2`보다 앞에 온다.
+// 번호가 제목 **끝이나 중간**에 붙은 시리즈가 그래서 엇갈려 보였다 —
+// `postNumber`는 제목 맨 앞의 번호만 읽으므로 이런 제목은 전부 "번호 없음"으로
+// 들어와 sort_order 순, 즉 노션 작성 시각 순으로 흩어졌다.
+func naturalCompare(a, b string) int {
+	ar, br := []rune(a), []rune(b)
+	i, j := 0, 0
+	for i < len(ar) && j < len(br) {
+		ad, bd := isDigit(ar[i]), isDigit(br[j])
+		switch {
+		case ad && bd:
+			// 숫자 덩어리는 값으로 견준다. 앞의 0은 값에 영향이 없으므로
+			// 길이가 아니라 자릿수를 세어 비교한다.
+			ai, av := scanNumber(ar, i)
+			bj, bv := scanNumber(br, j)
+			if av != bv {
+				if av < bv {
+					return -1
+				}
+				return 1
+			}
+			i, j = ai, bj
+		case ad != bd:
+			// 숫자가 글자보다 앞이다. `2022년 …`이 `practice …`보다 앞에 온다.
+			if ad {
+				return -1
+			}
+			return 1
+		case ar[i] != br[j]:
+			if ar[i] < br[j] {
+				return -1
+			}
+			return 1
+		default:
+			i, j = i+1, j+1
+		}
+	}
+	// 앞이 같으면 짧은 쪽이 앞이다.
+	switch {
+	case len(ar)-i < len(br)-j:
+		return -1
+	case len(ar)-i > len(br)-j:
+		return 1
+	}
+	return 0
+}
+
+func isDigit(r rune) bool { return r >= '0' && r <= '9' }
+
+// scanNumber는 i부터 이어지는 숫자 덩어리를 읽어 끝 위치와 값을 준다.
+// 값이 int를 넘칠 만큼 긴 숫자는 더 세지 않고 큰 값으로 둔다 — 제목에 그런
+// 숫자가 있으면 순서가 아니라 글자다.
+func scanNumber(rs []rune, i int) (int, int) {
+	v := 0
+	for i < len(rs) && isDigit(rs[i]) {
+		if v < 1<<40 {
+			v = v*10 + int(rs[i]-'0')
+		}
+		i++
+	}
+	return i, v
+}
+
 // sortPosts는 목록을 제목 앞 번호대로 다시 세운다.
 //
 // **sort_order를 믿을 수 없어서 필요하다.** 데이터베이스 행의 sort_order는
@@ -300,10 +416,13 @@ func postNumber(title string) (int, bool) {
 // 제목 앞 번호는 사람이 직접 붙인 것이라 이보다 훨씬 믿을 만하다.
 //
 // 번호가 없는 글은 **번호 있는 글들 사이에 끼우지 않고 뒤로 보낸다.** 어느
-// 번호 옆에 놓아야 하는지 알 방법이 없어서다. 자기들끼리의 순서는 들어온 순서
-// (sort_order, title)를 그대로 쓴다 — 없는 순서를 지어내지 않는다.
+// 번호 옆에 놓아야 하는지 알 방법이 없어서다.
 //
-// 안정 정렬이라 번호가 같은 글끼리도 들어온 순서가 유지된다.
+// 그 뒤쪽은 **제목 자연 정렬**로 세운다(naturalCompare). 예전에는 들어온 순서
+// (sort_order, title)를 그대로 썼는데, 그 sort_order가 created_time 순위라
+// `practice problem 1 / 2022년 탐자 1차 / practice problem 2 / 연습문제 …`처럼
+// 시리즈가 서로 엇갈려 보였다. 제목에 이미 번호가 적혀 있는데 그걸 안 읽고
+// 작성 시각을 따르는 것이라, 없는 순서를 지어내는 것과는 반대쪽 문제였다.
 func sortPosts(in []PostSummary) {
 	sort.SliceStable(in, func(i, j int) bool {
 		ni, oki := postNumber(in[i].Title)
@@ -314,7 +433,7 @@ func sortPosts(in []PostSummary) {
 		if oki && ni != nj {
 			return ni < nj
 		}
-		return false
+		return naturalCompare(in[i].Title, in[j].Title) < 0
 	})
 }
 
@@ -385,7 +504,7 @@ func (s *store) ChildPosts(postID int64) ([]PostSummary, error) {
 		SELECT `+postColumns+`
 		FROM posts p
 		LEFT JOIN categories c ON c.id = p.category_id
-		WHERE p.parent_id = ?
+		WHERE p.parent_id = ? AND `+s.notHidden("p")+`
 		ORDER BY p.sort_order, p.title`, postID)
 	if err != nil {
 		return nil, fmt.Errorf("하위 글 조회: %w", err)
@@ -414,6 +533,7 @@ func (s *store) PostAncestors(postID int64) ([]PostSummary, error) {
 		SELECT `+postColumns+`, up.depth
 		FROM up JOIN posts p ON p.id = up.id
 		LEFT JOIN categories c ON c.id = p.category_id
+		WHERE `+s.notHidden("p")+`
 		ORDER BY up.depth DESC`, postID)
 	if err != nil {
 		return nil, fmt.Errorf("상위 글 조회: %w", err)
@@ -439,7 +559,7 @@ func (s *store) PostBySlug(slug string) (*Post, error) {
 	var categoryID sql.NullInt64
 	err := s.db.QueryRow(`
 		SELECT id, parent_id, slug, title, body, status, original_path, original_created_at, category_id
-		FROM posts WHERE slug = ?`, slug).
+		FROM posts p WHERE p.slug = ? AND `+s.notHidden("p")+``, slug).
 		Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Body, &p.Status,
 			&p.OriginalPath, &p.CreatedAt, &categoryID)
 	switch {
@@ -506,32 +626,43 @@ func (s *store) ImageBySHA256(sha string) (*Image, error) {
 	return &img, nil
 }
 
-// PostTitlesBySlug는 주어진 slug들의 제목을 돌려준다. posts에 없는 slug는 빠진다.
-// 그래서 결과에 없다는 것이 곧 "가리킬 글이 없는 죽은 링크"라는 뜻이다.
-func (s *store) PostTitlesBySlug(slugs []string) (map[string]string, error) {
+// PostSummariesBySlug는 주어진 slug들의 목록 한 줄을 돌려준다. posts에 없는
+// slug는 빠진다. 그래서 결과에 없다는 것이 곧 "가리킬 글이 없는 죽은 링크"라는
+// 뜻이다.
+//
+// **제목만으로는 모자란다.** 자리표시자를 진짜 제목으로 바꾸는 데는 제목이면
+// 되지만, 낱개 링크를 묶어 만드는 상자(groupLinkRuns)는 인라인 데이터베이스를
+// 펼친 상자와 같은 모양이어야 한다 — 거기에는 작성일과 draft 뱃지가 찍힌다.
+// 본문에서 뽑아낸 링크는 slug와 글자밖에 없으므로 나머지를 여기서 가져온다.
+//
+// **여기만은 숨긴 글도 돌려준다.** 대신 Hidden 표시를 단다. 그냥 빼버리면
+// resolveBody가 "posts에 없는 slug = 노션 데이터베이스"로 오해해서 **엉뚱한
+// 목록을 펼친다.** 세 상태를 구별해야 한다: 보인다 / 숨겼다 / 아예 없다.
+func (s *store) PostSummariesBySlug(slugs []string) (map[string]PostSummary, error) {
 	if len(slugs) == 0 {
-		return map[string]string{}, nil
+		return map[string]PostSummary{}, nil
 	}
 	args := make([]any, len(slugs))
 	for i, sl := range slugs {
 		args[i] = sl
 	}
-	q := `SELECT slug, title FROM posts WHERE slug IN (?` + strings.Repeat(",?", len(slugs)-1) + `)`
+	q := `SELECT ` + postColumns + `
+		FROM posts p
+		WHERE p.slug IN (?` + strings.Repeat(",?", len(slugs)-1) + `)`
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("글 제목 조회: %w", err)
+		return nil, fmt.Errorf("글 요약 조회: %w", err)
 	}
-	defer rows.Close()
-
-	out := make(map[string]string, len(slugs))
-	for rows.Next() {
-		var slug, title string
-		if err := rows.Scan(&slug, &title); err != nil {
-			return nil, fmt.Errorf("글 제목 스캔: %w", err)
-		}
-		out[slug] = title
+	list, err := scanPostSummaries(rows)
+	if err != nil {
+		return nil, fmt.Errorf("글 요약 스캔: %w", err)
 	}
-	return out, rows.Err()
+	out := make(map[string]PostSummary, len(list))
+	for _, p := range list {
+		p.Hidden = !s.showDrafts && p.Status == "draft"
+		out[p.Slug] = p
+	}
+	return out, nil
 }
 
 // InlineDBGroups는 ownerPath 밑으로 "한 층 더" 들어가 있는 글들을 그 중간 이름별로
@@ -585,8 +716,22 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 		delete(grouped, name)
 	}
 	for name, list := range grouped {
-		sortPosts(list)
-		grouped[name] = nestPosts(list)
+		// **숨긴 행을 빼되 이름은 남긴다.** 행이 하나도 안 남은 목록과 애초에
+		// 없는 목록은 다르게 다뤄야 한다 — 앞의 것은 링크를 풀어 글자로 남기고,
+		// 뒤의 것은 손대지 않는다(짝을 못 찾은 죽은 링크다). 값이 빈 슬라이스면
+		// 조회하는 쪽에서 ok는 참이고 len이 0이라 그 둘이 구별된다.
+		visible := make([]PostSummary, 0, len(list))
+		for _, p := range list {
+			if !s.showDrafts && p.Status == "draft" {
+				continue
+			}
+			visible = append(visible, p)
+		}
+		sortPosts(visible)
+		grouped[name] = nestPosts(visible)
+		if grouped[name] == nil {
+			grouped[name] = []PostSummary{}
+		}
 	}
 	return grouped, nil
 }
@@ -603,7 +748,8 @@ func (s *store) CategorySubtreePostSlugs(categoryID int64) (map[string]bool, err
 			UNION ALL
 			SELECT k.id FROM categories k JOIN sub ON k.parent_id = sub.id
 		)
-		SELECT slug FROM posts WHERE category_id IN (SELECT id FROM sub)`, categoryID)
+		SELECT p.slug FROM posts p
+		 WHERE `+s.notHidden("p")+` AND p.category_id IN (SELECT id FROM sub)`, categoryID)
 	if err != nil {
 		return nil, fmt.Errorf("분류 하위 글 조회: %w", err)
 	}
@@ -645,8 +791,9 @@ type NavCategory struct {
 // 분류가 화면마다 다른 자리에 있게 된다.
 func (s *store) NavTree() ([]NavCategory, error) {
 	rows, err := s.db.Query(`
-		SELECT c.id, c.name, c.slug, c.parent_id, ` + subtreePostCount + `
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `
 		FROM categories c
+		WHERE ` + s.visibleCategory() + `
 		ORDER BY c.sort_order, c.name`)
 	if err != nil {
 		return nil, fmt.Errorf("사이드바 카테고리 조회: %w", err)
@@ -711,7 +858,7 @@ func (s *store) NavTree() ([]NavCategory, error) {
 func (s *store) CoverPostSlugOf(catSlug string) (string, error) {
 	var slug sql.NullString
 	err := s.db.QueryRow(`
-		SELECT (SELECT p.slug FROM posts p WHERE p.id = c.cover_post_id)
+		SELECT `+s.coverSlug()+`
 		FROM categories c WHERE c.slug = ? AND c.parent_id IS NULL`, catSlug).Scan(&slug)
 	switch {
 	case err == sql.ErrNoRows:

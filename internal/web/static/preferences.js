@@ -15,13 +15,14 @@
     ko: {
       skip: "본문으로 건너뛰기", openNav: "분류 열기", notes: "노트 {count}편",
       categories: "분류", home: "홈", location: "현재 위치",
-      footer: "읽기 전용 미리보기 · status 구분 없이 전부 노출 (뱃지는 draft만)",
+      footer: "읽기 전용 아카이브 · 작성 중인 글은 공개하지 않습니다",
       settings: "화면 설정", language: "언어", theme: "테마",
       system: "시스템", light: "화이트", dark: "다크", openSettings: "화면 설정 열기",
       closeSettings: "화면 설정 닫기", subcategories: "하위 분류", posts: "글",
       childPosts: "하위 글",
       toc: "목차", noteMeta: "노트 {count}편 · 분류 {categories}개",
       postCount: "글 {count}건", noCategories: "카테고리가 없다.",
+      brandHead: "열렬히", brandTail: "뛰기",
       personalSite: "최인렬의 개인 페이지",
       translating: "본문을 기기에서 번역하는 중…",
       translationUnavailable: "이 브라우저는 기기 내 본문 번역을 지원하지 않습니다."
@@ -29,13 +30,14 @@
     en: {
       skip: "Skip to content", openNav: "Open categories", notes: "{count} notes",
       categories: "Categories", home: "Home", location: "Current location",
-      footer: "Read-only preview · all statuses shown (drafts are labeled)",
+      footer: "Read-only archive · works in progress are not published",
       settings: "Display settings", language: "Language", theme: "Theme",
       system: "System", light: "Light", dark: "Dark", openSettings: "Open display settings",
       closeSettings: "Close display settings", subcategories: "Subcategories", posts: "Posts",
       childPosts: "Child posts",
       toc: "Contents", noteMeta: "{count} notes · {categories} categories",
       postCount: "{count} posts", noCategories: "No categories.",
+      brandHead: "Real", brandTail: "Leaner",
       personalSite: "Inryeol Choi's personal site",
       translating: "Translating the post on this device…",
       translationUnavailable: "This browser does not support on-device post translation."
@@ -43,13 +45,14 @@
     es: {
       skip: "Ir al contenido", openNav: "Abrir categorías", notes: "{count} notas",
       categories: "Categorías", home: "Inicio", location: "Ubicación actual",
-      footer: "Vista de solo lectura · se muestran todos los estados (los borradores llevan etiqueta)",
+      footer: "Archivo de solo lectura · los borradores no se publican",
       settings: "Ajustes de pantalla", language: "Idioma", theme: "Tema",
       system: "Sistema", light: "Claro", dark: "Oscuro", openSettings: "Abrir ajustes de pantalla",
       closeSettings: "Cerrar ajustes de pantalla", subcategories: "Subcategorías", posts: "Artículos",
       childPosts: "Artículos relacionados",
       toc: "Contenido", noteMeta: "{count} notas · {categories} categorías",
       postCount: "{count} artículos", noCategories: "No hay categorías.",
+      brandHead: "Real", brandTail: "Leaner",
       personalSite: "Sitio personal de Inryeol Choi",
       translating: "Traduciendo el artículo en este dispositivo…",
       translationUnavailable: "Este navegador no admite la traducción local del artículo."

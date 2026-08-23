@@ -81,3 +81,32 @@ func TestLanguageDeckUsesActualLanguagePosts(t *testing.T) {
 		}
 	}
 }
+
+// TestChildDeckSlugsHaveArt는 카드로 펼치는 분류의 하위 slug에 그림이 다 있는지 본다.
+//
+// **하나라도 비면 그 분류는 카드를 통째로 포기하고 목록으로 돌아간다**
+// (childDeck.cards). 조용히 일어나는 일이라 화면을 열어보기 전에는 모른다.
+// 갈래를 옮기거나 이름을 바꾸면 slug가 달라지므로 여기서 잡는다.
+func TestChildDeckSlugsHaveArt(t *testing.T) {
+	// deckSources는 slug만 알고 그 자식은 DB가 정한다. 카드가 걸린 분류의
+	// 자식 slug를 여기 적어두고 그림이 있는지만 확인한다.
+	want := map[string][]string{
+		"dev":       {"language", "리눅스-쉘", "tooling", "서버-api", "클라이언트-ui"},
+		"data-math": {"수리통계-이론", "수리통계-응용", "머신러닝"},
+		"algorithm": {"알고리즘-이론", "알고리즘-실전"},
+		"cs-theory": {"운영체제", "네트워크", "데이터베이스", "가상화기술"},
+	}
+	for parent, kids := range want {
+		if _, ok := deckSources[parent]; !ok {
+			t.Errorf("%s가 더 이상 카드 분류가 아니다", parent)
+			continue
+		}
+		for _, slug := range kids {
+			art, ok := cardArtBySlug[slug]
+			if !ok || art.Blurb == "" || art.Icon == "" {
+				t.Errorf("%s > %s에 카드 그림이 없다. 그러면 %s가 목록으로 돌아간다",
+					parent, slug, parent)
+			}
+		}
+	}
+}

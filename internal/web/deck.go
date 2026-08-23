@@ -238,13 +238,25 @@ var cardArtBySlug = map[string]cardArt{
 			<path d="M27 10l-6 28"/>
 		</svg>`),
 	},
-	"웹-프로그래밍": {
-		Blurb: "브라우저와 서버 사이. 프런트와 백엔드 양쪽.",
+	"서버-api": {
+		Blurb: "요청을 받아 처리하는 쪽. 프레임워크와 인증, 세션과 웹소켓.",
 		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
-			<rect x="7" y="10" width="34" height="28" rx="3"/>
-			<path d="M7 19h34"/>
-			<circle cx="13" cy="14.5" r="1.4" fill="currentColor" stroke="none"/>
-			<circle cx="18" cy="14.5" r="1.4" fill="currentColor" stroke="none"/>
+			<rect x="8" y="8" width="32" height="10" rx="2"/>
+			<rect x="8" y="20" width="32" height="10" rx="2"/>
+			<rect x="8" y="32" width="32" height="8" rx="2"/>
+			<circle cx="14" cy="13" r="1.4" fill="currentColor" stroke="none"/>
+			<circle cx="14" cy="25" r="1.4" fill="currentColor" stroke="none"/>
+			<circle cx="14" cy="36" r="1.4" fill="currentColor" stroke="none"/>
+		</svg>`),
+	},
+	"클라이언트-ui": {
+		Blurb: "화면을 그리는 쪽. 브라우저와 손안의 앱까지.",
+		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+			<rect x="5" y="9" width="26" height="21" rx="3"/>
+			<path d="M5 16h26"/>
+			<path d="M13 36h10"/><path d="M18 30v6"/>
+			<rect x="33" y="20" width="11" height="20" rx="2.5"/>
+			<path d="M36.5 24h4"/>
 		</svg>`),
 	},
 	"리눅스-쉘": {
@@ -252,13 +264,6 @@ var cardArtBySlug = map[string]cardArt{
 		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
 			<rect x="7" y="10" width="34" height="28" rx="3"/>
 			<path d="M14 20l6 5-6 5"/><path d="M24 30h10"/>
-		</svg>`),
-	},
-	"모바일-프로그래밍": {
-		Blurb: "손에 들고 쓰는 화면을 만드는 쪽.",
-		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
-			<rect x="15" y="6" width="18" height="36" rx="4"/>
-			<path d="M21 11h6"/><circle cx="24" cy="36" r="1.8" fill="currentColor" stroke="none"/>
 		</svg>`),
 	},
 	"tooling": {

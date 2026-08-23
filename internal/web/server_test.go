@@ -50,6 +50,27 @@ func execer(t *testing.T, sqlDB *sql.DB) func(string, ...any) sql.Result {
 //	                                            표지 글 "언어"는 language에 붙는다
 func testServer(t *testing.T) http.Handler {
 	t.Helper()
+	return handlerFor(t, seedTestDB(t))
+}
+
+// testServerShowingDrafts는 로컬 확인용 `-drafts`를 켠 서버다.
+// 기본 서버가 draft를 가리므로, draft가 보이는 모습을 확인하려면 이쪽이 필요하다.
+func testServerShowingDrafts(t *testing.T) http.Handler {
+	t.Helper()
+	return handlerFor(t, seedTestDB(t), WithDrafts())
+}
+
+func handlerFor(t *testing.T, sqlDB *sql.DB, opts ...Option) http.Handler {
+	t.Helper()
+	srv, err := New(sqlDB, opts...)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return srv.Handler()
+}
+
+func seedTestDB(t *testing.T) *sql.DB {
+	t.Helper()
 
 	sqlDB := testDB(t)
 	exec := execer(t, sqlDB)
@@ -89,11 +110,7 @@ func testServer(t *testing.T) http.Handler {
 	exec(`INSERT INTO images (sha256, data, mime, created_at) VALUES (?, ?, 'image/png', ?)`,
 		strings.Repeat("ab", 32), []byte{0x89, 0x50, 0x4e, 0x47}, now)
 
-	srv, err := New(sqlDB)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	return srv.Handler()
+	return sqlDB
 }
 
 // mainOf는 본문 영역만 잘라낸다.
@@ -129,18 +146,25 @@ func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	return rec
 }
 
-func TestIndexListsTopCategories(t *testing.T) {
+// 홈이 표제지만 남은 뒤로 최상위 분류와 하위 글 수를 보여주는 곳은 사이드바다.
+func TestSidebarListsTopCategoriesWithCounts(t *testing.T) {
 	rec := get(t, testServer(t), "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("상태 코드 %d", rec.Code)
 	}
-	body := mainOf(t, rec.Body.String())
-	if !strings.Contains(body, `href="/dev"`) {
-		t.Errorf("최상위 카테고리 링크가 없다:\n%s", body)
+	side := sideOf(t, rec.Body.String())
+	if !strings.Contains(side, `href="/dev"`) {
+		t.Errorf("최상위 카테고리 링크가 없다:\n%s", side)
 	}
-	// 하위 글까지 세야 한다 (dev 아래 글 7건)
-	if !strings.Contains(body, `class="home-field-meta">7 notes`) {
-		t.Errorf("하위 글 수가 홈 카드에 안 세졌다:\n%s", body)
+	// 하위 글까지 세야 한다. **숨긴 글은 안 센다** — dev 아래 7건 중 하나가
+	// draft라 6이다. 숫자와 실제로 보이는 목록이 어긋나면 숫자가 거짓말이 된다.
+	if !strings.Contains(side, `<span class="nav-count">6</span>`) {
+		t.Errorf("하위 글 수가 사이드바에 안 세졌다:\n%s", side)
+	}
+	// `-drafts`를 켜면 그 한 건이 다시 잡힌다.
+	withDrafts := sideOf(t, get(t, testServerShowingDrafts(t), "/").Body.String())
+	if !strings.Contains(withDrafts, `<span class="nav-count">7</span>`) {
+		t.Errorf("-drafts에서도 draft가 안 세졌다:\n%s", withDrafts)
 	}
 }
 
@@ -453,19 +477,34 @@ func TestNestPostsKeepsEveryPost(t *testing.T) {
 	}
 }
 
-// TestStatusBadgeOnlyForDraft는 목록과 상세에서 unlisted 뱃지를 감추는지 본다.
-// 1408건 중 1003건이 unlisted라 전부 찍으면 목록이 그 글자로 덮인다.
-func TestStatusBadgeOnlyForDraft(t *testing.T) {
+// TestDraftIsHiddenFromReaders는 draft가 남에게 어디에도 안 보이는지 본다.
+// URL을 직접 쳐도 404여야 한다 — 목록에서만 빼면 주소를 아는 사람에게는 열린다.
+func TestDraftIsHiddenFromReaders(t *testing.T) {
 	h := testServer(t)
 
-	// 픽스처의 글은 전부 unlisted다. 어디에도 그 글자가 보이면 안 된다.
+	if code := get(t, h, "/p/draft-post").Code; code != http.StatusNotFound {
+		t.Errorf("draft 글의 상태 코드 = %d, 404여야 한다", code)
+	}
+	body := get(t, h, "/dev/language/python").Body.String()
+	if strings.Contains(body, "draft-post") || strings.Contains(body, "초안") {
+		t.Errorf("목록에 draft 글이 남아 있다:\n%s", mainOf(t, body))
+	}
+	// 숫자와 실제로 보이는 목록이 어긋나면 숫자가 거짓말이 된다.
+	if strings.Contains(body, ">초안<") {
+		t.Error("draft 글이 어딘가에 그려졌다")
+	}
+}
+
+// TestStatusBadgeOnlyForDraft는 `-drafts`로 draft를 볼 때 뱃지가 draft에만
+// 붙는지 본다. unlisted는 989건이라 전부 찍으면 목록이 그 글자로 덮인다.
+func TestStatusBadgeOnlyForDraft(t *testing.T) {
+	h := testServerShowingDrafts(t)
+
 	for _, path := range []string{"/dev/language/python", "/p/list-post"} {
 		if body := get(t, h, path).Body.String(); strings.Contains(body, "unlisted") {
 			t.Errorf("%s 에 unlisted 뱃지가 남아 있다:\n%s", path, body)
 		}
 	}
-
-	// draft는 손봐야 할 신호라 계속 보여야 한다.
 	for _, path := range []string{"/dev/language/python", "/p/draft-post"} {
 		if body := get(t, h, path).Body.String(); !strings.Contains(body, "draft") {
 			t.Errorf("%s 에 draft 뱃지가 없다:\n%s", path, body)

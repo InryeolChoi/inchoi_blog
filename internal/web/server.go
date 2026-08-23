@@ -1,7 +1,8 @@
 // Package web은 읽기 전용 공개 페이지를 서빙한다.
 //
-// 지금은 인증도 접근 제어도 없고 status(draft/unlisted/published)를 가리지 않는다.
-// 로컬에서 이관 결과를 눈으로 확인하려고 만든 것이다. 글쓰기/수정(admin)은 별도다.
+// 인증과 접근 제어는 아직 없다. 다만 **draft는 어디에도 안 보이고 /p/{slug}도
+// 404다** — 목록·카운트·본문 링크 전부에서 빠진다. 로컬에서 확인할 때만
+// `-drafts`로 켠다. 글쓰기/수정(admin)은 별도로 만든다.
 package web
 
 import (
@@ -43,7 +44,16 @@ var pageTemplates = []string{"home.html", "index.html", "category.html", "post.h
 // 페이지마다 따로 파싱한다. Go 템플릿은 이름 공간이 하나라, 여러 파일을 한 번에
 // 파싱하면 각 파일의 {{define "content"}}가 서로를 덮어써서 마지막 것만 남는다.
 // 그러면 모든 페이지가 같은 내용을 그린다.
-func New(db *sql.DB) (*Server, error) {
+// Option은 서버를 만들 때 주는 선택지다.
+type Option func(*store)
+
+// WithDrafts는 draft 글까지 보여준다. **로컬에서 눈으로 확인할 때만 쓴다.**
+//
+// 기본값이 "가린다"인 이유: 공개 배포가 기본이고, 안 가리는 쪽이 사고다.
+// 켜고 끄는 것을 실수해도 새는 방향이 아니라 막는 방향으로 틀리게 둔다.
+func WithDrafts() Option { return func(s *store) { s.showDrafts = true } }
+
+func New(db *sql.DB, opts ...Option) (*Server, error) {
 	pages := make(map[string]*template.Template, len(pageTemplates))
 	for _, name := range pageTemplates {
 		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/"+name)
@@ -52,8 +62,12 @@ func New(db *sql.DB) (*Server, error) {
 		}
 		pages[name] = t
 	}
+	st := &store{db: db}
+	for _, opt := range opts {
+		opt(st)
+	}
 	return &Server{
-		store: &store{db: db},
+		store: st,
 		md:    markdown.New(),
 		pages: pages,
 	}, nil
@@ -268,7 +282,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "home.html", pageData{
-		Title:      "최인렬.기록",
+		Title:      "열렬히.뛰기",
 		Categories: categories,
 		HomeActive: true,
 	})

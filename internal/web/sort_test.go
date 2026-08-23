@@ -49,14 +49,54 @@ func TestSortPostsPushesUnnumberedToBack(t *testing.T) {
 	}
 }
 
-// TestSortPostsKeepsIncomingOrderOtherwise는 번호가 없거나 같으면 들어온 순서를
-// 그대로 두는지 본다. 들어올 때 이미 sort_order, title 순이다.
-func TestSortPostsKeepsIncomingOrderOtherwise(t *testing.T) {
-	in := summaries("나중", "먼저", "2. 단순회귀 (1)", "2. 단순회귀 (2)")
+// TestSortPostsSortsTailNaturally는 앞 번호가 없는 글들을 제목 자연 정렬로
+// 세우는지 본다. 예전에는 들어온 순서(sort_order)를 그대로 뒀는데, 그 값이
+// 노션 작성 시각이라 제목에 번호가 적힌 시리즈가 서로 엇갈려 보였다.
+func TestSortPostsSortsTailNaturally(t *testing.T) {
+	in := summaries(
+		"practice problem 1", "2022년 탐자 1차 시험", "practice problem 2", "연습문제",
+		"2022년 탐자 2차 시험", "2022년 탐자 3차 시험", "practice problem 3")
 
 	sortPosts(in)
 
-	want := "2. 단순회귀 (1) | 2. 단순회귀 (2) | 나중 | 먼저"
+	want := "2022년 탐자 1차 시험 | 2022년 탐자 2차 시험 | 2022년 탐자 3차 시험 | " +
+		"practice problem 1 | practice problem 2 | practice problem 3 | 연습문제"
+	if got := titlesOf(in); got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
+// TestNaturalCompareReadsNumbersAsNumbers는 제목 속 숫자를 값으로 견주는지 본다.
+// 글자로 견주면 "10"이 "2"보다 앞에 온다.
+func TestNaturalCompareReadsNumbersAsNumbers(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"인자분석 : 코드 (2)", "인자분석 : 코드 (10)", -1},
+		{"practice problem 10", "practice problem 9", 1},
+		{"exam 007", "exam 7", 0}, // 앞의 0은 값에 영향이 없다
+		{"2022년 탐자", "practice", -1},
+		{"같다", "같다", 0},
+		{"같", "같다", -1}, // 앞이 같으면 짧은 쪽이 앞이다
+	}
+	for _, c := range cases {
+		got := naturalCompare(c.a, c.b)
+		if (got < 0) != (c.want < 0) || (got > 0) != (c.want > 0) {
+			t.Errorf("naturalCompare(%q, %q) = %d, want 부호 %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+// TestSortPostsKeepsNumberedPrefixRule은 앞 번호 규칙이 그대로인지 본다.
+// 자연 정렬은 **번호 없는 뒤쪽에만** 걸린다 — 앞 번호는 사람이 직접 붙인 것이라
+// 여전히 더 믿을 만하고, 번호 없는 글을 그 사이에 끼우지도 않는다.
+func TestSortPostsKeepsNumberedPrefixRule(t *testing.T) {
+	in := summaries("과제1", "1. 확률", "42 : Cpp 모듈", "2. 확률분포")
+
+	sortPosts(in)
+
+	want := "1. 확률 | 2. 확률분포 | 42 : Cpp 모듈 | 과제1"
 	if got := titlesOf(in); got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}

@@ -431,12 +431,21 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 	}
 
 	// 사람이 slug로 직접 정한 글. 경로에서 나온 이름이 아니라 slug로 찾는다.
+	//
+	// **아직 없는 slug는 기다린다.** 사람이 둔 중간 층은 regroup이 만드는데
+	// (`서버 & API`, `클라이언트 & UI` 같은 것), 그걸 새로 만든 직후에는
+	// categorize가 먼저 돌 때 그 분류가 아직 없다. 여기서 멈추면 두 도구가
+	// 서로를 기다리며 아무것도 못 한다 — categorize가 글을 옮겨야 regroup이
+	// 빈 분류를 지울 수 있고, regroup이 층을 만들어야 categorize가 붙일 수 있다.
+	// 한 바퀴 더 돌면 풀리므로 이번엔 그대로 두고 몇 건인지만 알린다.
+	pending := 0
 	for _, mp := range p.movedPosts {
 		var want int64
 		switch err := tx.QueryRow(`SELECT id FROM categories WHERE slug = ?`, mp.slug).Scan(&want); err {
 		case nil:
 		case sql.ErrNoRows:
-			return 0, fmt.Errorf("글 %q를 붙일 카테고리가 없다: slug %q", mp.title, mp.slug)
+			pending++
+			continue
 		default:
 			return 0, fmt.Errorf("카테고리 조회(%s): %w", mp.slug, err)
 		}
@@ -455,6 +464,9 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 			return 0, fmt.Errorf("posts 갱신(%s): %w", mp.pageID, err)
 		}
 		changed++
+	}
+	if pending > 0 {
+		fmt.Printf("\n!! 붙일 분류가 아직 없어 미룬 글 %d건. regroup을 돌린 뒤 다시 실행하면 붙는다.\n", pending)
 	}
 
 	// 표지 글을 카테고리 쪽에 이어둔다. 값이 이미 맞으면 건드리지 않는다.

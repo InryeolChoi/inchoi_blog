@@ -65,8 +65,23 @@ var groups = []group{
 	{slug: "cs-theory", name: "CS 이론", members: []string{
 		"운영체제", "네트워크", "데이터베이스", "가상화기술",
 	}},
+	// 개발은 members와 subs를 **함께** 쓰는 유일한 분류다. Language·리눅스 & 쉘·
+	// tooling은 노션 최상위가 그대로 한 갈래인데, 웹 프로그래밍 77편만은 배운
+	// 순서(Django → Spring)와 곁다리로 붙은 것들(HTML/CSS, React, 로그인, 웹소켓)이
+	// 한 갈래에 뒤엉켜 있었다. 3단계가 끝이라 `웹 프로그래밍 > 백엔드 > Django`로는
+	// 못 내려가므로, 웹 프로그래밍 자리를 두 갈래가 대신한다.
+	//
+	// 이름을 "프론트엔드"가 아니라 "클라이언트 & UI"로 둔 이유: 그 밑에 모바일
+	// 프로그래밍(Swift/UIKit)이 들어간다. 웹만 가리키는 말이면 어긋난다.
 	{slug: "dev", name: "개발", members: []string{
-		"Language", "리눅스 & 쉘", "소프트스킬", "웹 프로그래밍", "모바일 프로그래밍",
+		"Language", "리눅스 & 쉘", "소프트스킬",
+	}, subs: []subgroup{
+		{slug: "서버-api", name: "서버 & API", members: []string{
+			"Django", "Spring", "Node.js",
+		}},
+		{slug: "클라이언트-ui", name: "클라이언트 & UI", members: []string{
+			"Javascript", "React", "모바일 프로그래밍",
+		}},
 	}},
 	// 노션 최상위 "수학 & 통계" 하나에 이론·응용·머신러닝이 다 들어 있어서
 	// 사람이 세 갈래로 갈랐다. 갈래 이름은 노션에 없는 것이라 source_name이 NULL이다.
@@ -103,6 +118,55 @@ var renames = []rename{
 	// 달고 있던 카테고리는 글이 열 편뿐이고 내용이 여기와 겹쳐서 없앴다.
 	{fromName: "핸즈온 머신러닝 2", toName: "머신러닝: 기초이론", toSlug: "머신러닝-기초이론"},
 	{fromName: "자연어처리 (1) : BERT와 GPT", toName: "자연어처리", toSlug: "자연어처리"},
+}
+
+// allScheduledToLeave는 이 카테고리에 남은 글과 하위 분류가 **전부** curation의
+// 표에 따라 다른 곳으로 갈 예정인지 본다.
+//
+// 글은 PostMoves가, 하위 분류는 Moves가 데려간다. 하나라도 표에 없으면 false다 —
+// 그건 갈 곳이 정해지지 않은 것이고, 지우면 조용히 잃는다.
+func allScheduledToLeave(tx *sql.Tx, id int64) (bool, error) {
+	moving := map[string]bool{}
+	for _, mp := range curation.PostMoves {
+		moving[mp.NotionPageID] = true
+	}
+	rows, err := tx.Query(`SELECT notion_page_id FROM posts WHERE category_id = ?`, id)
+	if err != nil {
+		return false, fmt.Errorf("남은 글 조회(%d): %w", id, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var pageID sql.NullString
+		if err := rows.Scan(&pageID); err != nil {
+			return false, fmt.Errorf("남은 글 스캔(%d): %w", id, err)
+		}
+		if !pageID.Valid || !moving[pageID.String] {
+			return false, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	movingCat := map[string]bool{}
+	for _, mv := range curation.Moves {
+		movingCat[mv.SourceName] = true
+	}
+	kids, err := tx.Query(`SELECT source_name FROM categories WHERE parent_id = ?`, id)
+	if err != nil {
+		return false, fmt.Errorf("남은 하위 분류 조회(%d): %w", id, err)
+	}
+	defer kids.Close()
+	for kids.Next() {
+		var source sql.NullString
+		if err := kids.Scan(&source); err != nil {
+			return false, fmt.Errorf("남은 하위 분류 스캔(%d): %w", id, err)
+		}
+		if !source.Valid || !movingCat[source.String] {
+			return false, nil
+		}
+	}
+	return true, kids.Err()
 }
 
 // category는 DB에 있는 카테고리 한 줄이다.
@@ -328,12 +392,12 @@ func checkPlan(cat *catalog) error {
 		if !ok {
 			return fmt.Errorf("옮기려는 카테고리가 없다: source_name %q", mv.SourceName)
 		}
-		if _, ok := cat.bySlug[mv.ToSlug]; !ok {
-			return fmt.Errorf("%q를 옮길 부모 카테고리가 없다: slug %q", mv.SourceName, mv.ToSlug)
-		}
 		if !newSlugs[mv.ToSlug] {
 			return fmt.Errorf("%q의 새 부모 %q가 우리가 만든 분류가 아니다", mv.SourceName, mv.ToSlug)
 		}
+		// DB에 아직 없어도 된다. newSlugs에 있으면 **이번 실행이 만드는 분류**라
+		// 옮기기 전에 생긴다(1a·1b가 3보다 먼저다). 새 층을 처음 얹는 실행이
+		// 이 검사에 걸려 멈추던 것을 고쳤다.
 		if c.grandchildren > 0 {
 			return fmt.Errorf("%q는 손자까지 있어 옮기면 4단계가 된다", mv.SourceName)
 		}
@@ -360,38 +424,32 @@ func printPlan(cat *catalog) {
 
 	totalMembers, totalChildren, totalPosts := 0, 0, 0
 	fmt.Println()
+	// 화면에 나갈 순서 그대로 찍는다: members가 먼저고 subs가 그 뒤다.
+	line := func(m, prefix string) {
+		c, _ := cat.member(m)
+		totalMembers++
+		totalChildren += c.children
+		totalPosts += c.posts
+		label := c.name
+		if r, ok := renameBy[m]; ok && c.name != r.toName {
+			label = fmt.Sprintf("%s → %s (slug: %s → %s)", m, r.toName, c.slug, r.toSlug)
+		}
+		fmt.Printf("%s%s   [자식 %d개, 직접 붙은 글 %d건]\n", prefix, label, c.children, c.posts)
+	}
 	for _, g := range groups {
 		fmt.Printf("%s  (/%s)\n", g.name, g.slug)
-		for _, sub := range g.subs {
-			fmt.Printf("    ├ %s  (/%s)  [사람이 둔 층]\n", sub.name, sub.slug)
-			for _, m := range sub.members {
-				c, _ := cat.member(m)
-				totalMembers++
-				totalChildren += c.children
-				totalPosts += c.posts
-				label := c.name
-				if r, ok := renameBy[m]; ok && c.name != r.toName {
-					label = fmt.Sprintf("%s → %s (slug: %s → %s)", m, r.toName, c.slug, r.toSlug)
-				}
-				fmt.Printf("    │   └ %s   [자식 %d개, 직접 붙은 글 %d건]\n", label, c.children, c.posts)
-			}
-		}
-		if len(g.members) == 0 {
-			if len(g.subs) == 0 {
-				fmt.Println("    (아직 소속 카테고리 없음)")
-			}
+		if len(g.members) == 0 && len(g.subs) == 0 {
+			fmt.Println("    (아직 소속 카테고리 없음)")
 			continue
 		}
 		for _, m := range g.members {
-			c, _ := cat.member(m)
-			totalMembers++
-			totalChildren += c.children
-			totalPosts += c.posts
-			label := c.name
-			if r, ok := renameBy[m]; ok && c.name != r.toName {
-				label = fmt.Sprintf("%s → %s (slug: %s → %s)", m, r.toName, c.slug, r.toSlug)
+			line(m, "    └ ")
+		}
+		for _, sub := range g.subs {
+			fmt.Printf("    ├ %s  (/%s)  [사람이 둔 층]\n", sub.name, sub.slug)
+			for _, m := range sub.members {
+				line(m, "    │   └ ")
 			}
-			fmt.Printf("    └ %s   [자식 %d개, 직접 붙은 글 %d건]\n", label, c.children, c.posts)
 		}
 	}
 
@@ -482,6 +540,10 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 	}
 
 	// 1b) 사람이 둔 중간 층(subs)을 넣는다. 최상위와 같은 방식이고 부모만 다르다.
+	//
+	// **sort_order는 members 다음부터 센다.** 둘 다 같은 분류의 자식이라, 0부터
+	// 다시 세면 사이드바에서 members와 subs가 같은 자리를 다투게 된다. 개발이
+	// 둘을 함께 쓰는 첫 분류다(members 3 + subs 2).
 	subID := map[string]int64{}
 	for _, g := range groups {
 		for i, sub := range g.subs {
@@ -492,7 +554,7 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 					name       = excluded.name,
 					parent_id  = excluded.parent_id,
 					sort_order = excluded.sort_order`,
-				groupID[g.slug], sub.name, sub.slug, i)
+				groupID[g.slug], sub.name, sub.slug, len(g.members)+i)
 			if err != nil {
 				return fmt.Errorf("중간 분류 %q: %w", sub.slug, err)
 			}
@@ -529,9 +591,25 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 			return fmt.Errorf("딸린 것 조회(%s): %w", dc.SourceName, err)
 		}
 		if posts > 0 || kids > 0 {
-			return fmt.Errorf(
-				"카테고리 %q를 지우려는데 글 %d건, 하위 분류 %d개가 남아 있다. "+
-					"먼저 curation.PostMoves로 옮겨라", dc.SourceName, posts, kids)
+			// **떠나기로 예정된 것만 남았으면 이번엔 미룬다.** 새 층을 막 만든
+			// 직후가 그렇다 — categorize가 글을 옮기려면 그 층이 있어야 하는데,
+			// 그 층을 만드는 게 바로 이 실행이다. 여기서 에러를 내면 두 도구가
+			// 서로를 기다리며 아무것도 못 한다. 한 바퀴 더 돌면 비고 지워진다.
+			//
+			// 예정에 없는 것이 하나라도 남아 있으면 예전대로 멈춘다. 조용히
+			// 지워서 글을 잃는 것이 이 검사가 막으려는 일이다.
+			leaving, err := allScheduledToLeave(tx, id)
+			if err != nil {
+				return err
+			}
+			if !leaving {
+				return fmt.Errorf(
+					"카테고리 %q를 지우려는데 글 %d건, 하위 분류 %d개가 남아 있다. "+
+						"먼저 curation.PostMoves로 옮겨라", dc.SourceName, posts, kids)
+			}
+			fmt.Printf("카테고리 %q 삭제를 미뤘다 (글 %d건, 하위 분류 %d개가 아직 있다. "+
+				"categorize를 돌린 뒤 다시 실행하면 지워진다)\n", dc.SourceName, posts, kids)
+			continue
 		}
 		if _, err := tx.Exec(`DELETE FROM categories WHERE id = ?`, id); err != nil {
 			return fmt.Errorf("카테고리 삭제(%s): %w", dc.SourceName, err)
@@ -762,17 +840,37 @@ func verify(sqlDB *sql.DB) error {
 		}
 	}
 
-	// 없애기로 한 카테고리가 실제로 사라졌는지
+	// 없애기로 한 카테고리가 실제로 사라졌는지.
+	//
+	// **미룬 것은 실패가 아니다.** 남은 것이 전부 떠나기로 예정돼 있으면 위에서
+	// 지우지 않고 넘긴다(allScheduledToLeave). 그건 categorize를 한 번 더 돌리면
+	// 풀리는 상태라, 여기서 멈추면 수렴할 길이 없다. 대신 아직 남았다고 찍는다.
 	for _, dc := range curation.DropCategories {
-		var n int
-		if err := sqlDB.QueryRow(
-			`SELECT count(*) FROM categories WHERE source_name = ?`, dc.SourceName).Scan(&n); err != nil {
+		var id int64
+		switch err := sqlDB.QueryRow(
+			`SELECT id FROM categories WHERE source_name = ?`, dc.SourceName).Scan(&id); err {
+		case sql.ErrNoRows:
+			fmt.Printf("카테고리 %q 삭제됨%s\n", dc.SourceName, mark(true))
+			continue
+		case nil:
+		default:
 			return fmt.Errorf("삭제 검증(%s): %w", dc.SourceName, err)
 		}
-		fmt.Printf("카테고리 %q 삭제됨%s\n", dc.SourceName, mark(n == 0))
-		if n != 0 {
+
+		tx, err := sqlDB.Begin()
+		if err != nil {
+			return fmt.Errorf("삭제 검증 트랜잭션(%s): %w", dc.SourceName, err)
+		}
+		leaving, err := allScheduledToLeave(tx, id)
+		tx.Rollback()
+		if err != nil {
+			return err
+		}
+		if !leaving {
+			fmt.Printf("카테고리 %q 삭제됨%s\n", dc.SourceName, mark(false))
 			return fmt.Errorf("카테고리 %q가 아직 있다", dc.SourceName)
 		}
+		fmt.Printf("카테고리 %q 삭제 대기 (categorize를 돌린 뒤 다시 실행하면 지워진다)\n", dc.SourceName)
 	}
 	return nil
 }

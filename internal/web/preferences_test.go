@@ -60,3 +60,34 @@ func TestPreferencesCircleMorphsIntoPanelAtBottomRight(t *testing.T) {
 		}
 	}
 }
+
+// TestBrandIsNamedByDictionaryNotMachineTranslated는 사이트 이름이 고정 사전으로만
+// 바뀌는지 본다.
+//
+// **이름은 기계번역 대상이 아니다.** preferences.js는 `.sidebar`/`.main` 안의
+// 한글 텍스트 노드를 온디바이스 Translator에 넘기는데, `[data-i18n]` 안은 뺀다.
+// 브랜드에 키가 없으면 Chrome에서 이름이 통째로 번역돼 나간다 — 실제로 그랬다.
+//
+// 키를 `<a class="brand">`가 아니라 **양옆 글자에 따로** 다는 이유: 사전 적용이
+// textContent를 통째로 갈아치우므로, 바깥에 달면 가운데 `<span class="dot">`이
+// 사라진다.
+func TestBrandIsNamedByDictionaryNotMachineTranslated(t *testing.T) {
+	body := get(t, testServer(t), "/dev/language").Body.String()
+	const want = `<span data-i18n="brandHead">열렬히</span>` +
+		`<span class="dot">.</span>` +
+		`<span data-i18n="brandTail">뛰기</span>`
+	// 상단 헤더와 사이드바 두 곳에 같은 이름이 나온다.
+	if got := strings.Count(body, want); got != 2 {
+		t.Errorf("사전 키를 단 브랜드가 %d곳이다, 2곳이어야 한다", got)
+	}
+
+	dict, err := staticFS.ReadFile("static/preferences.js")
+	if err != nil {
+		t.Fatalf("preferences.js 읽기: %v", err)
+	}
+	for _, key := range []string{"brandHead", "brandTail"} {
+		if strings.Count(string(dict), key+":") < 3 {
+			t.Errorf("사전에 %q가 세 언어로 다 있지 않다", key)
+		}
+	}
+}

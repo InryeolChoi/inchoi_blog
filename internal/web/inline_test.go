@@ -1,6 +1,7 @@
 package web
 
 import (
+	"database/sql"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -64,12 +65,19 @@ func inlineFixture(t *testing.T) (*Server, http.Handler) {
 	exec(`INSERT INTO categories (id, name, slug, sort_order) VALUES (1, '수학 & 통계', 'math-stat', 0)`)
 
 	now := time.Now().UTC()
-	post := func(slug, title, body, path string, sortOrder int) {
+	// 원본 작성일은 고정 값이다. 목록에 찍히는 날짜를 테스트가 글자 그대로
+	// 대조하기 때문이다.
+	written := time.Date(2023, 7, 2, 3, 4, 0, 0, time.UTC)
+	postAs := func(status, slug, title, body, path string, sortOrder int) {
 		t.Helper()
 		exec(`INSERT INTO posts (slug, title, body, status, source, category_id, sort_order,
-		      original_path, created_at, updated_at)
-		      VALUES (?, ?, ?, 'unlisted', 'notion', 1, ?, ?, ?, ?)`,
-			slug, title, body, sortOrder, path, now, now)
+		      original_path, original_created_at, created_at, updated_at)
+		      VALUES (?, ?, ?, ?, 'notion', 1, ?, ?, ?, ?, ?)`,
+			slug, title, body, status, sortOrder, path, written, now, now)
+	}
+	post := func(slug, title, body, path string, sortOrder int) {
+		t.Helper()
+		postAs("unlisted", slug, title, body, path, sortOrder)
 	}
 
 	const base = "수학 & 통계 > 탐색적 자료분석"
@@ -550,7 +558,7 @@ func TestPostPageKeepsChildrenNotInBody(t *testing.T) {
 // 한다 — 같은 것을 두 모양으로 보여줄 이유가 없다.
 func TestGroupsConsecutiveLinksIntoBox(t *testing.T) {
 	body := "## 머리말\n\n[가](/p/row-1)\n\n[나](/p/row-2)\n\n[다](/p/r-tips)\n"
-	got, n := groupLinkRuns(body)
+	got, n := groupLinkRuns(body, nil)
 
 	if n != 1 {
 		t.Fatalf("묶음 수가 %d다:\n%s", n, got)
@@ -568,11 +576,52 @@ func TestGroupsConsecutiveLinksIntoBox(t *testing.T) {
 	}
 }
 
+// TestGroupedBoxCarriesDateAndStatus는 묶은 상자가 인라인 데이터베이스를 펼친
+// 상자와 같은 것을 찍는지 본다. 본문 링크에는 slug와 글자밖에 없어서, 작성일과
+// draft 뱃지는 store에서 가져온 요약으로만 채울 수 있다. 이걸 안 넘기면 같은
+// 모양의 상자 두 개가 한쪽만 날짜를 달고 나온다.
+func TestGroupedBoxCarriesDateAndStatus(t *testing.T) {
+	written := time.Date(2023, 7, 2, 3, 4, 0, 0, time.UTC)
+	metas := map[string]PostSummary{
+		"row-1": {Slug: "row-1", Title: "1. 파일 다루기", Status: "unlisted",
+			CreatedAt: sql.NullTime{Time: written, Valid: true}},
+		"row-2": {Slug: "row-2", Title: "2. 빈 글", Status: "draft",
+			CreatedAt: sql.NullTime{Time: written, Valid: true}},
+	}
+	got, n := groupLinkRuns("[가](/p/row-1)\n\n[나](/p/row-2)\n", metas)
+
+	if n != 1 {
+		t.Fatalf("묶음 수가 %d다:\n%s", n, got)
+	}
+	if strings.Count(got, `<span class="date">2023-07-02</span>`) != 2 {
+		t.Errorf("작성일이 두 줄 다 안 찍혔다:\n%s", got)
+	}
+	if strings.Count(got, `<span class="status">draft</span>`) != 1 {
+		t.Errorf("draft 뱃지가 정확히 하나가 아니다:\n%s", got)
+	}
+	// 글자는 본문 것을 쓴다. 사람이 그 자리에 쓴 말이 제목과 다를 수 있다.
+	if !strings.Contains(got, ">가</a>") || !strings.Contains(got, ">나</a>") {
+		t.Errorf("링크 글자가 본문 것이 아니다:\n%s", got)
+	}
+}
+
+// TestGroupedBoxKeepsDeadLinkText는 짝이 없는 링크도 상자에 남는지 본다.
+// 날짜와 뱃지만 빠지고 링크는 그대로다.
+func TestGroupedBoxKeepsDeadLinkText(t *testing.T) {
+	got, n := groupLinkRuns("[가](/p/none-1)\n\n[나](/p/none-2)\n", map[string]PostSummary{})
+	if n != 1 {
+		t.Fatalf("묶음 수가 %d다:\n%s", n, got)
+	}
+	if strings.Contains(got, `class="date"`) || strings.Contains(got, `class="status"`) {
+		t.Errorf("짝이 없는데 날짜나 뱃지를 찍었다:\n%s", got)
+	}
+}
+
 // TestKeepsSingleLinkAsText는 하나짜리 링크는 그대로 두는지 본다.
 // 그건 목록이 아니라 문장 사이의 링크다.
 func TestKeepsSingleLinkAsText(t *testing.T) {
 	body := "## 머리말\n\n[하나](/p/row-1)\n\n본문이 이어진다.\n"
-	got, n := groupLinkRuns(body)
+	got, n := groupLinkRuns(body, nil)
 
 	if n != 0 {
 		t.Errorf("하나짜리를 묶었다:\n%s", got)
@@ -585,7 +634,7 @@ func TestKeepsSingleLinkAsText(t *testing.T) {
 // TestKeepsLinksInsideListItems는 목록 항목 안의 링크는 안 묶는지 본다.
 func TestKeepsLinksInsideListItems(t *testing.T) {
 	body := "- [가](/p/row-1)\n- [나](/p/row-2)\n"
-	got, n := groupLinkRuns(body)
+	got, n := groupLinkRuns(body, nil)
 
 	if n != 0 {
 		t.Errorf("목록 항목을 묶었다:\n%s", got)
@@ -595,10 +644,148 @@ func TestKeepsLinksInsideListItems(t *testing.T) {
 // TestGroupedBoxHasNoNewline은 묶은 HTML이 한 줄인지 본다. 마크다운 본문에
 // 끼워 넣으므로 줄이 나뉘면 뒷부분이 마크다운으로 다시 해석된다.
 func TestGroupedBoxHasNoNewline(t *testing.T) {
-	got, _ := groupLinkRuns("[가](/p/a)\n\n[나](/p/b)\n")
+	got, _ := groupLinkRuns("[가](/p/a)\n\n[나](/p/b)\n", nil)
 	for _, line := range strings.Split(got, "\n") {
 		if strings.Contains(line, "inline-db") && strings.Count(line, "<div") != 1 {
 			t.Errorf("상자가 한 줄이 아니다: %q", line)
 		}
+	}
+}
+
+// hiddenFixture는 숨긴 글이 섞인 본문을 그리는 서버다.
+//
+// 세 가지를 한 화면에 모아둔다: 문장 속 링크 하나, 자리표시자 하나,
+// 그리고 **행이 전부 숨겨진 인라인 데이터베이스** 하나.
+func hiddenFixture(t *testing.T) (*Server, http.Handler) {
+	t.Helper()
+
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	if _, err := db.Migrate(sqlDB, blog.MigrationsFS()); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := sqlDB.Exec(q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO categories (id, name, slug, sort_order) VALUES (1, '개발', 'dev', 0)`)
+
+	now := time.Now().UTC()
+	post := func(slug, title, body, status, path string) {
+		t.Helper()
+		exec(`INSERT INTO posts (slug, title, body, status, source, category_id, sort_order,
+		      original_path, created_at, updated_at)
+		      VALUES (?, ?, ?, ?, 'notion', 1, 0, ?, ?, ?)`,
+			slug, title, body, status, path, now, now)
+	}
+
+	const base = "개발 > 주인"
+	ownerBody := strings.Join([]string{
+		"문장 속 [초안 글](/p/hidden-1) 링크와 [보이는 글](/p/shown-1) 링크.",
+		"",
+		"[페이지 링크](/p/hidden-2)",
+		"",
+		"[숨은 목록](/p/db-0001)",
+		"",
+		"[살아있는 목록](/p/db-0002)",
+		"",
+	}, "\n")
+	post("owner", "주인", ownerBody, "unlisted", base)
+	post("shown-1", "보이는 글", "본문", "unlisted", base+" > 보이는 글")
+	post("hidden-1", "숨은 글 하나", "본문", "draft", base+" > 숨은 글 하나")
+	post("hidden-2", "숨은 글 둘", "본문", "draft", base+" > 숨은 글 둘")
+	// 행이 전부 draft인 목록과, 하나는 살아 있는 목록.
+	post("row-h1", "행 하나", "본문", "draft", base+" > 숨은 목록 > 행 하나")
+	post("row-h2", "행 둘", "본문", "draft", base+" > 숨은 목록 > 행 둘")
+	post("row-a1", "살아있는 행", "본문", "unlisted", base+" > 살아있는 목록 > 살아있는 행")
+	post("row-a2", "죽은 행", "본문", "draft", base+" > 살아있는 목록 > 죽은 행")
+
+	srv, err := New(sqlDB)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return srv, srv.Handler()
+}
+
+// TestHiddenPostLinksBecomePlainText는 숨긴 글을 가리키는 링크가 글자로 풀리는지
+// 본다. draft는 /p/{slug}가 404라, 링크로 두면 눌러야 없는 줄 아는 길이 된다.
+// 줄째 지우면 문장이 끊기므로 링크만 벗기고 글자는 남긴다.
+func TestHiddenPostLinksBecomePlainText(t *testing.T) {
+	_, h := hiddenFixture(t)
+	body := get(t, h, "/p/owner").Body.String()
+
+	if strings.Contains(body, `href="/p/hidden-1"`) {
+		t.Error("숨긴 글로 가는 링크가 남았다")
+	}
+	if !strings.Contains(body, "초안 글") {
+		t.Error("링크를 풀면서 글자까지 사라졌다")
+	}
+	if !strings.Contains(body, `href="/p/shown-1"`) {
+		t.Error("보이는 글의 링크까지 풀렸다")
+	}
+	// 자리표시자는 그냥 풀면 "페이지 링크"라는 말이 글자로 드러난다.
+	if strings.Contains(body, "페이지 링크") {
+		t.Error("자리표시자가 글자로 남았다")
+	}
+	if !strings.Contains(body, "숨은 글 둘") {
+		t.Error("자리표시자를 진짜 제목으로 안 바꿨다")
+	}
+}
+
+// TestFullyHiddenInlineDBUnlinks는 행이 전부 숨겨진 인라인 데이터베이스 링크가
+// 글자로 풀리는지 본다.
+//
+// 이게 없으면 오늘 `R언어 : 시각화`에서 겪은 것과 같은 고장이 난다 — 펼칠 것이
+// 없어 짝을 못 찾고, 링크는 그대로 남아 눌러도 404다.
+func TestFullyHiddenInlineDBUnlinks(t *testing.T) {
+	_, h := hiddenFixture(t)
+	body := get(t, h, "/p/owner").Body.String()
+
+	if strings.Contains(body, `href="/p/db-0001"`) {
+		t.Error("행이 다 숨겨진 목록의 링크가 남았다")
+	}
+	if !strings.Contains(body, "숨은 목록") {
+		t.Error("목록 이름 글자까지 사라졌다")
+	}
+	// 한 행이라도 살아 있으면 평소대로 펼친다.
+	if !strings.Contains(body, `href="/p/row-a1"`) {
+		t.Error("살아 있는 행이 안 펼쳐졌다")
+	}
+	if strings.Contains(body, `href="/p/row-a2"`) {
+		t.Error("숨긴 행이 목록에 남았다")
+	}
+}
+
+// TestHiddenLinkIsNotMistakenForInlineDB는 숨긴 글 링크를 노션 데이터베이스로
+// 오해하지 않는지 본다.
+//
+// resolveBody는 "posts에 없는 slug = 데이터베이스"로 판정한다. draft를 조회에서
+// 그냥 빼버리면 draft 링크가 이 판정에 걸려 **엉뚱한 목록이 펼쳐진다.**
+// 그래서 PostSummariesBySlug만은 숨긴 글도 돌려주고 Hidden 표시를 단다.
+func TestHiddenLinkIsNotMistakenForInlineDB(t *testing.T) {
+	srv, _ := hiddenFixture(t)
+	post, err := srv.store.PostBySlug("owner")
+	if err != nil || post == nil {
+		t.Fatalf("PostBySlug: %v", err)
+	}
+	_, fix, err := srv.resolveBody(post.Body, post.OriginalPath.String)
+	if err != nil {
+		t.Fatalf("resolveBody: %v", err)
+	}
+	// 푼 것: 문장 속 1 + 자리표시자 1 + 빈 목록 1 = 3
+	if fix.Unlinked != 3 {
+		t.Errorf("링크를 푼 자리 = %d, 3이어야 한다 (%+v)", fix.Unlinked, fix)
+	}
+	// 펼친 것: 살아 있는 목록 하나뿐
+	if fix.Expanded != 1 || fix.Rows != 1 {
+		t.Errorf("펼친 목록 = %d개 %d행, 1개 1행이어야 한다", fix.Expanded, fix.Rows)
+	}
+	if fix.Left != 0 {
+		t.Errorf("짝을 못 찾아 남긴 죽은 링크 = %d, 0이어야 한다", fix.Left)
 	}
 }

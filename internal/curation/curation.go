@@ -46,6 +46,19 @@ var Moves = []Move{
 	{SourceName: "빅데이터 분석기사", ToSlug: "career", Why: "자격증 학습 기록이라 수리/통계보다 커리어에 두기로 했다"},
 	{SourceName: "핸즈온 머신러닝 2", ToSlug: "머신러닝", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 	{SourceName: "자연어처리 (1) : BERT와 GPT", ToSlug: "머신러닝", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
+
+	// 웹 프로그래밍 77편을 서버 & API / 클라이언트 & UI 두 갈래로 갈랐다.
+	// 배운 순서가 Django → Spring이고 HTML/CSS·React·로그인·웹소켓은 곁다리로
+	// 붙어 있어서, 한 갈래 안에서는 무엇이 줄기인지 보이지 않았다.
+	{SourceName: "Django", ToSlug: "서버-api", Why: "웹 프로그래밍을 두 갈래로 가르면서 옮겼다"},
+	{SourceName: "Spring", ToSlug: "서버-api", Why: "웹 프로그래밍을 두 갈래로 가르면서 옮겼다"},
+	{SourceName: "Node.js", ToSlug: "서버-api", Why: "웹 프로그래밍을 두 갈래로 가르면서 옮겼다"},
+	{SourceName: "Javascript", ToSlug: "클라이언트-ui", Why: "웹 프로그래밍을 두 갈래로 가르면서 옮겼다"},
+	{SourceName: "React", ToSlug: "클라이언트-ui", Why: "웹 프로그래밍을 두 갈래로 가르면서 옮겼다"},
+	// 모바일은 개발 직속 5편짜리 갈래였다. Swift/UIKit도 결국 화면을 그리는
+	// 쪽이라 클라이언트 밑으로 내린다 — 갈래 이름을 "프론트엔드"가 아니라
+	// "클라이언트 & UI"로 둔 이유가 이것이다.
+	{SourceName: "모바일 프로그래밍", ToSlug: "클라이언트-ui", Why: "웹 프론트와 모바일은 둘 다 화면을 그리는 쪽이라 한 갈래로 묶었다"},
 }
 
 // PostMove는 글 하나를 경로가 정한 곳이 아닌 다른 카테고리에 붙이는 것이다.
@@ -63,6 +76,27 @@ type PostMove struct {
 
 // PostMoves는 사람이 정한 글 이동이다. 왜 옮기는지는 묶음마다 적어둔다.
 var PostMoves = []PostMove{
+	// 웹 프로그래밍 직속 글 열둘. 분류가 없어지므로 갈 곳을 정해준다.
+	//
+	// **입구 글 다섯은 같은 이름의 하위 분류로 내려보내고 그 분류의 표지로 삼는다**
+	// (Covers). école 42에서 쓴 방법과 같다 — 안 그러면 `서버 & API` 화면에
+	// `Django` 글과 `Django` 분류가 나란히 서서 같은 곳으로 가는 길이 두 벌이 된다.
+	{NotionPageID: "6c8d3a3f-d398-4029-ab5c-92388eb194d1", ToSlug: "django", Title: "Django"},
+	{NotionPageID: "4c00e9ea-5f92-4a36-b851-cd1c306aac52", ToSlug: "spring", Title: "Spring"},
+	{NotionPageID: "b253d89d-0d82-459d-94a7-27a7dad05036", ToSlug: "node-js", Title: "Node.js"},
+	{NotionPageID: "6f267d09-77fe-4cd9-aef5-2bdb47ba49de", ToSlug: "javascript", Title: "Javascript"},
+	{NotionPageID: "4d9af5a1-cd10-419b-8c89-17a8b40a93f7", ToSlug: "react", Title: "React"},
+
+	// 나머지 일곱은 제 분류가 없다. 성격대로 두 갈래에 직접 붙인다.
+	// 로그인·인증과 웹소켓은 서버가 하는 일이고, HTML & CSS는 화면 쪽이다.
+	{NotionPageID: "544a27a7-2c8e-42ff-9b37-59f86ebbdc69", ToSlug: "서버-api", Title: "Rest 프레임워크"},
+	{NotionPageID: "9713e08a-f32b-4953-a827-9a55c241b667", ToSlug: "서버-api", Title: "쿠키와 세션"},
+	{NotionPageID: "b1d6e4c4-d5ef-4f95-abc4-9bd87d471f94", ToSlug: "서버-api", Title: "인증과 인가"},
+	{NotionPageID: "902c6a9a-059e-4fe8-ada0-e0b28152f780", ToSlug: "서버-api", Title: "OAuth 인증"},
+	{NotionPageID: "2c7583ba-e6c0-41b7-9c4e-5d827f2a587d", ToSlug: "서버-api", Title: "2FA 인증"},
+	{NotionPageID: "c329efdd-d626-43dc-a779-e292ecdec402", ToSlug: "서버-api", Title: "웹소켓이란?"},
+	{NotionPageID: "1e7119a0-53e2-4267-877b-b64f4fd434a3", ToSlug: "클라이언트-ui", Title: "HTML & CSS"},
+
 	// 자기소개 한 편은 `소개` 분류에 직접 붙인다.
 	//
 	// 노션 최상위 페이지 `최인렬 (Inryeol Choi)`가 categorize를 거치면 같은 이름의
@@ -242,6 +276,53 @@ func ApplyPostMetadata(pageID, title string, createdAt *time.Time) (string, *tim
 	return edit.Title, &date, &order, nil
 }
 
+// StatusEdit는 사람이 status를 직접 정한 글이다.
+//
+// **status는 원래 덤프 분석이 정한다.** `notion-page-status.csv`가 블록 수를 보고
+// 5개 미만이면 draft, 아니면 unlisted를 준다. 그 어림짐작이 틀리는 자리가 있다 —
+// **본문은 짧지만 다른 글을 묶는 마디**가 그렇다. 공개 서버가 draft를 가리면
+// 그런 마디가 사라지면서 밑에 매달린 글이 통째로 평평해진다.
+//
+// 여기 적으면 CSV 위에 얹는다. DB를 손으로 고치면 다음 `import -db`가 CSV 값으로
+// 되돌리므로 안 된다 — BodyEdits와 같은 성질이다.
+type StatusEdit struct {
+	// NotionPageID는 status를 정할 글이다. posts의 멱등 키다.
+	NotionPageID string
+	// Status는 draft/unlisted/published 중 하나다.
+	Status string
+	Title  string // 사람이 읽으라고 적어두는 것. 대조에 쓰지 않는다.
+	Why    string
+}
+
+var StatusEdits = []StatusEdit{
+	// 빅데이터 분석기사의 두 마디. 본문이 48·52바이트뿐이라 덤프 분석이 draft로
+	// 봤지만, 실제로는 42편을 개념정리 23편과 실전문제 8편으로 나누는 층이다
+	// (2026-08-22에 postparent로 parent_id를 복원한 그 층이다). 가리면 표지 본문의
+	// 두 링크가 글자로 풀리고 자식 27편이 묶음을 잃는다.
+	{
+		NotionPageID: "250c89b8-b6c1-4353-ba0a-f68ef44f6e07",
+		Status:       "unlisted",
+		Title:        "개념정리",
+		Why:          "본문은 짧지만 빅데이터 분석기사 23편을 묶는 마디다. 가리면 자식이 평평해진다",
+	},
+	{
+		NotionPageID: "236908fd-251a-4f13-8520-d01eaa04e1f1",
+		Status:       "unlisted",
+		Title:        "실전문제",
+		Why:          "본문은 짧지만 빅데이터 분석기사 8편을 묶는 마디다. 가리면 자식이 평평해진다",
+	},
+}
+
+// ApplyStatus는 CSV가 준 status 위에 사람이 정한 값을 얹는다.
+func ApplyStatus(pageID, status string) string {
+	for _, e := range StatusEdits {
+		if e.NotionPageID == pageID {
+			return e.Status
+		}
+	}
+	return status
+}
+
 // DropCategory는 사람이 없애기로 한 카테고리다.
 //
 // 이 프로젝트는 글을 지우지 않지만 카테고리는 분류일 뿐이라 지울 수 있다.
@@ -265,6 +346,12 @@ var DropCategories = []DropCategory{
 	{
 		SourceName: "프로젝트",
 		Why:        "/project 밑에 같은 이름이라 프로젝트 > 프로젝트로 겹친다. 글은 PostMoves로 위로 올렸다",
+	},
+	{
+		SourceName: "웹 프로그래밍",
+		Why: "서버 & API와 클라이언트 & UI 두 갈래가 이 자리를 대신한다. 하위 분류 " +
+			"다섯은 Moves로 두 갈래에 나눠 붙였고, 직속 글 열셋은 PostMoves로 " +
+			"내려보내거나(입구 글은 같은 이름 분류의 표지로) 표지 한 편만 뺐다",
 	},
 	{
 		SourceName: "시스템 프로그래밍",
@@ -323,6 +410,14 @@ var Covers = []Cover{
 		Slug: "intro", NotionPageID: "1080901b-87f1-80d2-811a-eba467c2c160",
 		Why: "소개를 누르면 목록이 아니라 자기소개가 바로 나와야 한다",
 	},
+
+	// 웹 프로그래밍의 입구 글 다섯. PostMoves로 같은 이름의 하위 분류에 내려보내고
+	// 그 분류의 표지로 삼는다. 들어가면 입구 본문과 세부 글을 한 화면에서 본다.
+	{Slug: "django", NotionPageID: "6c8d3a3f-d398-4029-ab5c-92388eb194d1", Why: "Django 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
+	{Slug: "spring", NotionPageID: "4c00e9ea-5f92-4a36-b851-cd1c306aac52", Why: "Spring 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
+	{Slug: "node-js", NotionPageID: "b253d89d-0d82-459d-94a7-27a7dad05036", Why: "Node.js 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
+	{Slug: "javascript", NotionPageID: "6f267d09-77fe-4cd9-aef5-2bdb47ba49de", Why: "Javascript 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
+	{Slug: "react", NotionPageID: "4d9af5a1-cd10-419b-8c89-17a8b40a93f7", Why: "React 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
 
 	// 아래 열셋은 노션 2단계 페이지의 목차 글이다. 중간층이 없어지면서 각자 제
 	// 분류로 내려왔고(PostMoves), 그 분류의 표지로 삼는다.
@@ -569,6 +664,29 @@ var DropPosts = []DropPost{
 	{NotionPageID: "2c224d59-221f-4fdf-8428-998ff9c8df0d", Title: "(제목 없음)", Why: "컴퓨터 구조 : 이론 밑의 빈 페이지다"},
 	{NotionPageID: "b9a67d80-4be7-473f-a715-cd0b6310b520", Title: "(제목 없음)", Why: "컴퓨터 구조 : 이론 밑의 빈 페이지다"},
 	{NotionPageID: "dfd45512-9cf2-4e24-be50-2759963c7141", Title: "(제목 없음)", Why: "컴퓨터 구조 : 이론 밑의 빈 페이지다"},
+
+	// `R언어 : 시각화` 인라인 데이터베이스의 행 다섯 건. 전부 본문이 0바이트인
+	// draft다. 같은 내용을 실제로 쓴 글은 한 층 위의 `기본 시각화1`(고수준 함수),
+	// `기본 시각화2`(저수준 함수), `그래프 꾸미기`에 있어서 목록에 두 벌로 보였다.
+	// 다섯을 다 빼면 그 데이터베이스에 남는 행이 없어지므로 R 표지의 묶음 링크도
+	// BodyEdits로 함께 없앤다.
+	{NotionPageID: "d8902603-ff1f-4100-875f-e05b676dc864", Title: "ggplot", Why: "R언어 : 시각화 밑의 빈 껍데기(0바이트 draft)"},
+	{NotionPageID: "b8085cd9-6538-4bc8-9a05-e6321289b175", Title: "고수준 함수", Why: "R언어 : 시각화 밑의 빈 껍데기(0바이트 draft). 알맹이는 기본 시각화1에 있다"},
+	{NotionPageID: "63a80b68-62c5-45af-8efb-f9a2169732a6", Title: "저수준 함수", Why: "R언어 : 시각화 밑의 빈 껍데기(0바이트 draft). 알맹이는 기본 시각화2에 있다"},
+	{NotionPageID: "5ea820b2-d90b-4e85-bca1-c1e34049f428", Title: "그래프 그리기", Why: "R언어 : 시각화 밑의 빈 껍데기(0바이트 draft)"},
+	{NotionPageID: "2ad16805-6163-4314-a553-971ee01038c5", Title: "그래프 꾸미기", Why: "R언어 : 시각화 밑의 빈 껍데기(0바이트 draft). 같은 제목의 알맹이가 한 층 위에 따로 있다"},
+
+	// `파이썬 : 데이터 시각화` 인라인 데이터베이스의 제목 없는 행 세 건.
+	// 제목도 본문도 없어서 목록에서 `(제목 없음)`으로만 보이고 눌러도 볼 것이 없다.
+	// 같은 데이터베이스의 엑셀 글 네 건은 내용이 있어 그대로 둔다.
+	// 웹 프로그래밍 표지 글. 본문이 기초 이론 / 프레임워크 / 로그인 / 웹소켓
+	// 링크 목록과 내용 없는 `## 실전 프로젝트` 제목뿐이라, 그 목차가 하던 일을
+	// 서버 & API와 클라이언트 & UI 두 갈래가 그대로 대신한다.
+	{NotionPageID: "9e9d8b9b-cfe9-46cd-9b1c-9207e79dde46", Title: "웹 프로그래밍", Why: "두 갈래로 가르면서 이 목차 글이 할 일이 없어졌다"},
+
+	{NotionPageID: "02718d05-11b3-4c7a-9b29-f874cd586a98", Title: "(제목 없음)", Why: "파이썬 : 데이터 시각화 밑의 빈 페이지다"},
+	{NotionPageID: "540f7a7e-b96b-4713-9bc6-03f755a86583", Title: "(제목 없음)", Why: "파이썬 : 데이터 시각화 밑의 빈 페이지다"},
+	{NotionPageID: "c2c5b971-7a1a-4eee-a026-94a5bda068a2", Title: "(제목 없음)", Why: "파이썬 : 데이터 시각화 밑의 빈 페이지다"},
 }
 
 // Dropped는 이 글을 이관에서 빼야 하는지다.
@@ -648,6 +766,13 @@ var BodyEdits = []BodyEdit{
 		Remove:       "[Untitled](/p/1e8accad-7dac-4eb2-8da7-383a404b3ee5)",
 		Title:        "선형대수",
 		Why:          "이름 없는 인라인 데이터베이스라 눌러도 404다. 목록 맨 위에서 자리만 차지한다",
+	},
+	{
+		NotionPageID: "bd74e69e-56fa-4d0b-a4f5-4239749a8566",
+		Remove:       "[R언어 : 시각화](/p/54d12411-e657-465e-b236-7a5e41b9e3eb)",
+		Title:        "R",
+		Why: "그 데이터베이스의 행이던 다섯 건을 DropPosts로 뺐다. " +
+			"이제 눌러도 빈 목록이라 링크째 없앤다",
 	},
 	{
 		NotionPageID: "ad1ef256-4567-4b9f-b57e-6f16486d0606",

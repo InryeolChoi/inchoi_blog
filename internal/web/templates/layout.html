@@ -251,240 +251,20 @@
   .page-head { margin-bottom: 1.4rem; }
   .page-meta { font-size: .78rem; color: var(--ink-dim); margin: 0; }
 
-  /* ── 홈: 아카이브의 입구 ─────────────────────────────────────── */
-  /* 홈만은 읽기 화면이 아니라 탐색 화면이라 더 강한 시각 언어를 쓴다.
-     구조와 동작은 HTML(section/nav/ul/details/summary)이고, 아래 CSS는 빛·깊이·
-     움직임만 담당한다. 홈 전용 JavaScript는 없다. */
-  .home-hero {
-    --home-cyan: #55D8F5;
-    --home-blue: #5C8DFF;
-    --home-violet: #B887FF;
-    position: relative; isolation: isolate; overflow: hidden;
-    min-height: 31rem; padding: clamp(1.5rem, 4.5vw, 3.5rem);
-    display: flex; flex-direction: column; justify-content: space-between;
-    color: #F5FBFC; border: 1px solid rgba(109, 203, 231, .38);
-    border-radius: 1.2rem; corner-shape: squircle;
-    background:
-      radial-gradient(circle at 12% 4%, rgba(78, 210, 235, .28), transparent 32%),
-      radial-gradient(circle at 88% 82%, rgba(155, 105, 242, .24), transparent 36%),
-      linear-gradient(142deg, #07161D 0%, #0B2632 48%, #111927 100%);
-    box-shadow: 0 32px 80px -42px rgba(10, 61, 85, .86);
-  }
-  /* 움직이는 격자. 장식이라 HTML에는 내용이 없고 클릭을 받지 않는다. */
-  .home-hero::before {
-    content: ""; position: absolute; z-index: -2; inset: -45%; pointer-events: none;
-    background-image:
-      linear-gradient(rgba(126, 220, 242, .07) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(126, 220, 242, .07) 1px, transparent 1px);
-    background-size: 3.2rem 3.2rem;
-    transform: perspective(34rem) rotateX(58deg) rotateZ(-12deg) translateY(8%);
-    animation: home-grid-travel 22s linear infinite;
-    -webkit-mask-image: radial-gradient(circle at center, #000 0 42%, transparent 76%);
-    mask-image: radial-gradient(circle at center, #000 0 42%, transparent 76%);
-  }
-  .home-hero::after {
-    content: ""; position: absolute; z-index: -1; width: 28rem; aspect-ratio: 1;
-    right: -10rem; top: -12rem; border-radius: 50%; pointer-events: none;
-    background: conic-gradient(from 45deg, rgba(85, 216, 245, .34), rgba(92, 141, 255, .08), rgba(184, 135, 255, .31), rgba(85, 216, 245, .34));
-    filter: blur(3.5rem); animation: home-aurora 13s ease-in-out infinite alternate;
-  }
-  @keyframes home-grid-travel {
-    to { background-position: 3.2rem 3.2rem; }
-  }
-  @keyframes home-aurora {
-    0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(.9); opacity: .65; }
-    100% { transform: translate3d(-7rem, 7rem, 0) rotate(85deg) scale(1.25); opacity: 1; }
-  }
-
-  .home-hero-copy { position: relative; z-index: 2; max-width: 43rem; }
-  .home-kicker {
-    margin: 0 0 1.1rem; color: #8DDFF1;
-    font: 650 .72rem/1.4 var(--mono); letter-spacing: .19em;
-  }
+  /* ── 홈: 표제지 ─────────────────────────────────────────────── */
+  /* 홈은 활자만 쓴다. 배경도 테두리도 색면도 없고, 애니메이션도 없어서
+     prefers-reduced-motion에서 따로 멈출 것이 없다. 분야로 가는 길은
+     사이드바가 전담한다 — 홈이 같은 트리를 한 벌 더 그리지 않는다. */
+  .home-hero { padding: .5rem 0 2rem; }
+  .home-eyebrow { margin: 0 0 1.4rem; color: var(--ink-dim); font-size: .8rem; }
   .home-hero h1 {
-    margin: 0; max-width: 11ch; color: #F7FCFD;
-    font-size: clamp(2.35rem, 6.5vw, 4.65rem); line-height: 1.04;
-    letter-spacing: -.055em; text-wrap: balance;
-    text-shadow: 0 .15em .7em rgba(0, 0, 0, .22);
+    margin: 0; max-width: 19ch;
+    font-size: clamp(2rem, 5.2vw, 3.15rem); line-height: 1.22; font-weight: 600;
+    letter-spacing: -.035em; text-wrap: balance;
   }
-  .home-hero h1 em {
-    color: #80E5F8; font-style: normal;
-    background: linear-gradient(95deg, #8DE8F7 3%, #82B4FF 51%, #D2AEFF 96%);
-    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  }
-  .home-lead {
-    margin: 1.35rem 0 0; max-width: 39rem; color: rgba(229, 243, 246, .78);
-    font-size: clamp(.94rem, 2vw, 1.05rem); line-height: 1.8;
-  }
-  .home-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.55rem; }
-  .home-actions a {
-    display: inline-flex; align-items: center; gap: .65rem; padding: .68rem 1rem;
-    border-radius: .55rem; color: #F7FCFD; text-decoration: none; font-size: .88rem;
-    transition: transform .25s ease, border-color .25s ease, background-color .25s ease;
-  }
-  .home-action-primary {
-    background: linear-gradient(115deg, rgba(66, 187, 218, .36), rgba(102, 120, 235, .28));
-    border: 1px solid rgba(137, 224, 245, .55);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15);
-  }
-  .home-action-quiet { border: 1px solid rgba(219, 238, 243, .2); background: rgba(4, 19, 26, .28); }
-  .home-actions a:hover, .home-actions a:focus-visible { transform: translateY(-3px); border-color: #8DE8F7; }
-
-  .home-stats {
-    position: relative; z-index: 2; display: flex; flex-wrap: wrap; gap: 0;
-    width: fit-content; margin: 3.5rem 0 0; padding: .75rem 0;
-    border-top: 1px solid rgba(183, 225, 235, .18);
-    border-bottom: 1px solid rgba(183, 225, 235, .18);
-  }
-  .home-stats div { min-width: 6.8rem; padding: 0 1.15rem; border-right: 1px solid rgba(183, 225, 235, .18); }
-  .home-stats div:first-child { padding-left: 0; }
-  .home-stats div:last-child { border-right: 0; }
-  .home-stats dt { color: rgba(205, 231, 237, .58); font: 600 .65rem/1.2 var(--mono); letter-spacing: .13em; text-transform: uppercase; }
-  .home-stats dd { margin: .2rem 0 0; color: #F5FBFC; font: 650 1.25rem/1.2 var(--mono); }
-
-  .home-sky { position: absolute; z-index: 0; inset: 0; pointer-events: none; }
-  .home-sky span {
-    position: absolute; display: grid; place-items: center; width: 3.1rem; aspect-ratio: 1;
-    border-radius: 50%; color: rgba(213, 243, 249, .72); background: rgba(12, 49, 62, .58);
-    border: 1px solid rgba(125, 219, 241, .28); box-shadow: 0 0 2rem rgba(60, 188, 222, .12);
-    font: 600 .7rem/1 var(--mono); animation: home-node 6.5s ease-in-out infinite;
-  }
-  .home-sky span::after {
-    content: ""; position: absolute; left: 100%; top: 50%; width: 6.8rem; height: 1px;
-    transform-origin: left; background: linear-gradient(90deg, rgba(113, 212, 236, .3), transparent);
-  }
-  .home-sky span:nth-child(1) { right: 24%; top: 10%; animation-delay: -1s; }
-  .home-sky span:nth-child(1)::after { transform: rotate(34deg); }
-  .home-sky span:nth-child(2) { right: 7%; top: 31%; animation-delay: -3.2s; }
-  .home-sky span:nth-child(2)::after { transform: rotate(137deg); width: 9rem; }
-  .home-sky span:nth-child(3) { right: 29%; bottom: 23%; animation-delay: -5.3s; }
-  .home-sky span:nth-child(3)::after { transform: rotate(-22deg); }
-  .home-sky span:nth-child(4) { right: 10%; bottom: 9%; animation-delay: -2.1s; }
-  .home-sky span:nth-child(4)::after { transform: rotate(198deg); width: 8rem; }
-  .home-sky span:nth-child(5) { right: 42%; top: 39%; animation-delay: -4.4s; }
-  .home-sky span:nth-child(5)::after { transform: rotate(12deg); width: 8.5rem; }
-  .home-sky span:nth-child(6) { right: 3%; top: 7%; animation-delay: -.2s; }
-  .home-sky span:nth-child(6)::after { transform: rotate(96deg); width: 7rem; }
-  @keyframes home-node {
-    0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-.6rem) scale(1.06); }
-  }
-
-  .home-atlas, .home-routes { margin-top: clamp(3.2rem, 7vw, 5.5rem); scroll-margin-top: 1.5rem; }
-  .home-section-head {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end;
-    gap: .15rem 2rem; margin-bottom: 1.4rem;
-  }
-  .home-section-head p {
-    grid-column: 1 / -1; margin: 0 0 .35rem; color: var(--accent);
-    font: 650 .68rem/1.4 var(--mono); letter-spacing: .16em;
-  }
-  .home-section-head h2 { margin: 0; font-size: clamp(1.65rem, 4vw, 2.25rem); line-height: 1.2; }
-  .home-section-head > span { max-width: 25rem; color: var(--ink-dim); font-size: .86rem; text-align: right; }
-
-  .home-atlas-grid {
-    counter-reset: home-field; display: grid; grid-template-columns: 1fr; gap: .8rem;
-    list-style: none; margin: 0; padding: 0;
-  }
-  .home-field { counter-increment: home-field; --field-color: #55B7E8; min-width: 0; }
-  .home-field[data-home-field="intro"]     { --field-color: #77A8FF; }
-  .home-field[data-home-field="algorithm"] { --field-color: #E3A94A; }
-  .home-field[data-home-field="cs-theory"] { --field-color: #A58AF1; }
-  .home-field[data-home-field="dev"]       { --field-color: #45BDD5; }
-  .home-field[data-home-field="data-math"] { --field-color: #4DBF91; }
-  .home-field[data-home-field="project"]   { --field-color: #EF8B5E; }
-  .home-field[data-home-field="career"]    { --field-color: #D879A4; }
-  .home-field[data-home-field="life"]      { --field-color: #84979E; }
-  .home-field a {
-    position: relative; isolation: isolate; overflow: hidden; min-height: 10.5rem;
-    display: flex; flex-direction: column; gap: .9rem; padding: 1.15rem;
-    color: var(--ink); text-decoration: none; background: var(--surface);
-    background: linear-gradient(145deg, color-mix(in srgb, var(--field-color) 9%, var(--surface)), var(--bg) 72%);
-    border: 1px solid var(--line); border-radius: .7rem; corner-shape: squircle;
-    transition: transform .32s cubic-bezier(.2,.75,.25,1), border-color .25s ease, box-shadow .32s ease;
-  }
-  .home-field a::before {
-    content: ""; position: absolute; z-index: -1; inset: -75% -40%; pointer-events: none;
-    background: linear-gradient(105deg, transparent 42%, color-mix(in srgb, var(--field-color) 20%, transparent) 50%, transparent 58%);
-    transform: translateX(-45%) rotate(9deg); animation: home-card-light 10s ease-in-out infinite;
-  }
-  .home-field:nth-child(2n) a::before { animation-delay: -4.5s; }
-  .home-field:nth-child(3n) a::before { animation-delay: -7.2s; }
-  @keyframes home-card-light {
-    0%, 62% { transform: translateX(-45%) rotate(9deg); opacity: 0; }
-    70% { opacity: 1; }
-    86%, 100% { transform: translateX(48%) rotate(9deg); opacity: 0; }
-  }
-  .home-field a:hover, .home-field a:focus-visible {
-    transform: translateY(-6px) scale(1.012); border-color: var(--field-color);
-    box-shadow: 0 24px 42px -29px color-mix(in srgb, var(--field-color) 80%, #152C38);
-  }
-  .home-field-mark {
-    display: grid; place-items: center; width: 3.1rem; height: 3.1rem; color: var(--field-color);
-    background: color-mix(in srgb, var(--field-color) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--field-color) 42%, transparent);
-    border-radius: 50%; font: 700 .78rem/1 var(--mono); letter-spacing: -.04em;
-    transition: transform .35s cubic-bezier(.2,.8,.2,1), border-radius .35s ease;
-  }
-  .home-field a:hover .home-field-mark, .home-field a:focus-visible .home-field-mark {
-    transform: rotate(-8deg) scale(1.08); border-radius: .85rem;
-  }
-  .home-field-body { display: flex; flex-direction: column; gap: .15rem; }
-  .home-field-body strong { font-size: 1.05rem; letter-spacing: -.015em; }
-  .home-field-body > span { color: var(--ink-dim); font-size: .82rem; line-height: 1.55; }
-  .home-field-meta {
-    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-    margin-top: auto; padding-top: .65rem; border-top: 1px solid var(--line);
-    color: var(--ink-dim); font: 600 .67rem/1.2 var(--mono); letter-spacing: .06em;
-  }
-  .home-field-meta b { color: var(--field-color); font-size: 1rem; transition: transform .25s ease; }
-  .home-field a:hover .home-field-meta b { transform: translate(.2rem, -.2rem); }
-
-  .home-route-grid { display: grid; grid-template-columns: 1fr; gap: .8rem; }
-  .home-route {
-    margin: 0; padding: 0; overflow: hidden; background: var(--surface);
-    border: 1px solid var(--line); border-radius: .7rem; corner-shape: squircle;
-    transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease;
-  }
-  .home-route:hover, .home-route[open] { border-color: var(--rail); }
-  .home-route[open] { transform: translateY(-3px); box-shadow: 0 18px 34px -30px var(--card-shadow); }
-  .home-route summary {
-    position: relative; display: flex; flex-direction: column; gap: .22rem;
-    min-height: 9.8rem; padding: 1.1rem 3rem 1.15rem 1.1rem; cursor: pointer; list-style: none;
-    background: linear-gradient(145deg, var(--surface), var(--bg));
-  }
-  .home-route summary::-webkit-details-marker { display: none; }
-  .home-route summary::after {
-    content: "+"; position: absolute; right: 1.1rem; top: 1rem; color: var(--accent);
-    font: 300 1.5rem/1 var(--mono); transition: transform .25s ease;
-  }
-  .home-route[open] summary::after { transform: rotate(45deg); }
-  .home-route summary > span { color: var(--accent); font: 650 .65rem/1.3 var(--mono); letter-spacing: .15em; }
-  .home-route summary strong { margin-top: auto; font-size: 1rem; }
-  .home-route summary small { color: var(--ink-dim); font-size: .76rem; line-height: 1.5; }
-  .home-route nav { display: flex; flex-wrap: wrap; gap: .45rem; padding: .85rem 1rem 1rem; border-top: 1px solid var(--line); }
-  .home-route nav a {
-    padding: .27rem .58rem; color: var(--accent); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 999px; text-decoration: none; font-size: .78rem;
-  }
-  .home-route nav a:hover { border-color: var(--rail); background: var(--hover-bg); }
-
-  @media (min-width: 42rem) {
-    .home-atlas-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .home-route-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  }
-  @media (max-width: 41.99rem) {
-    .home-hero { min-height: 34rem; }
-    .home-sky { opacity: .45; }
-    .home-sky span:nth-child(5) { display: none; }
-    .home-section-head { grid-template-columns: 1fr; }
-    .home-section-head > span { text-align: left; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .home-hero::before, .home-hero::after, .home-sky span, .home-field a::before { animation: none; }
-    .home-actions a:hover, .home-actions a:focus-visible,
-    .home-field a:hover, .home-field a:focus-visible, .home-route[open] { transform: none; }
-  }
+  /* 둘째 줄만 힘을 빼서 한 문장이 두 박자로 읽히게 한다. 색을 더 쓰지 않는다. */
+  .home-hero h1 span { color: var(--ink-dim); font-weight: 400; }
+  .home-lead { margin: 1.2rem 0 0; max-width: 36rem; color: var(--ink-dim); font-size: .97rem; }
 
   .section-title {
     font-size: 1.05rem; margin: 2.2rem 0 .5rem; font-weight: 650;
@@ -968,13 +748,13 @@
     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/></svg>
     <span class="visually-hidden" data-i18n="openNav">분류 열기</span>
   </button>
-  <a class="brand" href="/">최인렬<span class="dot">.</span>기록</a>
+  <a class="brand" href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a>
 </header>
 <div class="scrim" id="scrim" hidden></div>
 
 <div class="shell">
   <aside class="side" id="side">
-    <p class="side-brand"><a href="/">최인렬<span class="dot">.</span>기록</a></p>
+    <p class="side-brand"><a href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a></p>
     <p class="side-sub" data-i18n="notes" data-count="{{.TotalPostsText}}">노트 {{.TotalPostsText}}편</p>
 
     <nav aria-label="분류" data-i18n-aria-label="categories">
@@ -1010,7 +790,7 @@
       </nav>
       {{end}}
       {{template "content" .}}
-      <footer class="page-foot" data-i18n="footer">읽기 전용 미리보기 · status 구분 없이 전부 노출 (뱃지는 draft만)</footer>
+      <footer class="page-foot" data-i18n="footer">읽기 전용 아카이브 · 작성 중인 글은 공개하지 않습니다</footer>
     </div>
   </main>
 </div>

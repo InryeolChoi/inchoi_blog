@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // 사이드바는 모든 페이지에 나온다. 어느 한 페이지에서만 나오면 탐색이 끊긴다.
@@ -89,32 +90,39 @@ func TestMarkNavHandlesEmptyTree(t *testing.T) {
 	}
 }
 
-// 홈은 소개 글이 아니라 최상위 분류로 들어가는 아카이브 허브다.
-func TestHomeIsArchiveHub(t *testing.T) {
+// 홈은 표제지 하나다. 분야로 가는 길은 모든 페이지에 있는 사이드바가 전담하므로
+// 홈이 같은 트리를 한 벌 더 그리지 않는다.
+func TestHomeIsTitlePage(t *testing.T) {
 	rec := get(t, testServer(t), "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("상태 코드 %d", rec.Code)
 	}
 	body := mainOf(t, rec.Body.String())
-	for _, want := range []string{
-		`id="home-title"`,
-		`href="/dev"`,
-		`<details class="home-route">`,
+	if !strings.Contains(body, `id="home-title"`) {
+		t.Errorf("표제지가 없다:\n%s", body)
+	}
+	// home.html이 두 섹션을 Go 템플릿 주석으로 재워뒀다. 주석이 화면으로 새면
+	// 지운 적 없는 것과 같고, `#archive-map`은 가리킬 섹션이 없어 죽은 앵커가 된다.
+	for _, gone := range []string{
+		`class="home-atlas"`,
+		`class="home-route"`,
+		`class="home-actions"`,
 		`id="archive-map"`,
 	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("홈 허브에 %q가 없다:\n%s", want, body)
+		if strings.Contains(body, gone) {
+			t.Errorf("주석으로 재워둔 %q가 홈에 나왔다:\n%s", gone, body)
 		}
 	}
-	if n := strings.Count(body, `<details class="home-route">`); n != 3 {
-		t.Errorf("HTML 기본 details 탐색 경로가 %d개다, want 3", n)
+	// 지도를 지운 근거가 이것이다 — 사이드바가 길을 들고 있어야 한다.
+	if !strings.Contains(sideOf(t, rec.Body.String()), `href="/dev"`) {
+		t.Errorf("홈에서 분야로 가는 길이 사라졌다:\n%s", rec.Body.String())
 	}
 	if strings.Contains(rec.Body.String(), `/static/home.js`) {
 		t.Error("홈 효과에 전용 JavaScript를 넣었다")
 	}
 }
 
-// 소개 표지 글은 /intro만 전담한다. 홈에는 소개로 가는 카드만 둔다.
+// 소개 표지 글은 /intro만 전담한다. 홈은 표제지뿐이라 본문을 옮겨 오지 않는다.
 func TestHomeKeepsIntroSeparate(t *testing.T) {
 	sqlDB := testDB(t)
 	exec := execer(t, sqlDB)
@@ -137,11 +145,53 @@ func TestHomeKeepsIntroSeparate(t *testing.T) {
 	if strings.Contains(body, "늘 우직하게 도전하는 개발자입니다.") {
 		t.Errorf("소개 본문이 홈에 중복됐다:\n%s", body)
 	}
-	if !strings.Contains(body, `href="/intro"`) {
-		t.Errorf("소개로 가는 링크가 없다:\n%s", body)
-	}
 	// 사이드바는 여전히 나와야 한다.
 	if !strings.Contains(sideOf(t, rec.Body.String()), `href="/intro"`) {
 		t.Errorf("홈에 사이드바가 없다:\n%s", rec.Body.String())
+	}
+}
+
+// TestEmptyNotionCategoryIsHiddenButHumanShelfStays는 draft를 가린 뒤 통째로 빈
+// 분류를 어떻게 다루는지 본다.
+//
+// 덤프가 만든 마디는 감춘다 — 목록에 `0`으로 남으면 눌러도 빈 화면인 막다른
+// 길이다. 사람이 세운 빈 선반(`source_name IS NULL`)은 앞으로 채울 자리라 남긴다.
+func TestEmptyNotionCategoryIsHiddenButHumanShelfStays(t *testing.T) {
+	sqlDB := testDB(t)
+	exec := execer(t, sqlDB)
+
+	exec(`INSERT INTO categories (id, name, slug, sort_order, source_name)
+	      VALUES (1, '개발', 'dev', 0, NULL)`)
+	// 노션에서 온 마디인데 밑의 글이 전부 draft다.
+	exec(`INSERT INTO categories (id, name, slug, parent_id, sort_order, source_name)
+	      VALUES (2, '빈 마디', 'empty-node', 1, 0, '빈 마디')`)
+	// 사람이 만든 빈 선반. 글이 아예 없다.
+	exec(`INSERT INTO categories (id, name, slug, sort_order, source_name)
+	      VALUES (3, '라이프', 'life', 1, NULL)`)
+
+	now := time.Now().UTC()
+	exec(`INSERT INTO posts (slug, title, body, status, source, category_id, sort_order, created_at, updated_at)
+	      VALUES ('d1', '초안', '본문', 'draft', 'notion', 2, 0, ?, ?)`, now, now)
+
+	srv, err := New(sqlDB)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	side := sideOf(t, get(t, srv.Handler(), "/").Body.String())
+
+	if strings.Contains(side, `href="/dev/empty-node"`) {
+		t.Errorf("글이 0이 된 노션 마디가 사이드바에 남았다:\n%s", side)
+	}
+	if !strings.Contains(side, `href="/life"`) {
+		t.Errorf("사람이 만든 빈 선반이 사라졌다:\n%s", side)
+	}
+
+	// -drafts를 켜면 그 마디가 돌아온다. 감춘 근거가 "보이는 글이 0"이기 때문이다.
+	srvDrafts, err := New(sqlDB, WithDrafts())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if side := sideOf(t, get(t, srvDrafts.Handler(), "/").Body.String()); !strings.Contains(side, `href="/dev/empty-node"`) {
+		t.Errorf("-drafts에서도 마디가 안 보인다:\n%s", side)
 	}
 }

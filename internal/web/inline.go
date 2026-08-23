@@ -34,6 +34,7 @@ type bodyFix struct {
 	Rows     int // 그렇게 드러난 글
 	Left     int // 짝을 못 찾아 그대로 둔 죽은 링크
 	Grouped  int // 낱개 링크를 묶어 만든 목록 상자
+	Unlinked int // 숨긴 글을 가리켜서 링크를 풀고 글자만 남긴 자리
 	// Shown은 본문 링크와 펼친 목록에 나온 글의 slug다. 카테고리 페이지의
 	// 목차와 아래 목록이 겹치는지 볼 때 쓴다.
 	Shown map[string]bool
@@ -47,15 +48,21 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 	if len(targets) == 0 {
 		return body, fix, nil
 	}
-	titles, err := s.store.PostTitlesBySlug(targets)
+	metas, err := s.store.PostSummariesBySlug(targets)
 	if err != nil {
 		return "", fix, err
 	}
+	// **숨긴 글을 가리키는 링크를 먼저 푼다.** 이 뒤의 모든 판정이 "링크가 아직
+	// 본문에 있는가"를 보기 때문에 순서가 중요하다 — 나중에 풀면 이미 Shown에
+	// 들어갔거나 상자로 묶인 뒤다.
+	body = s.unlinkHidden(body, metas, &fix)
+
 	// 살아 있는 글 링크는 그 자체로 본문에 이미 보이는 길이다. 표지 글의 목차가
 	// 이런 링크를 여러 개 직접 쌓아 만든 경우도 있어서, 인라인 DB로 펼친 행만
 	// 세면 아래 "글" 목록과의 중복을 놓친다.
 	for _, target := range targets {
-		if _, live := titles[target]; !live {
+		meta, live := metas[target]
+		if !live || meta.Hidden {
 			continue
 		}
 		if fix.Shown == nil {
@@ -69,7 +76,9 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 	var groups map[string][]PostSummary
 	hasDead := false
 	for _, t := range targets {
-		if _, ok := titles[t]; !ok {
+		// 숨긴 글은 이미 링크가 풀려서 본문에 남아 있지 않다. 인라인
+		// 데이터베이스 후보로 세면 안 된다.
+		if meta, ok := metas[t]; !ok || meta.Hidden {
 			hasDead = true
 			break
 		}
@@ -88,13 +97,22 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if m := postLinkPattern.FindStringSubmatch(trimmed); m != nil && m[0] == trimmed {
-			if _, live := titles[m[2]]; !live {
+			if _, live := metas[m[2]]; !live {
 				linkText := m[1]
 				rows, ok := groups[linkText]
 				if !ok || used[linkText] {
 					// 짝을 못 찾았다. 억지로 아무 목록이나 붙이면 남의 글이
 					// 섞여 들어간다. 그대로 두는 편이 낫다.
 					fix.Left++
+					continue
+				}
+				if len(rows) == 0 {
+					// 이름은 맞는데 펼칠 행이 하나도 안 남았다 — 그 목록의
+					// 글이 전부 숨긴 글이다. 링크로 두면 눌러서 404다.
+					// 글자는 그 절의 제목이라 남긴다.
+					lines[i] = unescapeLinkText(linkText)
+					used[linkText] = true
+					fix.Unlinked++
 					continue
 				}
 				used[linkText] = true
@@ -113,15 +131,47 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 			}
 		}
 		if n := strings.Count(line, placeholderLinkText); n > 0 {
-			lines[i] = fillPlaceholders(line, titles, &fix)
+			lines[i] = fillPlaceholders(line, metas, &fix)
 		}
 	}
 	// **묶기는 맨 마지막이다.** 자리표시자가 진짜 제목이 된 뒤라야 상자 안의
 	// 글자가 "페이지 링크"가 아니라 글 제목이 된다.
-	out, grouped := groupLinkRuns(strings.Join(lines, "\n"))
+	out, grouped := groupLinkRuns(strings.Join(lines, "\n"), metas)
 	fix.Grouped = grouped
 	return out, fix, nil
 }
+
+// unlinkHidden은 **숨긴 글을 가리키는 링크를 글자로 푼다.**
+//
+// draft는 `/p/{slug}`가 404다. 링크를 그대로 두면 눌러야 없는 줄 아는 길이 되고,
+// 줄째 지우면 문장이 끊긴다. 그래서 링크만 벗기고 글자는 남긴다 — 죽은 링크를
+// 렌더링 직전에만 손보고 DB의 body는 건드리지 않는다는 이 파일의 원칙 그대로다.
+//
+// **`[페이지 링크]` 자리표시자는 진짜 제목으로 바꿔서 남긴다.** 그냥 풀면
+// 본문에 "페이지 링크"라는 말이 글자로 드러난다. 제목은 metas가 들고 있다.
+func (s *Server) unlinkHidden(body string, metas map[string]PostSummary, fix *bodyFix) string {
+	return postLinkPattern.ReplaceAllStringFunc(body, func(match string) string {
+		m := postLinkPattern.FindStringSubmatch(match)
+		if m == nil {
+			return match
+		}
+		meta, ok := metas[m[2]]
+		if !ok || !meta.Hidden {
+			return match
+		}
+		fix.Unlinked++
+		if m[1] == placeholderLinkText && meta.Title != "" {
+			return meta.Title
+		}
+		return unescapeLinkText(m[1])
+	})
+}
+
+// unescapeLinkText는 링크 글자 자리의 이스케이프를 되돌린다. 링크를 풀어
+// 맨 글자로 내보낼 때 `\[`가 그대로 보이지 않게 한다(escapeLinkText의 반대).
+var linkTextUnescaper = strings.NewReplacer(`\[`, `[`, `\]`, `]`, `\\`, `\`)
+
+func unescapeLinkText(s string) string { return linkTextUnescaper.Replace(s) }
 
 // linkTargets는 본문에 나오는 /p/ 링크의 대상을 중복 없이 모은다.
 func linkTargets(body string) []string {
@@ -138,18 +188,18 @@ func linkTargets(body string) []string {
 
 // fillPlaceholders는 자리표시자 링크의 글자를 대상 글의 제목으로 바꾼다.
 // 대상이 posts에 없으면 손대지 않는다 — 바꿀 제목 자체가 없다.
-func fillPlaceholders(line string, titles map[string]string, fix *bodyFix) string {
+func fillPlaceholders(line string, metas map[string]PostSummary, fix *bodyFix) string {
 	return postLinkPattern.ReplaceAllStringFunc(line, func(match string) string {
 		m := postLinkPattern.FindStringSubmatch(match)
 		if m == nil || m[1] != placeholderLinkText {
 			return match
 		}
-		title, ok := titles[m[2]]
-		if !ok || title == "" {
+		meta, ok := metas[m[2]]
+		if !ok || meta.Title == "" {
 			return match
 		}
 		fix.Titled++
-		return "[" + escapeLinkText(title) + "](/p/" + m[2] + m[3] + ")"
+		return "[" + escapeLinkText(meta.Title) + "](/p/" + m[2] + m[3] + ")"
 	})
 }
 
@@ -214,6 +264,21 @@ func countRows(rows []PostSummary) int {
 	return n
 }
 
+// linkRow는 본문 링크 한 줄을 목록 한 줄로 만든다.
+//
+// **글자는 본문 것을 쓰고 나머지만 DB에서 가져온다.** 링크 글자는 사람이 그
+// 자리에 쓴 것이라 제목과 다를 수 있고(자리표시자는 이미 진짜 제목으로 바뀐
+// 뒤다), 작성일과 status는 본문에 아예 없다. 짝이 없으면 — 죽은 링크라 —
+// 날짜와 뱃지 없이 글자만 남는다. 상자를 못 만드는 것보다 낫다.
+func linkRow(slug, text string, metas map[string]PostSummary) PostSummary {
+	row := PostSummary{Slug: slug, Title: text}
+	if meta, ok := metas[slug]; ok {
+		row.Status = meta.Status
+		row.CreatedAt = meta.CreatedAt
+	}
+	return row
+}
+
 // standaloneLink는 제 문단을 통째로 차지한 글 링크다.
 var standaloneLink = regexp.MustCompile(`^\[([^\[\]]+)\]\(/p/([^)\s#]+)\)$`)
 
@@ -226,7 +291,7 @@ var standaloneLink = regexp.MustCompile(`^\[([^\[\]]+)\]\(/p/([^)\s#]+)\)$`)
 // **두 개 이상 이어질 때만 묶는다.** 하나짜리는 목록이 아니라 문장 사이의 링크다.
 // 문단 하나를 통째로 차지한 링크만 본다 — 목록 항목 안이나 문장 속 링크는 글자
 // 그대로 둔다(바깥 링크를 카드로 만드는 규칙과 같은 결이다).
-func groupLinkRuns(body string) (string, int) {
+func groupLinkRuns(body string, metas map[string]PostSummary) (string, int) {
 	lines := strings.Split(body, "\n")
 	var out []string
 	grouped := 0
@@ -243,7 +308,7 @@ func groupLinkRuns(body string) (string, int) {
 		for j < len(lines) {
 			t := strings.TrimSpace(lines[j])
 			if m := standaloneLink.FindStringSubmatch(t); m != nil {
-				rows = append(rows, PostSummary{Slug: m[2], Title: m[1]})
+				rows = append(rows, linkRow(m[2], m[1], metas))
 				j++
 				continue
 			}

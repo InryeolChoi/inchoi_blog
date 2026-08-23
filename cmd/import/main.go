@@ -611,7 +611,7 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 			Slug:              cp.pageID, // 지금은 페이지 ID 그대로. 나중에 제목 기반으로 다시 쓴다.
 			Title:             title,
 			Body:              cp.markdown,
-			Status:            m.Status,
+			Status:            curation.ApplyStatus(cp.pageID, m.Status),
 			Source:            "notion",
 			NotionPageID:      cp.pageID,
 			OriginalPath:      m.FullPath,

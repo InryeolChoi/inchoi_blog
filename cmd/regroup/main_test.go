@@ -10,9 +10,11 @@ import (
 func TestCuratedCategoryOrdersAndCareerMove(t *testing.T) {
 	wantApplied := []string{"탐색적 자료분석", "회귀분석", "다변량분석"}
 	wantCareer := []string{"취업 준비", "빅데이터 분석기사"}
-	wantDev := []string{"Language", "리눅스 & 쉘", "소프트스킬", "웹 프로그래밍", "모바일 프로그래밍"}
+	wantDev := []string{"Language", "리눅스 & 쉘", "소프트스킬"}
+	wantServer := []string{"Django", "Spring", "Node.js"}
+	wantClient := []string{"Javascript", "React", "모바일 프로그래밍"}
 
-	var gotApplied, gotCareer, gotDev []string
+	var gotApplied, gotCareer, gotDev, gotServer, gotClient []string
 	for _, group := range groups {
 		if group.slug == "career" {
 			gotCareer = group.members
@@ -21,8 +23,13 @@ func TestCuratedCategoryOrdersAndCareerMove(t *testing.T) {
 			gotDev = group.members
 		}
 		for _, sub := range group.subs {
-			if sub.slug == "수리통계-응용" {
+			switch sub.slug {
+			case "수리통계-응용":
 				gotApplied = sub.members
+			case "서버-api":
+				gotServer = sub.members
+			case "클라이언트-ui":
+				gotClient = sub.members
 			}
 		}
 	}
@@ -34,6 +41,14 @@ func TestCuratedCategoryOrdersAndCareerMove(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotDev, wantDev) {
 		t.Fatalf("개발 순서 = %v, 원한 값 %v", gotDev, wantDev)
+	}
+	// 웹 프로그래밍 77편을 배운 순서(Django → Spring)와 성격대로 두 갈래로 갈랐다.
+	// 3단계가 끝이라 웹 프로그래밍 밑에 한 층을 더 두는 길은 막혀 있다.
+	if !reflect.DeepEqual(gotServer, wantServer) {
+		t.Fatalf("서버 & API 순서 = %v, 원한 값 %v", gotServer, wantServer)
+	}
+	if !reflect.DeepEqual(gotClient, wantClient) {
+		t.Fatalf("클라이언트 & UI 순서 = %v, 원한 값 %v", gotClient, wantClient)
 	}
 
 	for _, move := range curation.Moves {
