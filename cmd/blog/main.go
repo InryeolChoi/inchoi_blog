@@ -9,6 +9,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/inryeol/blog"
 	"github.com/inryeol/blog/internal/db"
@@ -48,7 +49,33 @@ func main() {
 
 	log.Printf("http://%s 에서 대기 중 (db: %s, draft %s)",
 		*addr, *dbPath, map[bool]string{true: "보임", false: "가림"}[*drafts])
-	if err := http.ListenAndServe(*addr, srv.Handler()); err != nil {
+	if err := httpServer(*addr, srv.Handler()).ListenAndServe(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// httpServer는 타임아웃을 건 서버를 만든다.
+//
+// **http.ListenAndServe의 기본값은 "무제한"이다.** 연결을 열어놓고 요청을
+// 끝내지 않는 클라이언트가 고루틴과 파일 디스크립터를 계속 물고 있어서,
+// 공개 주소에 그대로 두면 느린 연결 몇 개로 서버가 멎는다. 인증이 없는
+// 읽기 전용 서버라 더 그렇다.
+//
+// 값은 이 서버가 실제로 하는 일에서 나왔다:
+//   - 헤더 5초, 본문 15초 — GET뿐이라 받을 것이 사실상 헤더밖에 없다.
+//   - 쓰기 60초 — 가장 큰 응답이 3.4MB짜리 이미지 BLOB이다. 60초면
+//     57KB/s에서도 끝난다. 짧게 잡으면 느린 회선에서 그림이 잘린다.
+//   - 유휴 60초 — keep-alive 연결을 그보다 오래 붙들지 않는다.
+func httpServer(addr string, h http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		// 기본값(1MB)보다 좁힌다. 이 서버의 정상 요청에는 쿠키도 인증
+		// 헤더도 없어서 몇 KB를 넘길 이유가 없다.
+		MaxHeaderBytes: 64 << 10,
 	}
 }

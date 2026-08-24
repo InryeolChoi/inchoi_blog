@@ -237,7 +237,7 @@
   /* 글줄은 읽기 좋은 폭에서 멈춘다. 넘쳐도 되는 것(코드·표·수식)만
      남은 폭을 쓴다 — 그것들은 줄바꿈이 아니라 스크롤로 감당하는 것이라
      넓을수록 읽기 쉽다. */
-  .trail, .page-head, .toc, .list, .page-foot, .pagelinks,
+  .trail, .page-head, .toc, .list, .page-foot, .pagelinks, .errpage,
   article > p, article > ul, article > ol, article > blockquote,
   article > h1, article > h2, article > h3, article > h4, article > h5, article > h6,
   article > hr, article > details, article > .extcard, article > .inline-db,
@@ -265,6 +265,23 @@
   /* 둘째 줄만 힘을 빼서 한 문장이 두 박자로 읽히게 한다. 색을 더 쓰지 않는다. */
   .home-hero h1 span { color: var(--ink-dim); font-weight: 400; }
   .home-lead { margin: 1.2rem 0 0; max-width: 36rem; color: var(--ink-dim); font-size: .97rem; }
+
+  /* ── 404 · 500 ──────────────────────────────────────────────── */
+  /* 없는 길을 알려주는 화면이 사이트에서 가장 화려하면 안 된다. 홈 표제지와
+     같은 활자만 쓰고, 다른 길은 사이드바가 이미 들고 있으므로 여기서 다시
+     늘어놓지 않는다. 새 토큰도 애니메이션도 없다. */
+  .errpage { padding: .5rem 0 2rem; }
+  .errpage-code {
+    margin: 0 0 1.2rem; color: var(--ink-dim);
+    font-size: .8rem; font-variant-numeric: tabular-nums; letter-spacing: .08em;
+  }
+  .errpage h1 {
+    margin: 0; max-width: 19ch;
+    font-size: clamp(1.7rem, 4.4vw, 2.5rem); line-height: 1.25; font-weight: 600;
+    letter-spacing: -.03em; text-wrap: balance;
+  }
+  .errpage-lead { margin: 1.1rem 0 0; max-width: 34rem; color: var(--ink-dim); font-size: .97rem; }
+  .errpage-back { margin: 1.8rem 0 0; font-size: .92rem; }
 
   .section-title {
     font-size: 1.05rem; margin: 2.2rem 0 .5rem; font-weight: 650;

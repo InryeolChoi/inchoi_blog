@@ -1,0 +1,11 @@
+{{define "content"}}
+{{/* 404·500 화면. 홈 표제지와 같은 자리에 같은 활자만 쓴다 — 없는 길을
+     알려주는 화면이 사이트에서 가장 화려하면 안 된다. 사이드바는 layout이
+     이미 그리므로, 여기서 "다른 길"을 따로 나열하지 않는다. */}}
+<section class="errpage" aria-labelledby="err-title">
+  <p class="errpage-code">{{.Err.Code}}</p>
+  <h1 id="err-title" data-i18n="{{.Err.TitleKey}}">{{.Err.Title}}</h1>
+  <p class="errpage-lead" data-i18n="{{.Err.LeadKey}}">{{.Err.Lead}}</p>
+  <p class="errpage-back"><a href="/" data-i18n="backHome">홈으로 돌아가기</a></p>
+</section>
+{{end}}

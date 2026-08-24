@@ -37,7 +37,7 @@ type Server struct {
 }
 
 // pageTemplates는 layout과 함께 묶을 페이지 템플릿 목록이다.
-var pageTemplates = []string{"home.html", "index.html", "category.html", "post.html"}
+var pageTemplates = []string{"home.html", "index.html", "category.html", "post.html", "error.html"}
 
 // New는 서버를 만든다. 템플릿은 바이너리에 박혀 있으므로 여기서 한 번만 파싱한다.
 //
@@ -89,7 +89,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{l1}", s.handleCategory)
 	mux.HandleFunc("GET /{l1}/{l2}", s.handleCategory)
 	mux.HandleFunc("GET /{l1}/{l2}/{l3}", s.handleCategory)
-	return mux
+	// 네 단계 이상처럼 어느 패턴에도 안 걸리는 경로를 받는다. 이게 없으면
+	// ServeMux가 기본 404(글자 한 줄)를 돌려줘서, 같은 사이트인데 없는 길을
+	// 알려주는 화면이 두 가지가 된다.
+	mux.HandleFunc("GET /", s.handleNotFound)
+	// panic이 프로세스를 죽이거나 연결만 끊고 끝나지 않게 감싼다 (recover.go).
+	return s.recovering(mux)
+}
+
+// handleNotFound는 어느 라우트에도 안 걸린 경로를 받는다.
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	s.notFound(w, r)
 }
 
 // Crumb는 상단 경로에 찍을 링크 한 칸이다.
@@ -131,6 +141,8 @@ type pageData struct {
 	Deck []DeckCard
 	// Links는 이 화면에서 아카이브 바깥으로 나가는 링크다 (links.go).
 	Links []SiteLink
+	// Err은 404·500 화면에만 채워진다 (errorpage.go).
+	Err *errorInfo
 }
 
 // TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
@@ -167,15 +179,15 @@ func crumbs(trail []Category) ([]Crumb, string) {
 
 // render는 페이지 하나를 그린다. 사이드바는 모든 페이지에 나오므로 여기서
 // 한 번에 채운다 — 핸들러마다 잊지 않고 넣게 하는 것보다 안전하다.
-func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data pageData) {
 	t, ok := s.pages[name]
 	if !ok {
-		s.fail(w, fmt.Errorf("템플릿이 없다: %s", name))
+		s.fail(w, r, fmt.Errorf("템플릿이 없다: %s", name))
 		return
 	}
 	nav, err := s.store.NavTree()
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	markNav(nav, data.openCats, data.activeCat)
@@ -265,11 +277,6 @@ func (s *Server) renderCategoryCoverBody(post *Post) (renderedBody, error) {
 	return renderedBody{HTML: beforeHTML, AfterPosts: afterHTML, fix: fix}, nil
 }
 
-func (s *Server) fail(w http.ResponseWriter, err error) {
-	fmt.Printf("요청 처리 실패: %v\n", err)
-	http.Error(w, "internal error", http.StatusInternalServerError)
-}
-
 // handleIndex는 아카이브의 탐색 허브다.
 //
 // 자기소개는 /intro가 전담한다. 홈까지 같은 글을 펼치면 사이드바의 "홈"과
@@ -278,10 +285,10 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	categories, err := s.store.TopCategories()
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	s.render(w, "home.html", pageData{
+	s.render(w, r, "home.html", pageData{
 		Title:      "열렬히.뛰기",
 		Categories: categories,
 		HomeActive: true,
@@ -303,11 +310,11 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	for _, slug := range slugs {
 		cat, err := s.store.CategoryBySlug(slug, parentID)
 		if err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		if cat == nil {
-			http.NotFound(w, r)
+			s.notFound(w, r)
 			return
 		}
 		trail = append(trail, *cat)
@@ -317,12 +324,12 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	current := trail[len(trail)-1]
 	children, err := s.store.ChildCategories(current.ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	posts, err := s.store.PostsInCategory(current.ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	crumbList, basePath := crumbs(trail)
@@ -334,12 +341,12 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	if current.CoverPostSlug != "" && !listOnlyCategory(current.Slug) {
 		coverPost, err = s.store.PostBySlug(current.CoverPostSlug)
 		if err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		if coverPost != nil {
 			if cover, err = s.renderCategoryCoverBody(coverPost); err != nil {
-				s.fail(w, err)
+				s.fail(w, r, err)
 				return
 			}
 			// 표지 본문의 글 링크가 같은 이름의 하위 분류 표지라면 분류 링크로
@@ -350,7 +357,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 			// 다시 보여주지 않는다. 상단 목차가 그 갈래의 입구다.
 			posts = dropShownPostTrees(posts, cover.fix.Shown)
 			if children, err = s.dropCoveredChildren(children, cover.fix.Shown); err != nil {
-				s.fail(w, err)
+				s.fail(w, r, err)
 				return
 			}
 		}
@@ -359,10 +366,10 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	open, active := openTrail(trail)
 	deck, err := s.deckFor(current.Slug, basePath, children)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	s.render(w, "category.html", pageData{
+	s.render(w, r, "category.html", pageData{
 		Title:      current.Name,
 		Deck:       deck,
 		Trail:      crumbList,
@@ -479,17 +486,17 @@ func (s *Server) dropCoveredChildren(children []Category, shown map[string]bool)
 func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	post, err := s.store.PostBySlug(r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if post == nil {
-		http.NotFound(w, r)
+		s.notFound(w, r)
 		return
 	}
 
 	rendered, err := s.renderPostBody(post)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 
@@ -506,7 +513,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// 글을 열면 사이드바에서 그 글이 속한 분류가 펼쳐져 있어야 한다.
 	open, active := openTrail(post.Trail)
-	s.render(w, "post.html", pageData{
+	s.render(w, r, "post.html", pageData{
 		Title:     post.Title,
 		Trail:     crumbList,
 		Post:      post,
@@ -606,7 +613,7 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
 
 	img, err := s.store.ImageBySHA256(sha)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if img == nil {

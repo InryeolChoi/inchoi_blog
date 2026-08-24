@@ -1,0 +1,53 @@
+# /etc/systemd/system/blog.service
+#
+# 배포물은 바이너리 하나와 SQLite 파일 하나다. 리버스 프록시도 컨테이너도
+# 없다 — e2-micro(1GB)에서 프로세스를 하나라도 덜 띄우는 편이 낫다.
+[Unit]
+Description=열렬히.뛰기 (blog)
+Documentation=https://github.com/inryeol/blog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=blog
+Group=blog
+
+# -drafts를 **절대 붙이지 않는다.** 붙이면 작성 중인 글 366편이 그대로 공개된다.
+# 기본값이 "가린다"라서 아무것도 안 쓰는 것이 맞다.
+ExecStart=/opt/blog/blog -db /var/lib/blog/blog.db -addr 0.0.0.0:80
+
+Restart=always
+RestartSec=2s
+
+# 80번은 특권 포트다. root로 돌리는 대신 이 능력 하나만 준다.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+# 파일시스템은 DB가 있는 곳만 쓸 수 있다. 마이그레이션과 SQLite 저널이
+# 쓰기를 하므로 디렉토리째 열어야 한다(파일 하나만으로는 저널을 못 만든다).
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/blog
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+# AF_UNIX까지 여는 이유: 막아두면 표준 라이브러리가 소켓을 여는
+# 어느 경로에서 조용히 실패할 때 원인을 찾기가 아주 어렵다.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# 1GB짜리 기계다. 여기서 새면 SSH까지 같이 죽는다.
+MemoryHigh=384M
+MemoryMax=512M
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
