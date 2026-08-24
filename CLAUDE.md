@@ -606,8 +606,47 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
 - 인증은 서비스 계정 키(`GCP_SA_KEY` Secret) + OS Login + IAP 터널이다.
   22번을 0.0.0.0/0에 여는 대신 `allow-iap-ssh`(35.235.240.0/20)만 쓴다.
 
+### 밖에서 닿는 곳 (2026-08-24 점검)
+
+**열린 포트는 80(블로그)과 22(SSH) 둘뿐이다.** 실제로 듣고 있는 것도 그 둘이다.
+
+| 규칙 | 허용 | 출처 | 대상 태그 |
+|---|---|---|---|
+| `allow-iap-ssh` | tcp:22 | 35.235.240.0/20 | — |
+| `default-allow-http` | tcp:80 | 0.0.0.0/0 | `http-server` |
+| `default-allow-https` | tcp:443 | 0.0.0.0/0 | `https-server` |
+| `default-allow-icmp` | icmp | 0.0.0.0/0 | — |
+| `default-allow-internal` | tcp/udp 전체, icmp | 10.128.0.0/9 | — |
+| `default-allow-ssh` | tcp:22 | 0.0.0.0/0 | — |
+
+- **`test-jupyter`·`test-rstudio`·`test-vscode-server`·`test-http`와
+  `default-allow-rdp`를 없앴다.** 전부 0.0.0.0/0인데 그 포트에 듣는 것이
+  없었다. `test-http`가 80/443을 겸해 열고 있었지만 `default-allow-http`가
+  `http-server` 태그로 같은 포트를 열고 인스턴스에 그 태그가 있어서 영향이 없다.
+  **인스턴스는 `playground` 하나뿐이라** 대상 태그 없는 규칙을 지워도 다른
+  기계가 딸려 죽지 않는다.
+- **`default-allow-ssh`(22, 0.0.0.0/0)는 일부러 남겼다.** 지우면
+  `--tunnel-through-iap` 말고는 들어갈 길이 없어진다. 배포는 이미 IAP를 쓰므로
+  익숙해지면 지워도 된다.
+- SSH는 **키 전용**이고(`passwordauthentication no`) 어느 계정에도
+  `authorized_keys`가 없다 — 접근이 전부 메타데이터/OS Login을 거쳐 IAM으로
+  통제된다. `unattended-upgrades`는 active다.
+
+**공개된 글에 자격증명이 없다는 것을 전수로 확인했다.** 990편의 body에서 AWS
+키·GitHub 토큰·OpenAI 키·Notion 토큰·Slack 토큰·개인키 블록·Google API 키·JWT·
+DB 접속 문자열을 정규식으로 찾아 **0건**이다. `password=` 5건이 걸리지만 전부
+튜토리얼 예시값이다(`your_password`, `admin_password`, 도커 컴포즈 예제 등).
+**노션에서 옮겨온 글이 늘면 다시 돌려볼 것** — 학습 노트라 언제든 섞일 수 있다.
+
+- **`/img/{sha256}`는 어느 글이 그 그림을 쓰는지 보지 않는다.** 그래서 draft만
+  쓰는 이미지도 해시를 알면 받아진다. 현재 445개 중 1개가 그렇고(`OPTIONS` 글의
+  PNG) 1개는 아무 글도 안 쓴다. 그 해시는 어느 공개 페이지에도 안 나오므로
+  사실상 닿을 수 없어 그냥 뒀다. **draft를 더 가려야 할 일이 생기면 여기가
+  마지막 구멍이다.**
+
 **아직 안 한 것:** HTTPS(도메인을 정하면 Caddy를 앞에 둔다), DB 백업,
-robots.txt/sitemap.xml, 0.0.0.0/0으로 열린 옛 `test-*` 방화벽 규칙 정리.
+robots.txt/sitemap.xml, 속도 제한(HTTPS를 붙이며 Caddy에서 같이 하면 된다),
+배포 키를 Workload Identity Federation으로 옮기기.
 
 ## 마이그레이션
 
@@ -1478,6 +1517,9 @@ $$
 
 **2026-08-24에 한 것**
 
+- **밖에서 닿는 곳을 80과 22로 줄였다.** 껍데기만 남은 방화벽 규칙 5개를
+  없애고, 공개된 글 990편에 자격증명이 없다는 것을 전수로 확인했다.
+  위 "밖에서 닿는 곳" 절 참고.
 - **첫 배포를 했다.** `http://35.230.119.252`. 공개 1,078페이지 전부 200,
   draft 366편 전부 404, 홈·`/dev`·`/intro`·`/data-math`가 로컬 렌더링과
   바이트까지 같은 것을 확인했다. **한 번 틀렸다** — WAL을 checkpoint하지 않고
