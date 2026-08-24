@@ -111,23 +111,52 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
 # 로컬 blog.db가 최신인지 먼저 확인한다 (파이프라인을 두 바퀴 돌려 0건)
 go test ./...
 
+# ① 이 DB는 WAL 모드다. 최근 변경이 blog.db-wal에만 있을 수 있으므로
+#    반드시 checkpoint부터 한다. 서버가 떠 있으면 먼저 끈다.
+sqlite3 blog.db "pragma wal_checkpoint(truncate);"   # 0|0|0 이 나와야 한다
+ls -l blog.db-wal                                    # 0 바이트여야 한다
+
+# ② 파일 해시가 아니라 **내용**을 적어둔다 (아래 "왜 해시로 확인하면 안 되나")
+sqlite3 blog.db "select id||'|'||slug||'|'||status from posts order by id" | shasum -a 256
+sqlite3 blog.db "select id||'|'||slug||'|'||coalesce(parent_id,-1) from categories order by id" | shasum -a 256
+
+# ③ 올린다
 gcloud compute scp blog.db playground:/tmp/blog.db \
   --zone=us-west1-a --project=statcode --tunnel-through-iap
 
 gcloud compute ssh playground --zone=us-west1-a --project=statcode \
   --tunnel-through-iap --command='set -eux
-    sudo systemctl stop blog || true
+    sudo systemctl stop blog
+    sudo cp -a /var/lib/blog/blog.db /var/lib/blog/blog.db.prev
+    sudo rm -f /var/lib/blog/blog.db-wal /var/lib/blog/blog.db-shm
     sudo install -o blog -g blog -m 0644 /tmp/blog.db /var/lib/blog/blog.db
     rm -f /tmp/blog.db
-    sudo systemctl start blog || true'
+    sudo systemctl start blog'
 ```
 
-79MB라 IAP 터널로 몇 분 걸린다.
-
 - **서버를 멈추고 바꾼다.** 도는 중에 갈아끼우면 열려 있던 커넥션이 옛 파일을
-  들고 있다.
-- **WAL 파일이 생겼다면 같이 챙겨야 한다.** 지금은 저널 모드가 기본값이라
-  `blog.db` 하나면 되지만, 나중에 WAL로 바꾸면 `-wal`/`-shm`도 함께 봐야 한다.
+  들고 있고, 남은 `-wal`이 새 본체와 짝이 안 맞는다.
+- **옛 `-wal`/`-shm`을 반드시 지운다.** 본체만 갈아끼우고 남겨두면 SQLite가
+  다른 DB의 WAL을 새 본체에 얹으려 든다.
+
+#### WAL 때문에 실제로 한 번 틀렸다 (2026-08-24, 첫 배포)
+
+첫 배포에서 **2026-08-23 이전 구조의 DB가 올라갔다.** 사이트가 `웹 프로그래밍`을
+보여주고 사이드바 글 수가 990이 아니라 988이었다.
+
+- `blog.db`는 **WAL 모드**고, 그날의 변경(`서버 & API` / `클라이언트 & UI` 분리)이
+  아직 `blog.db-wal`에 있었다. scp는 `blog.db` 본체만 가져가므로 **옛 내용이
+  올라갔다.**
+- **그런데 sha256은 맞아떨어졌다.** 양쪽 다 본체만 해싱했기 때문이다. 그 뒤에
+  로컬에서 서버를 한 번 띄우자 SQLite가 WAL을 checkpoint하면서 본체가 바뀌었고,
+  그제서야 해시가 갈라졌다.
+- **그래서 파일 해시로 "같은 DB냐"를 판정하면 안 된다.** 열기만 해도 바뀌고,
+  달라야 할 때 같게 나온다. 위 ②처럼 **행을 뽑아 해싱**하거나, 가장 확실하게는
+  올린 뒤 화면을 로컬과 비교한다:
+
+```sh
+diff <(curl -s http://127.0.0.1:8080/) <(curl -s http://35.230.119.252/)
+```
 
 ---
 
