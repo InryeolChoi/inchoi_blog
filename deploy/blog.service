@@ -13,8 +13,10 @@ Type=simple
 User=blog
 Group=blog
 
-# -drafts를 **절대 붙이지 않는다.** 붙이면 작성 중인 글 366편이 그대로 공개된다.
-# 기본값이 "가린다"라서 아무것도 안 쓰는 것이 맞다.
+# -drafts와 -admin을 **절대 붙이지 않는다.**
+#   -drafts  작성 중인 글 366편이 그대로 공개된다.
+#   -admin   **인증이 없는** 글쓰기 화면이 공개 주소에 열린다(로드맵 2단계 전).
+# 둘 다 기본값이 "안 한다"라서 아무것도 안 쓰는 것이 맞다.
 ExecStart=/opt/blog/blog -db /var/lib/blog/blog.db -addr 0.0.0.0:80
 
 Restart=always

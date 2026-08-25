@@ -18,7 +18,195 @@
     } catch (_) {}
   })();
 </script>
-<style>
+<style>{{template "sitecss" .}}</style>
+{{/* CDN에서 받는 것은 **그 페이지에 필요할 때만** 받는다. 무엇이 필요한지는
+     본문 HTML을 보고 정한다(internal/web/assets.go). 수식이 있는 글은 1408편 중
+     297편뿐인데 예전에는 모든 페이지가 스타일시트와 스크립트를 네 개씩 받았다.
+
+     CDN에 무결성 해시를 걸어둔다. 파일이 바뀌면 브라우저가 실행을 거부한다.
+     버전을 올릴 때 해시도 같이 바꿔야 한다 — 안 그러면 조용히 안 뜬다. */}}
+{{if .Assets.Math}}
+{{/* 수식은 브라우저에서 그린다. 변환기와 goldmark 확장은 원문 LaTeX를
+     .math 안에 넣어두기만 한다(internal/markdown/math.go). */}}
+{{template "katex-cdn" .}}
+<script defer src="/static/math.js"></script>
+{{end}}
+{{if .Assets.Code}}
+{{/* 코드 하이라이팅. 본문의 <pre><code class="language-xxx">를 색칠한다.
+     common 묶음이 40여 개 언어를 담고 있어 python·c·r·bash·java 등 큰 것들을
+     덮는다. 거기 없는 것만 그 언어가 실제로 나올 때 따로 받는다. */}}
+{{template "hljs-cdn" .}}
+{{if .Assets.Lang "latex"}}
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/latex.min.js"
+        integrity="sha384-wHW9Hcxw0oenHF2z8fGo1rhAe1jZwnp35Z6xzC29Vj/O+toSfBY9+7TrUfUnwFMD"
+        crossorigin="anonymous"></script>
+{{end}}
+{{if .Assets.Lang "dockerfile"}}
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/dockerfile.min.js"
+        integrity="sha384-/zu1pI8+9j/v/qNlCRRyidiBhGdxfvGwOLXEPBXpKc77eFNUAhccr0WglEQ+x9La"
+        crossorigin="anonymous"></script>
+{{end}}
+{{if .Assets.Lang "powershell"}}
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/powershell.min.js"
+        integrity="sha384-jigawbLJjSW9uklht6/lvMBC7b00t25Id0RQW+qORcsF6B+LARvlTLfzyIaNolYG"
+        crossorigin="anonymous"></script>
+{{end}}
+<script defer src="/static/highlight-init.js"></script>
+{{end}}
+{{if .Assets.YouTube}}
+{{/* 눌렀을 때 그 자리에서 유튜브 플레이어를 켠다. 못 떠도 원래대로 유튜브로
+     가는 링크라 빈 자리가 되지 않는다. */}}
+<script defer src="/static/youtube.js"></script>
+{{end}}
+{{if .Deck}}
+{{/* 갈래 카드가 포인터를 따라 기울게 한다. 못 떠도 CSS만으로 hover 기울기와
+     아이콘 떠 있기는 그대로 동작한다. */}}
+<script defer src="/static/deck.js"></script>
+{{end}}
+{{/* 사이드바 아코디언과 좁은 화면의 서랍. 스크립트가 못 떠도 지금 보고 있는
+     곳까지는 서버가 이미 펼쳐서 보내므로 길이 막히지는 않는다. */}}
+<script defer src="/static/sidebar.js"></script>
+<script defer src="/static/preferences.js"></script>
+</head>
+<body>
+<a class="skip" href="#main" data-i18n="skip">본문으로 건너뛰기</a>
+
+<header class="topbar">
+  <button type="button" class="burger" id="burger" aria-expanded="false" aria-controls="side">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/></svg>
+    <span class="visually-hidden" data-i18n="openNav">분류 열기</span>
+  </button>
+  <a class="brand" href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a>
+</header>
+<div class="scrim" id="scrim" hidden></div>
+
+<div class="shell">
+  <aside class="side" id="side">
+    <p class="side-brand"><a href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a></p>
+    <p class="side-sub" data-i18n="notes" data-count="{{.TotalPostsText}}">노트 {{.TotalPostsText}}편</p>
+
+    <nav aria-label="분류" data-i18n-aria-label="categories">
+      <ul class="nav-list">
+        <li class="nav-item">
+          <div class="nav-row">
+            <span class="nav-twist-empty" aria-hidden="true"></span>
+            <a class="nav-link" href="/"{{if .HomeActive}} aria-current="page"{{end}}><span class="nav-name" data-i18n="home">홈</span></a>
+          </div>
+        </li>
+      </ul>
+      {{template "navtree" .Nav}}
+    </nav>
+
+    <div class="side-foot">
+      <a href="https://github.com/InryeolChoi" rel="noreferrer">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.14.46.55.38A8 8 0 0 0 8 0z"/></svg>
+        GitHub
+      </a>
+      <a href="https://inryeolchoi.github.io" rel="noreferrer">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm5.9 7H11.6c-.1-1.8-.5-3.4-1.1-4.5A6.5 6.5 0 0 1 13.9 7zM8 1.5c.8 0 1.8 2 2 5.5H6c.2-3.5 1.2-5.5 2-5.5zM2.1 7a6.5 6.5 0 0 1 3.4-4.5C4.9 3.6 4.5 5.2 4.4 7H2.1zm0 2h2.3c.1 1.8.5 3.4 1.1 4.5A6.5 6.5 0 0 1 2.1 9zM8 14.5c-.8 0-1.8-2-2-5.5h4c-.2 3.5-1.2 5.5-2 5.5zm2.5-1a10.9 10.9 0 0 0 1.1-4.5h2.3a6.5 6.5 0 0 1-3.4 4.5z"/></svg>
+        Pages
+      </a>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="wrap">
+      {{with .Trail}}
+      <nav class="trail" aria-label="현재 위치" data-i18n-aria-label="location">
+        <a href="/" data-i18n="home">홈</a>
+        {{- range .}}<span class="sep">/</span><a href="{{.URL}}">{{.Name}}</a>{{end}}
+      </nav>
+      {{end}}
+      {{template "content" .}}
+      <footer class="page-foot" data-i18n="footer">읽기 전용 아카이브 · 작성 중인 글은 공개하지 않습니다</footer>
+    </div>
+  </main>
+</div>
+
+<div class="prefs-shell" id="prefs-shell" data-open="false">
+  <section class="prefs-panel" id="prefs-panel" data-open="false" aria-hidden="true" aria-labelledby="prefs-title">
+    <h2 class="prefs-title" id="prefs-title" data-i18n="settings">화면 설정</h2>
+    <div class="prefs-group">
+      <span class="prefs-label" id="language-label" data-i18n="language">언어</span>
+      <div class="prefs-options" role="group" aria-labelledby="language-label">
+        <button type="button" class="prefs-option" data-language="ko" aria-pressed="true">한국어</button>
+        <button type="button" class="prefs-option" data-language="en" aria-pressed="false">English</button>
+        <button type="button" class="prefs-option" data-language="es" aria-pressed="false">Español</button>
+      </div>
+      <p class="prefs-translation-status" id="translation-status" aria-live="polite"></p>
+    </div>
+    <div class="prefs-group">
+      <span class="prefs-label" id="theme-label" data-i18n="theme">테마</span>
+      <div class="prefs-options" role="group" aria-labelledby="theme-label">
+        <button type="button" class="prefs-option" data-theme-choice="system" aria-pressed="true" data-i18n="system">시스템</button>
+        <button type="button" class="prefs-option" data-theme-choice="light" aria-pressed="false" data-i18n="light">화이트</button>
+        <button type="button" class="prefs-option" data-theme-choice="dark" aria-pressed="false" data-i18n="dark">다크</button>
+      </div>
+    </div>
+  </section>
+  <button type="button" class="prefs-toggle" id="prefs-toggle" aria-expanded="false" aria-controls="prefs-panel">
+    <span class="prefs-glyph" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span class="visually-hidden" data-i18n="openSettings">화면 설정 열기</span>
+  </button>
+</div>
+</body>
+</html>{{end}}
+
+{{/* navtree는 사이드바 분류 트리를 그린다. 자기 자신을 부른다.
+     펼침(.Open)과 현재 위치(.Active)는 서버가 이미 표시해서 보낸다 —
+     markNav(internal/web/nav.go). 그래서 스크립트가 없어도 지금 보고 있는
+     곳까지는 열려 있다. */}}
+{{define "navtree"}}
+<ul class="nav-list">
+  {{range .}}
+  <li class="nav-item{{if .Open}} is-open{{end}}">
+    <div class="nav-row">
+      {{if .Children}}
+      <button type="button" class="nav-twist" aria-expanded="{{if .Open}}true{{else}}false{{end}}">
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1l4 4-4 4z"/></svg>
+        <span class="visually-hidden">{{.Name}} 하위 분류</span>
+      </button>
+      {{else}}
+      <span class="nav-twist-empty" aria-hidden="true"></span>
+      {{end}}
+      <a class="nav-link" href="{{.Path}}"{{if .Active}} aria-current="page"{{end}}>
+        <span class="nav-name">{{.Name}}</span>
+        <span class="nav-count">{{.PostCount}}</span>
+      </a>
+    </div>
+    {{with .Children}}{{template "navtree" .}}{{end}}
+  </li>
+  {{end}}
+</ul>
+{{end}}
+
+{{/* posttree는 글 목록을 parent_id 계층대로 중첩해서 그린다. 자기 자신을 부른다.
+     layout에 두는 이유: 페이지마다 템플릿을 따로 파싱하는데, layout은 모든 집합에
+     들어가므로 여기 정의해야 category와 post 양쪽에서 쓸 수 있다. */}}
+{{define "posttree"}}
+<ul class="list">
+  {{range .}}
+  <li>
+    <a href="/p/{{.Slug}}">{{.Title}}</a>
+    {{/* unlisted가 1003/1408이라 전부 찍으면 목록이 그 글자로 덮인다.
+         손봐야 할 글(draft)만 표시한다. */}}
+    {{if eq .Status "draft"}}<span class="status">{{.Status}}</span>{{end}}
+    {{/* 노션 원본의 작성일. 목록 순서가 이상해 보일 때 근거가 된다. */}}
+    {{with .Date}}<span class="date">{{.}}</span>{{end}}
+    {{with .Children}}{{template "posttree" .}}{{end}}
+  </li>
+  {{end}}
+</ul>
+{{end}}
+
+{{/* sitecss는 이 사이트의 스타일시트 전체다. layout이 <style>에 그대로 붓는다.
+
+     **admin 화면도 같은 것을 쓴다** (internal/admin). admin의 미리보기가 실제 글
+     화면과 다르게 보이면 그건 미리보기가 아니다. 여기 한 벌만 두고 web.SiteCSS()로
+     뽑아 쓰므로 둘이 갈라질 수 없다.
+
+     이름을 붙여 떼어냈을 뿐이라 공개 페이지의 출력은 한 바이트도 바뀌지 않는다. */}}
+{{define "sitecss"}}
   /* 읽기용 스타일. 긴 본문은 화려하게 만들지 않는다 — 여백·타이포·대비를 잡고,
      색은 길잡이가 필요한 자리(링크, 현재 위치, 뱃지)에만 쓴다. 홈은 글이 아니라
      탐색 허브라서 아래의 `.home-*` 절에서만 더 강한 색과 움직임을 쓴다.
@@ -697,193 +885,24 @@
   :root[data-theme="dark"] .hljs-built_in,
   :root[data-theme="dark"] .hljs-type,
   :root[data-theme="dark"] .hljs-variable { color: #E8B77D !important; }
-</style>
-{{/* CDN에서 받는 것은 **그 페이지에 필요할 때만** 받는다. 무엇이 필요한지는
-     본문 HTML을 보고 정한다(internal/web/assets.go). 수식이 있는 글은 1408편 중
-     297편뿐인데 예전에는 모든 페이지가 스타일시트와 스크립트를 네 개씩 받았다.
+{{end}}
 
-     CDN에 무결성 해시를 걸어둔다. 파일이 바뀌면 브라우저가 실행을 거부한다.
-     버전을 올릴 때 해시도 같이 바꿔야 한다 — 안 그러면 조용히 안 뜬다. */}}
-{{if .Assets.Math}}
-{{/* 수식은 브라우저에서 그린다. 변환기와 goldmark 확장은 원문 LaTeX를
-     .math 안에 넣어두기만 한다(internal/markdown/math.go). */}}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+{{/* katex-cdn / hljs-cdn은 CDN에서 받는 것의 **정본**이다. layout은 그 페이지에
+     필요할 때만(assets.go) 부르고, admin 화면은 늘 부른다 — 작업 도구라 무엇을
+     칠지 미리 알 수 없다. web.PreviewAssetTags()가 이 둘을 뽑아 admin에 넘긴다.
+
+     **여기 한 벌만 두는 이유는 SRI 해시다.** 주소나 버전만 베끼고 해시를 안 맞추면
+     브라우저가 아무 말 없이 실행을 거부한다. 복사본이 있으면 반드시 그렇게 된다. */}}
+{{define "katex-cdn"}}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
       integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
       crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
         integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
-        crossorigin="anonymous"></script>
-<script defer src="/static/math.js"></script>
-{{end}}
-{{if .Assets.Code}}
-{{/* 코드 하이라이팅. 본문의 <pre><code class="language-xxx">를 색칠한다.
-     common 묶음이 40여 개 언어를 담고 있어 python·c·r·bash·java 등 큰 것들을
-     덮는다. 거기 없는 것만 그 언어가 실제로 나올 때 따로 받는다. */}}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/styles/github.min.css"
+        crossorigin="anonymous"></script>{{end}}
+
+{{define "hljs-cdn"}}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/styles/github.min.css"
       integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L"
       crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js"
         integrity="sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix"
-        crossorigin="anonymous"></script>
-{{if .Assets.Lang "latex"}}
-<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/latex.min.js"
-        integrity="sha384-wHW9Hcxw0oenHF2z8fGo1rhAe1jZwnp35Z6xzC29Vj/O+toSfBY9+7TrUfUnwFMD"
-        crossorigin="anonymous"></script>
-{{end}}
-{{if .Assets.Lang "dockerfile"}}
-<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/dockerfile.min.js"
-        integrity="sha384-/zu1pI8+9j/v/qNlCRRyidiBhGdxfvGwOLXEPBXpKc77eFNUAhccr0WglEQ+x9La"
-        crossorigin="anonymous"></script>
-{{end}}
-{{if .Assets.Lang "powershell"}}
-<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/languages/powershell.min.js"
-        integrity="sha384-jigawbLJjSW9uklht6/lvMBC7b00t25Id0RQW+qORcsF6B+LARvlTLfzyIaNolYG"
-        crossorigin="anonymous"></script>
-{{end}}
-<script defer src="/static/highlight-init.js"></script>
-{{end}}
-{{if .Assets.YouTube}}
-{{/* 눌렀을 때 그 자리에서 유튜브 플레이어를 켠다. 못 떠도 원래대로 유튜브로
-     가는 링크라 빈 자리가 되지 않는다. */}}
-<script defer src="/static/youtube.js"></script>
-{{end}}
-{{if .Deck}}
-{{/* 갈래 카드가 포인터를 따라 기울게 한다. 못 떠도 CSS만으로 hover 기울기와
-     아이콘 떠 있기는 그대로 동작한다. */}}
-<script defer src="/static/deck.js"></script>
-{{end}}
-{{/* 사이드바 아코디언과 좁은 화면의 서랍. 스크립트가 못 떠도 지금 보고 있는
-     곳까지는 서버가 이미 펼쳐서 보내므로 길이 막히지는 않는다. */}}
-<script defer src="/static/sidebar.js"></script>
-<script defer src="/static/preferences.js"></script>
-</head>
-<body>
-<a class="skip" href="#main" data-i18n="skip">본문으로 건너뛰기</a>
-
-<header class="topbar">
-  <button type="button" class="burger" id="burger" aria-expanded="false" aria-controls="side">
-    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/></svg>
-    <span class="visually-hidden" data-i18n="openNav">분류 열기</span>
-  </button>
-  <a class="brand" href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a>
-</header>
-<div class="scrim" id="scrim" hidden></div>
-
-<div class="shell">
-  <aside class="side" id="side">
-    <p class="side-brand"><a href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a></p>
-    <p class="side-sub" data-i18n="notes" data-count="{{.TotalPostsText}}">노트 {{.TotalPostsText}}편</p>
-
-    <nav aria-label="분류" data-i18n-aria-label="categories">
-      <ul class="nav-list">
-        <li class="nav-item">
-          <div class="nav-row">
-            <span class="nav-twist-empty" aria-hidden="true"></span>
-            <a class="nav-link" href="/"{{if .HomeActive}} aria-current="page"{{end}}><span class="nav-name" data-i18n="home">홈</span></a>
-          </div>
-        </li>
-      </ul>
-      {{template "navtree" .Nav}}
-    </nav>
-
-    <div class="side-foot">
-      <a href="https://github.com/InryeolChoi" rel="noreferrer">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.14.46.55.38A8 8 0 0 0 8 0z"/></svg>
-        GitHub
-      </a>
-      <a href="https://inryeolchoi.github.io" rel="noreferrer">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm5.9 7H11.6c-.1-1.8-.5-3.4-1.1-4.5A6.5 6.5 0 0 1 13.9 7zM8 1.5c.8 0 1.8 2 2 5.5H6c.2-3.5 1.2-5.5 2-5.5zM2.1 7a6.5 6.5 0 0 1 3.4-4.5C4.9 3.6 4.5 5.2 4.4 7H2.1zm0 2h2.3c.1 1.8.5 3.4 1.1 4.5A6.5 6.5 0 0 1 2.1 9zM8 14.5c-.8 0-1.8-2-2-5.5h4c-.2 3.5-1.2 5.5-2 5.5zm2.5-1a10.9 10.9 0 0 0 1.1-4.5h2.3a6.5 6.5 0 0 1-3.4 4.5z"/></svg>
-        Pages
-      </a>
-    </div>
-  </aside>
-
-  <main class="main" id="main">
-    <div class="wrap">
-      {{with .Trail}}
-      <nav class="trail" aria-label="현재 위치" data-i18n-aria-label="location">
-        <a href="/" data-i18n="home">홈</a>
-        {{- range .}}<span class="sep">/</span><a href="{{.URL}}">{{.Name}}</a>{{end}}
-      </nav>
-      {{end}}
-      {{template "content" .}}
-      <footer class="page-foot" data-i18n="footer">읽기 전용 아카이브 · 작성 중인 글은 공개하지 않습니다</footer>
-    </div>
-  </main>
-</div>
-
-<div class="prefs-shell" id="prefs-shell" data-open="false">
-  <section class="prefs-panel" id="prefs-panel" data-open="false" aria-hidden="true" aria-labelledby="prefs-title">
-    <h2 class="prefs-title" id="prefs-title" data-i18n="settings">화면 설정</h2>
-    <div class="prefs-group">
-      <span class="prefs-label" id="language-label" data-i18n="language">언어</span>
-      <div class="prefs-options" role="group" aria-labelledby="language-label">
-        <button type="button" class="prefs-option" data-language="ko" aria-pressed="true">한국어</button>
-        <button type="button" class="prefs-option" data-language="en" aria-pressed="false">English</button>
-        <button type="button" class="prefs-option" data-language="es" aria-pressed="false">Español</button>
-      </div>
-      <p class="prefs-translation-status" id="translation-status" aria-live="polite"></p>
-    </div>
-    <div class="prefs-group">
-      <span class="prefs-label" id="theme-label" data-i18n="theme">테마</span>
-      <div class="prefs-options" role="group" aria-labelledby="theme-label">
-        <button type="button" class="prefs-option" data-theme-choice="system" aria-pressed="true" data-i18n="system">시스템</button>
-        <button type="button" class="prefs-option" data-theme-choice="light" aria-pressed="false" data-i18n="light">화이트</button>
-        <button type="button" class="prefs-option" data-theme-choice="dark" aria-pressed="false" data-i18n="dark">다크</button>
-      </div>
-    </div>
-  </section>
-  <button type="button" class="prefs-toggle" id="prefs-toggle" aria-expanded="false" aria-controls="prefs-panel">
-    <span class="prefs-glyph" aria-hidden="true"><span></span><span></span><span></span></span>
-    <span class="visually-hidden" data-i18n="openSettings">화면 설정 열기</span>
-  </button>
-</div>
-</body>
-</html>{{end}}
-
-{{/* navtree는 사이드바 분류 트리를 그린다. 자기 자신을 부른다.
-     펼침(.Open)과 현재 위치(.Active)는 서버가 이미 표시해서 보낸다 —
-     markNav(internal/web/nav.go). 그래서 스크립트가 없어도 지금 보고 있는
-     곳까지는 열려 있다. */}}
-{{define "navtree"}}
-<ul class="nav-list">
-  {{range .}}
-  <li class="nav-item{{if .Open}} is-open{{end}}">
-    <div class="nav-row">
-      {{if .Children}}
-      <button type="button" class="nav-twist" aria-expanded="{{if .Open}}true{{else}}false{{end}}">
-        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1l4 4-4 4z"/></svg>
-        <span class="visually-hidden">{{.Name}} 하위 분류</span>
-      </button>
-      {{else}}
-      <span class="nav-twist-empty" aria-hidden="true"></span>
-      {{end}}
-      <a class="nav-link" href="{{.Path}}"{{if .Active}} aria-current="page"{{end}}>
-        <span class="nav-name">{{.Name}}</span>
-        <span class="nav-count">{{.PostCount}}</span>
-      </a>
-    </div>
-    {{with .Children}}{{template "navtree" .}}{{end}}
-  </li>
-  {{end}}
-</ul>
-{{end}}
-
-{{/* posttree는 글 목록을 parent_id 계층대로 중첩해서 그린다. 자기 자신을 부른다.
-     layout에 두는 이유: 페이지마다 템플릿을 따로 파싱하는데, layout은 모든 집합에
-     들어가므로 여기 정의해야 category와 post 양쪽에서 쓸 수 있다. */}}
-{{define "posttree"}}
-<ul class="list">
-  {{range .}}
-  <li>
-    <a href="/p/{{.Slug}}">{{.Title}}</a>
-    {{/* unlisted가 1003/1408이라 전부 찍으면 목록이 그 글자로 덮인다.
-         손봐야 할 글(draft)만 표시한다. */}}
-    {{if eq .Status "draft"}}<span class="status">{{.Status}}</span>{{end}}
-    {{/* 노션 원본의 작성일. 목록 순서가 이상해 보일 때 근거가 된다. */}}
-    {{with .Date}}<span class="date">{{.}}</span>{{end}}
-    {{with .Children}}{{template "posttree" .}}{{end}}
-  </li>
-  {{end}}
-</ul>
-{{end}}
+        crossorigin="anonymous"></script>{{end}}

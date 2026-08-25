@@ -40,6 +40,10 @@
     }
   }
 
+  // math.js와 같은 이유로 연다 — admin 미리보기가 본문을 다시 그릴 때마다
+  // 부른다. 이미 칠한 블록에는 hljs가 표시를 남기므로 다시 칠해도 같다.
+  window.blogHighlight = highlightAll;
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", highlightAll);
   } else {

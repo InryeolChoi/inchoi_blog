@@ -1,0 +1,174 @@
+/* admin 화면의 껍데기 스타일.
+ *
+ * **본문(article) 스타일은 여기 없다.** 미리보기는 공개 페이지와 같은
+ * 스타일시트가 그린다(layout.html의 sitecss → web.SiteCSS). 여기 한 벌 더
+ * 두면 미리보기와 실제 화면이 갈라진다.
+ *
+ * 색은 전부 sitecss가 정의한 토큰(--ink, --surface, --line …)을 쓴다.
+ * 그래서 라이트/다크가 저절로 따라간다.
+ */
+
+body.admin {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* 공개 페이지의 사이드바 레이아웃이 admin에는 없다. sitecss가 body에 걸어둔
+   그리드가 있으면 여기서 되돌린다. */
+body.admin > * { max-width: none; }
+
+.ad-top {
+  display: flex; align-items: center; gap: 1rem;
+  padding: .7rem 1.2rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--side-bg);
+}
+.ad-brand { font-weight: 600; text-decoration: none; color: var(--ink); }
+.ad-brand .dot { color: var(--rail); }
+.ad-tag {
+  font: 600 .7rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--badge-fg); background: var(--badge-bg);
+  border: 1px solid var(--badge-line); border-radius: 999px;
+  padding: .25em .6em; margin-left: .4rem; vertical-align: .1em;
+}
+.ad-top-nav { margin-left: auto; font-size: .85rem; }
+.ad-top-nav a { color: var(--ink-dim); text-decoration: none; }
+.ad-top-nav a:hover { color: var(--accent); }
+
+/* 지금 무엇이 없는지 알리는 띠. 2단계(인증)와 3단계(저장)가 끝나면 지운다. */
+.ad-warn {
+  margin: 0; padding: .6rem 1.2rem;
+  background: var(--mark-bg); color: #3a2c00;
+  font-size: .85rem; line-height: 1.5;
+  border-bottom: 1px solid var(--line-mid);
+}
+.ad-warn code {
+  font: .9em/1 var(--mono); background: rgba(0,0,0,.07);
+  padding: .15em .4em; border-radius: 3px;
+}
+
+.ad-main { padding: 1.4rem 1.2rem 4rem; }
+
+/* ------------------------------------------------------------------ 목록 */
+
+.ad-listhead { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.ad-listhead h1 { margin: 0; font-size: 1.4rem; }
+.ad-counts { display: flex; gap: .4rem; margin: 0; }
+.ad-listhead .ad-btn { margin-left: auto; }
+
+.ad-chip {
+  font: 600 .72rem/1 var(--mono);
+  border: 1px solid var(--line-mid); border-radius: 999px;
+  padding: .32em .7em; white-space: nowrap;
+  color: var(--ink-dim); background: var(--surface);
+}
+/* draft만 눈에 띄게 한다 — 공개 화면에서 숨겨지는 것이 그것뿐이다. */
+.ad-chip.st-draft { color: #8a5a00; background: var(--mark-bg); border-color: var(--line-mid); }
+.ad-chip.st-published { color: var(--badge-fg); background: var(--badge-bg); border-color: var(--badge-line); }
+
+.ad-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
+.ad-table th, .ad-table td {
+  text-align: left; padding: .5rem .6rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: baseline;
+}
+.ad-table th {
+  font: 600 .72rem/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-dim); background: var(--surface);
+  border-bottom: 1px solid var(--line-mid);
+  position: sticky; top: 0;
+}
+.ad-table tbody tr:hover { background: var(--hover-bg); }
+.ad-table .num { text-align: right; font: .82rem/1.4 var(--mono); }
+.ad-title { color: var(--ink); text-decoration: none; font-weight: 500; }
+.ad-title:hover { color: var(--accent); text-decoration: underline; }
+.ad-dim { color: var(--ink-dim); font-size: .85em; }
+/* 본문이 거의 없는 글. 공개 화면에서 제목만 뜨는 자리다. */
+.ad-warnnum { color: #b45309; font: 600 .82rem/1.4 var(--mono); text-align: right; }
+
+/* ------------------------------------------------------------------ 편집 */
+
+.ad-editbar {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.ad-editbar h1 { margin: 0; font-size: 1.2rem; }
+.ad-back { color: var(--ink-dim); text-decoration: none; font-size: .9rem; }
+.ad-back:hover { color: var(--accent); }
+.ad-spacer { flex: 1; }
+
+/* 왼쪽 원문 / 오른쪽 미리보기. 좁아지면 위아래로 쌓는다 — 375px에서
+   가로로 밀리지 않게 하는 것은 공개 페이지와 같은 규칙이다. */
+.ad-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; align-items: start; }
+@media (max-width: 60rem) { .ad-split { grid-template-columns: 1fr; } }
+
+.ad-pane {
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); padding: 1rem; min-width: 0;
+}
+.ad-panehead { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .6rem; }
+.ad-panehead h2 { margin: 0; font-size: .95rem; }
+
+.ad-fields { display: grid; grid-template-columns: 1fr auto; gap: .6rem; margin-bottom: .8rem; }
+.ad-field { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+.ad-field.wide { grid-column: 1 / -1; }
+.ad-field > span {
+  font: 600 .7rem/1 var(--mono); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-dim);
+}
+
+.ad-input {
+  font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line-mid); border-radius: 5px;
+  padding: .45rem .6rem; min-width: 0;
+}
+.ad-input.mono { font: .85rem/1.4 var(--mono); }
+.ad-input:focus-visible, .ad-body:focus-visible {
+  outline: 2px solid var(--rail); outline-offset: 1px; border-color: var(--rail);
+}
+
+.ad-body {
+  width: 100%; box-sizing: border-box;
+  min-height: 26rem; resize: vertical;
+  font: .85rem/1.7 var(--mono);
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-mid); border-radius: 5px;
+  padding: .8rem; tab-size: 2;
+}
+
+/* 미리보기는 sitecss의 article 규칙이 그린다. 여기서는 넘칠 것만 가둔다 —
+   공개 페이지가 pre/table/.math-display에 거는 것과 같은 처리다. */
+.ad-preview-body { min-width: 0; overflow-wrap: anywhere; }
+.ad-preview-body > :first-child { margin-top: 0; }
+
+/* ------------------------------------------------------------ 버튼과 알림 */
+
+.ad-btn {
+  font: 600 .85rem/1 inherit; cursor: pointer;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-mid); border-radius: 5px;
+  padding: .5rem .9rem;
+}
+.ad-btn:hover { background: var(--hover-bg); }
+.ad-btn.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+.ad-btn.primary:hover { filter: brightness(1.1); }
+.ad-btn:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }
+
+.ad-imagebox { display: flex; align-items: center; gap: .7rem; margin-bottom: .8rem; flex-wrap: wrap; }
+/* 파일 입력은 <label class="ad-btn">이 대신 누른다. 감추되 키보드에서
+   닿을 수 있게 남긴다 — display:none이면 포커스가 안 간다. */
+.ad-file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.ad-file:focus-visible + .ad-note { outline: 2px solid var(--rail); }
+
+.ad-note { margin: 0; font-size: .8rem; color: var(--ink-dim); }
+.ad-empty { color: var(--ink-dim); }
+.ad-error { color: #b91c1c; }
+.ad-status { margin: 1rem 0 0; font-size: .85rem; color: var(--ink-dim); min-height: 1.2em; }
+.ad-status.ok { color: #15803d; }
+/* 501이 오는 자리. "실패"가 아니라 "아직 안 만들었다"라서 빨갛게 두지 않는다. */
+.ad-status.pending, .ad-note.pending { color: #b45309; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

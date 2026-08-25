@@ -50,6 +50,12 @@
     }
   }
 
+  // admin 미리보기는 본문을 계속 다시 그린다. 그때마다 이걸 다시 불러야
+  // 새로 들어온 .math가 그려진다. **공개 페이지가 쓰는 것과 같은 함수여야**
+  // 미리보기와 실제 화면이 같은 결과를 낸다 — 그래서 복사하지 않고 연다.
+  // (이미 그린 것은 .katex-done이 붙어 있어서 다시 그리지 않는다.)
+  window.blogRenderMath = renderAll;
+
   // defer 스크립트끼리는 순서가 보장되고 DOM도 다 만들어져 있다.
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", renderAll);
