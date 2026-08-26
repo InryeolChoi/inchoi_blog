@@ -32,9 +32,23 @@ body.admin > * { max-width: none; }
   border: 1px solid var(--badge-line); border-radius: 999px;
   padding: .25em .6em; margin-left: .4rem; vertical-align: .1em;
 }
-.ad-top-nav { margin-left: auto; font-size: .85rem; }
+.ad-top-nav {
+  margin-left: auto; font-size: .85rem;
+  display: flex; align-items: center; gap: 1rem;
+}
 .ad-top-nav a { color: var(--ink-dim); text-decoration: none; }
 .ad-top-nav a:hover { color: var(--accent); }
+
+/* 누가 들어와 있는지와 나가는 길. form인 이유는 로그아웃이 POST라서다. */
+.ad-logout { display: flex; align-items: center; gap: .55rem; margin: 0; }
+.ad-who { color: var(--ink-dim); font-family: var(--mono); font-size: .8rem; }
+.ad-logout button {
+  font: inherit; font-size: .8rem;
+  padding: .25rem .6rem;
+  border: 1px solid var(--line-mid); border-radius: 6px;
+  background: none; color: var(--ink-dim); cursor: pointer;
+}
+.ad-logout button:hover { color: var(--ink); border-color: var(--rail); }
 
 /* 지금 무엇이 없는지 알리는 띠. 2단계(인증)와 3단계(저장)가 끝나면 지운다. */
 .ad-warn {

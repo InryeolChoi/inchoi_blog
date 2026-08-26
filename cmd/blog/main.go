@@ -8,8 +8,12 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/inryeol/blog"
@@ -24,11 +28,15 @@ func main() {
 	// 기본값은 "가린다"다. 켜고 끄는 것을 실수해도 새는 방향이 아니라
 	// 막는 방향으로 틀리게 둔다.
 	drafts := flag.Bool("drafts", false, "draft 글까지 보여준다 (로컬 확인용)")
-	// **기본값이 "안 띄운다"인 이유는 인증이 아직 없기 때문이다.** 로드맵 2단계가
-	// 끝나기 전까지 이 화면은 아무나 글을 고칠 수 있는 화면이고, 그래서 배포
-	// 유닛(deploy/blog.service)은 이 플래그를 주지 않는다. -drafts와 같은 원칙이다 —
-	// 켜고 끄는 것을 실수해도 새는 방향이 아니라 막는 방향으로 틀리게 둔다.
-	adminOn := flag.Bool("admin", false, "admin 화면을 연다 (인증 없음 — 로컬 전용)")
+	// **기본값은 "안 띄운다"다.** 이제 인증이 붙었지만(로드맵 2단계) 그렇다고
+	// 늘 열어둘 이유는 없다 — 공개 서버가 하는 일은 읽기고, 안 여는 것이
+	// 공격 면적이 제일 작다. -drafts와 같은 원칙이다: 켜고 끄는 것을 실수해도
+	// 새는 방향이 아니라 막는 방향으로 틀리게 둔다.
+	adminOn := flag.Bool("admin", false, "admin 화면을 연다 (GitHub 로그인 설정이 있어야 한다)")
+	// **위험한 것은 이름이 위험해야 한다.** 인증 없이 admin을 여는 길을 없애면
+	// 로컬에서 화면을 못 보고, 조용한 기본값으로 두면 언젠가 배포에 딸려간다.
+	// 그래서 길게 적게 만들고, 아래에서 loopback이 아니면 아예 안 뜨게 한다.
+	noAuth := flag.Bool("admin-no-auth", false, "admin을 인증 없이 연다 (loopback 전용)")
 	flag.Parse()
 
 	sqlDB, err := db.Open(*dbPath)
@@ -55,20 +63,120 @@ func main() {
 	}
 
 	handler := srv.Handler()
+	adminState := "닫힘"
 	if *adminOn {
-		if handler, err = withAdmin(handler, sqlDB); err != nil {
+		auth, err := adminAuth(*addr, *noAuth)
+		if err != nil {
+			log.Fatalf("admin: %v", err)
+		}
+		if handler, err = withAdmin(handler, sqlDB, auth); err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("admin: http://%s/admin — **인증이 없다. 이 주소를 밖에 열지 마라.**", *addr)
+		if auth == nil {
+			adminState = "열림 (인증 없음)"
+			log.Printf("admin: http://%s/admin — **인증이 없다. 이 주소를 밖에 열지 마라.**", *addr)
+		} else {
+			adminState = "열림"
+			log.Printf("admin: http://%s/admin — GitHub 로그인 (허용: %s)",
+				*addr, strings.Join(auth.AllowedLogins, ", "))
+		}
 	}
 
 	log.Printf("http://%s 에서 대기 중 (db: %s, draft %s, admin %s)",
 		*addr, *dbPath,
 		map[bool]string{true: "보임", false: "가림"}[*drafts],
-		map[bool]string{true: "열림", false: "닫힘"}[*adminOn])
+		adminState)
 	if err := httpServer(*addr, handler).ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// admin 로그인 설정은 환경변수에서 읽는다. **플래그로 받지 않는다** — client
+// secret이 플래그면 `ps`에 그대로 보이고 셸 히스토리에도 남는다.
+const (
+	envClientID     = "BLOG_GITHUB_CLIENT_ID"
+	envClientSecret = "BLOG_GITHUB_CLIENT_SECRET"
+	envLogins       = "BLOG_ADMIN_LOGINS"
+	envSessionKey   = "BLOG_SESSION_KEY"
+)
+
+// sessionKeyMinLen은 세션 서명 키의 최소 길이다. 짧은 키는 HMAC을 무르게
+// 만들어서, 서명을 맞춰내면 아무 계정으로나 세션을 지어낼 수 있다.
+const sessionKeyMinLen = 32
+
+// adminAuth는 admin에 붙일 인증 설정을 만든다.
+//
+// **이 함수의 요점은 "애매하면 안 뜬다"이다.** 인증이 반쯤 설정된 채로 서버가
+// 뜨는 것이 여기서 제일 나쁜 결과라, 모자라면 nil이 아니라 error를 낸다.
+// 인증 없이 여는 길은 -admin-no-auth 하나뿐이고 그것도 loopback에서만 된다.
+func adminAuth(addr string, noAuth bool) (*admin.AuthConfig, error) {
+	id := os.Getenv(envClientID)
+	secret := os.Getenv(envClientSecret)
+	logins := os.Getenv(envLogins)
+	configured := id != "" || secret != "" || logins != ""
+
+	if noAuth {
+		// **설정이 있는데 -admin-no-auth를 주면 거절한다.** 둘 다 주는 것은
+		// 사람이 무엇을 원하는지 알 수 없는 상태고, 조용히 인증을 끄는 쪽으로
+		// 고르면 그게 사고다.
+		if configured {
+			return nil, fmt.Errorf("-admin-no-auth와 %s 설정을 같이 줬다. 하나만 골라라", envClientID)
+		}
+		if !isLoopback(addr) {
+			return nil, fmt.Errorf("-admin-no-auth는 loopback에서만 된다 (지금 -addr %q). "+
+				"밖에 열려면 %s / %s / %s를 설정해라", addr, envClientID, envClientSecret, envLogins)
+		}
+		return nil, nil
+	}
+
+	var missing []string
+	for _, e := range []struct{ name, val string }{
+		{envClientID, id}, {envClientSecret, secret}, {envLogins, logins},
+	} {
+		if strings.TrimSpace(e.val) == "" {
+			missing = append(missing, e.name)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("-admin에는 GitHub 로그인 설정이 필요하다. 없는 것: %s. "+
+			"로컬에서 화면만 볼 것이면 -admin-no-auth를 써라 (loopback 전용)",
+			strings.Join(missing, ", "))
+	}
+
+	cfg := &admin.AuthConfig{
+		ClientID:      id,
+		ClientSecret:  secret,
+		AllowedLogins: strings.Split(logins, ","),
+	}
+	if k := os.Getenv(envSessionKey); k != "" {
+		if len(k) < sessionKeyMinLen {
+			return nil, fmt.Errorf("%s가 너무 짧다 (%d바이트). %d바이트 이상으로 해라",
+				envSessionKey, len(k), sessionKeyMinLen)
+		}
+		cfg.SessionKey = []byte(k)
+	}
+	return cfg, nil
+}
+
+// isLoopback은 이 주소가 이 기계 밖에서 닿을 수 없는 곳인지 본다.
+//
+// **호스트가 비어 있으면(":8080") loopback이 아니다.** 그건 모든 인터페이스에
+// 붙는다는 뜻이라 밖에서 그대로 들어온다. 여기서 틀리면 인증 없는 글쓰기
+// 화면이 공개 주소에 열린다.
+func isLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// 포트가 없는 형태면 통째로 호스트로 본다.
+		host = addr
+	}
+	if host == "" {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
 }
 
 // withAdmin은 공개 핸들러 앞에 admin을 붙인다.
@@ -77,8 +185,8 @@ func main() {
 // 어디에도 안 걸린 경로를 404 화면으로 받는다. 같은 mux에 admin을 넣으면 두
 // 패키지가 라우팅을 나눠 갖게 되므로, 여기서 접두사로만 가른다.
 // ServeMux는 더 구체적인 패턴을 먼저 고르므로 "/admin/"이 "/"를 이긴다.
-func withAdmin(public http.Handler, sqlDB *sql.DB) (http.Handler, error) {
-	adm, err := admin.New(sqlDB)
+func withAdmin(public http.Handler, sqlDB *sql.DB, auth *admin.AuthConfig) (http.Handler, error) {
+	adm, err := admin.New(sqlDB, auth)
 	if err != nil {
 		return nil, err
 	}

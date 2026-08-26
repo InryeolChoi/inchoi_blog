@@ -42,7 +42,7 @@ func testDB(t *testing.T) *sql.DB {
 
 func testHandler(t *testing.T) http.Handler {
 	t.Helper()
-	s, err := New(testDB(t))
+	s, err := New(testDB(t), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestSaveIsNotImplementedYet(t *testing.T) {
 // 저장이 정말로 DB를 안 건드리는지 본다. 501을 주면서 몰래 쓰면 더 나쁘다.
 func TestSaveDoesNotTouchTheDatabase(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB)
+	s, err := New(sqlDB, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

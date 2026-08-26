@@ -3,15 +3,17 @@
 //
 // # 지금 어디까지 와 있나
 //
-// 이번 단계는 **뼈대뿐이다.** 화면 모양을 먼저 보고 다듬으려고 만든 것이라
-// 다음 셋이 없다:
+// 1단계(화면)와 2단계(인증)가 끝났다. 아직 없는 것은 둘이다:
 //
-//	인증  — 아무나 들어올 수 있다. 그래서 기본값이 "안 띄운다"이다(cmd/blog의 -admin).
 //	저장  — "저장"은 서버 로그만 남기고 DB를 건드리지 않는다 (handleSave).
 //	업로드 — 이미지 고르는 UI만 있고 받은 파일을 버린다 (handleUpload).
 //
-// 순서는 CLAUDE.md의 "Admin 화면" 로드맵에 적혀 있다. **1단계가 끝났다고 이걸
-// 배포에 올리면 안 된다** — 2단계(인증)가 끝나기 전까지 이 화면은 로컬 전용이다.
+// 인증은 auth.go에 있다. 허용 목록(AuthConfig.AllowedLogins)에 적은 GitHub
+// 계정만 들어올 수 있고, 관문은 Handler()가 mux 바깥에 두른다.
+//
+// 순서는 CLAUDE.md의 "Admin 화면" 로드맵에 적혀 있다. **인증이 붙었다고 이걸
+// 배포에 올리면 안 된다** — 지금 배포는 평문 HTTP라 세션 쿠키가 그대로 오간다.
+// HTTPS가 먼저다.
 //
 // # 왜 web과 따로인가
 //
@@ -51,10 +53,17 @@ type Server struct {
 	shell *template.Template
 	css   template.CSS
 	tags  template.HTML
+	// auth가 nil이면 **관문이 없다.** cmd/blog가 이 상태를 loopback에서만
+	// 허용한다(-admin-no-auth). auth.go의 guard 참고.
+	auth *authenticator
 }
 
 // New는 admin 서버를 만든다.
-func New(db *sql.DB) (*Server, error) {
+//
+// **auth를 반드시 적어야 한다.** nil이면 인증이 없는 화면이 된다. 기본값으로
+// 슬쩍 얻어지지 않게 인자로 뒀다 — 부르는 쪽이 `nil`이라고 쓰게 만드는 것이
+// 요점이다.
+func New(db *sql.DB, auth *AuthConfig) (*Server, error) {
 	shell, err := template.ParseFS(templateFS, "templates/admin.html")
 	if err != nil {
 		return nil, fmt.Errorf("admin 템플릿 파싱: %w", err)
@@ -67,7 +76,7 @@ func New(db *sql.DB) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("CDN 태그: %w", err)
 	}
-	return &Server{
+	s := &Server{
 		store: &store{db: db},
 		// **공개 페이지와 같은 렌더러다.** 확장(수식·코드 라벨·외부 링크 카드)이
 		// 전부 여기 들어 있어서, 미리보기와 실제 글이 같은 결과를 낸다.
@@ -75,7 +84,13 @@ func New(db *sql.DB) (*Server, error) {
 		shell: shell,
 		css:   css,
 		tags:  tags,
-	}, nil
+	}
+	if auth != nil {
+		if s.auth, err = newAuthenticator(*auth, css); err != nil {
+			return nil, fmt.Errorf("admin 인증 설정: %w", err)
+		}
+	}
+	return s, nil
 }
 
 // Handler는 admin 라우트를 붙인 http.Handler를 돌려준다.
@@ -105,6 +120,20 @@ func (s *Server) Handler() http.Handler {
 		writeErr(w, http.StatusNotFound, "그런 API가 없다: "+r.Method+" "+r.URL.Path)
 	})
 
+	if s.auth != nil {
+		// 로그인 길. ServeMux가 더 구체적인 패턴을 먼저 고르므로 이 셋이
+		// 위의 `GET /admin/{rest...}` 껍데기를 이긴다.
+		mux.HandleFunc("GET /admin/login", s.auth.handleLoginPage)
+		mux.HandleFunc("GET /admin/auth/start", s.auth.handleStart)
+		mux.HandleFunc("GET /admin/auth/callback", s.auth.handleCallback)
+		// 로그아웃은 POST다. GET이면 남의 페이지에 박아둔 <img>만으로도
+		// 사람을 로그아웃시킬 수 있다.
+		mux.HandleFunc("POST /admin/logout", s.auth.handleLogout)
+
+		// **관문은 mux 바깥이다.** 안쪽에 두면 새 라우트를 더할 때마다 챙겨야
+		// 하고, 한 번 빠뜨리면 그게 곧 구멍이다.
+		return recovering(s.auth.guard(mux))
+	}
 	return recovering(mux)
 }
 
@@ -142,6 +171,9 @@ type shellData struct {
 	// Statuses는 폼의 status 선택지다. 코드(Statuses)를 그대로 내려보내
 	// 템플릿에 값을 또 적지 않는다.
 	Statuses []string
+	// Login은 지금 들어와 있는 GitHub 계정이다. 인증이 꺼져 있으면 빈 값이고,
+	// 화면이 그 자리에 "인증 없음" 경고를 대신 그린다.
+	Login string
 }
 
 func (s *Server) handleShell(w http.ResponseWriter, r *http.Request) {
@@ -151,10 +183,15 @@ func (s *Server) handleShell(w http.ResponseWriter, r *http.Request) {
 	// 검색엔진이 이 화면을 주워가지 않게 한다. robots.txt가 아직 없기도 하고,
 	// 있어도 헤더가 더 확실하다.
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	login := ""
+	if s.auth != nil {
+		login = s.auth.currentLogin(r)
+	}
 	if err := s.shell.ExecuteTemplate(w, "admin", shellData{
 		SiteCSS:   s.css,
 		AssetTags: s.tags,
 		Statuses:  Statuses,
+		Login:     login,
 	}); err != nil {
 		log.Printf("admin 껍데기 렌더 실패: %v", err)
 	}

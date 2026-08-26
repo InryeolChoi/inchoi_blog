@@ -73,7 +73,7 @@ func TestAdminIsOffUnlessAskedFor(t *testing.T) {
 
 	// -admin을 줬을 때는 반대로 실제로 붙어야 한다. 안 그러면 위 검사는
 	// 아무것도 확인하지 않는 셈이 된다.
-	withAdm, err := withAdmin(public, sqlDB)
+	withAdm, err := withAdmin(public, sqlDB, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestPublicRoutesSurviveTheAdminMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := withAdmin(srv.Handler(), sqlDB)
+	h, err := withAdmin(srv.Handler(), sqlDB, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,4 +128,96 @@ func testDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	return sqlDB
+}
+
+// TestNoAuthAdminStaysOnLoopback은 이 파일에서 제일 중요한 테스트다.
+//
+// **인증 없는 글쓰기 화면이 밖에서 닿는 주소에 열리면 안 된다.** -admin-no-auth는
+// 로컬에서 화면을 보라고 둔 문이고, loopback이 아니면 서버가 아예 안 떠야 한다.
+func TestNoAuthAdminStaysOnLoopback(t *testing.T) {
+	// 밖에서 닿는 주소들. **":8080"은 loopback이 아니다** — 모든 인터페이스에
+	// 붙는다는 뜻이라 여기서 틀리면 그대로 공개된다.
+	for _, addr := range []string{":8080", "0.0.0.0:8080", "35.230.119.252:80", "[::]:8080", "192.168.0.9:8080"} {
+		if isLoopback(addr) {
+			t.Errorf("isLoopback(%q)가 참이다. 밖에서 닿는 주소다", addr)
+		}
+		if _, err := adminAuth(addr, true); err == nil {
+			t.Errorf("-admin-no-auth가 %q에서 통과했다. 거절해야 한다", addr)
+		}
+	}
+
+	// 이 기계 밖에서 닿을 수 없는 주소들.
+	for _, addr := range []string{"127.0.0.1:8080", "localhost:8080", "[::1]:8080", "127.0.0.2:9999"} {
+		if !isLoopback(addr) {
+			t.Errorf("isLoopback(%q)가 거짓이다. loopback이다", addr)
+		}
+		auth, err := adminAuth(addr, true)
+		if err != nil {
+			t.Errorf("-admin-no-auth가 %q에서 막혔다: %v", addr, err)
+		}
+		if auth != nil {
+			t.Errorf("-admin-no-auth인데 인증 설정이 나왔다 (%q)", addr)
+		}
+	}
+}
+
+// TestAdminNeedsAuthConfig — 설정이 모자라면 뜨지 않는다. 반쯤 설정된 채로
+// 뜨면 그게 곧 "인증이 있는 줄 알았는데 없는" 상태다.
+func TestAdminNeedsAuthConfig(t *testing.T) {
+	full := map[string]string{
+		envClientID:     "id",
+		envClientSecret: "secret",
+		envLogins:       "InryeolChoi",
+	}
+
+	// 하나씩 빼면 하나씩 거절당한다.
+	for missing := range full {
+		t.Run("없음: "+missing, func(t *testing.T) {
+			for k, v := range full {
+				if k == missing {
+					t.Setenv(k, "")
+					continue
+				}
+				t.Setenv(k, v)
+			}
+			if _, err := adminAuth("0.0.0.0:80", false); err == nil {
+				t.Fatalf("%s가 없는데 통과했다", missing)
+			}
+		})
+	}
+
+	t.Run("다 있으면 통과", func(t *testing.T) {
+		for k, v := range full {
+			t.Setenv(k, v)
+		}
+		auth, err := adminAuth("0.0.0.0:80", false)
+		if err != nil {
+			t.Fatalf("설정이 다 있는데 막혔다: %v", err)
+		}
+		if len(auth.AllowedLogins) != 1 || auth.AllowedLogins[0] != "InryeolChoi" {
+			t.Fatalf("허용 목록이 %v다", auth.AllowedLogins)
+		}
+	})
+
+	// **설정과 -admin-no-auth를 같이 주면 거절한다.** 사람이 무엇을 원하는지
+	// 알 수 없는 상태고, 조용히 인증을 끄는 쪽으로 고르면 그게 사고다.
+	t.Run("설정과 -admin-no-auth를 같이 줌", func(t *testing.T) {
+		for k, v := range full {
+			t.Setenv(k, v)
+		}
+		if _, err := adminAuth("127.0.0.1:8080", true); err == nil {
+			t.Fatal("둘 다 줬는데 통과했다")
+		}
+	})
+
+	// 짧은 세션 키는 HMAC을 무르게 만든다.
+	t.Run("세션 키가 짧다", func(t *testing.T) {
+		for k, v := range full {
+			t.Setenv(k, v)
+		}
+		t.Setenv(envSessionKey, "짧다")
+		if _, err := adminAuth("127.0.0.1:8080", false); err == nil {
+			t.Fatal("짧은 세션 키가 통과했다")
+		}
+	})
 }

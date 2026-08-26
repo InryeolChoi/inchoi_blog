@@ -49,15 +49,29 @@
   <a class="ad-brand" href="/admin">열렬히<span class="dot">.</span>뛰기 <span class="ad-tag">admin</span></a>
   <nav class="ad-top-nav">
     <a href="/" target="_blank" rel="noreferrer">공개 화면 ↗</a>
+    {{if .Login}}
+    {{/* 로그아웃은 form + POST다. 링크로 두면 남의 페이지에 박아둔 <img> 하나로도
+         사람을 로그아웃시킬 수 있다. */}}
+    <form class="ad-logout" method="post" action="/admin/logout">
+      <span class="ad-who">{{.Login}}</span>
+      <button type="submit">로그아웃</button>
+    </form>
+    {{end}}
   </nav>
 </header>
 
-{{/* 지금 무엇이 없는지 화면에서 바로 보이게 한다. 인증 없이 도는 화면이라
-     이 띠가 사라지는 시점이 곧 2단계가 끝난 시점이다. */}}
+{{/* 지금 무엇이 없는지 화면에서 바로 보이게 한다. 이 띠가 사라지는 시점이
+     곧 로드맵이 끝나는 시점이다. */}}
 <p class="ad-warn" role="status">
-  <strong>뼈대만 있는 화면이다.</strong>
-  인증이 없고, <code>저장</code>을 눌러도 DB에 아무것도 안 들어간다(서버 로그에만 남는다).
-  이미지도 받기만 하고 버린다. — 로드맵 1단계
+  {{if .Login}}
+  <strong>아직 저장이 안 된다.</strong>
+  <code>저장</code>을 눌러도 DB에 아무것도 안 들어간다(서버 로그에만 남는다).
+  이미지도 받기만 하고 버린다. — 로드맵 3단계에서 붙는다
+  {{else}}
+  <strong>인증이 꺼져 있다.</strong>
+  이 서버는 <code>-admin-no-auth</code>로 떴다. 아무나 이 화면을 쓸 수 있으므로
+  <strong>loopback 밖에 내놓으면 안 된다.</strong> 저장도 아직 안 된다.
+  {{end}}
 </p>
 
 <main class="ad-main" id="ad-root">
