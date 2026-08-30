@@ -232,9 +232,14 @@ func (a *authenticator) currentLogin(r *http.Request) string {
 
 // secure는 이 요청이 HTTPS로 왔는지 본다.
 //
-// **무조건 Secure를 붙이면 안 된다.** 지금 배포가 평문 HTTP라(HTTPS는 아직
-// 남은 일이다) 붙이는 순간 브라우저가 쿠키를 아예 안 보낸다 — 로그인이 되는데
-// 로그인이 안 되는 상태가 된다. 대신 HTTPS면 반드시 붙인다.
+// **무조건 Secure를 붙이면 안 된다.** 로컬(http://127.0.0.1:8080)에서 붙이는
+// 순간 브라우저가 쿠키를 아예 안 보낸다 — 로그인이 되는데 로그인이 안 되는
+// 상태가 된다. 대신 HTTPS면 반드시 붙인다.
+//
+// 배포에서는 Caddy가 앞에 서서 X-Forwarded-Proto: https를 붙여준다
+// (deploy/Caddyfile). blog 자신은 127.0.0.1:8080에서 평문을 듣고 있으므로
+// r.TLS는 언제나 nil이다 — **이 헤더가 유일한 근거다.** 프록시를 바꿀 일이
+// 생기면 그것도 이 헤더를 붙이는지 먼저 본다.
 func secure(r *http.Request) bool {
 	if r.TLS != nil {
 		return true

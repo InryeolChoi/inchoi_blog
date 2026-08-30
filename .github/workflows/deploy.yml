@@ -81,6 +81,10 @@ jobs:
 
       # 재시작만 확인하면 부족하다. 마이그레이션이나 DB 때문에 뜨자마자
       # 죽는 경우가 있어서, 실제로 페이지가 나오는지 본다.
+      #
+      # **두 군데를 본다.** 8080은 blog 자신이고, 80은 Caddy를 거친 길이다.
+      # 앞엣것만 보면 Caddy가 죽었을 때 배포가 초록으로 끝나고, 뒤엣것만
+      # 보면 무엇이 고장났는지 구분이 안 된다.
       - name: 살아 있는지 확인
         run: |
           gcloud compute ssh "$INSTANCE" \
@@ -88,11 +92,34 @@ jobs:
             --tunnel-through-iap --quiet \
             --command='set -euo pipefail
               for i in $(seq 1 15); do
-                if curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1/; then
-                  exit 0
+                if curl -fsS -o /dev/null http://127.0.0.1:8080/; then
+                  break
+                fi
+                if [ "$i" = 15 ]; then
+                  echo "blog가 8080에서 응답하지 않는다" >&2
+                  sudo journalctl -u blog -n 50 --no-pager >&2
+                  exit 1
                 fi
                 sleep 2
               done
-              echo "서버가 응답하지 않는다" >&2
-              sudo journalctl -u blog -n 50 --no-pager >&2
-              exit 1'
+              curl -fsS -o /dev/null -H "Host: inquieto.dev" http://127.0.0.1/ || {
+                echo "Caddy를 거친 길이 막혔다" >&2
+                sudo systemctl status caddy --no-pager >&2
+                sudo journalctl -u caddy -n 50 --no-pager >&2
+                exit 1
+              }
+              echo "blog 8080 OK / Caddy 80 OK"'
+
+      # 밖에서 실제로 HTTPS가 되는지는 러너에서 본다. 인스턴스 안에서만
+      # 확인하면 DNS·방화벽·인증서가 빠진 채로 초록이 된다.
+      - name: HTTPS 확인
+        run: |
+          code=$(curl -fsS -o /dev/null -w '%{http_code}' --retry 5 --retry-delay 3 \
+            https://inquieto.dev/)
+          echo "https://inquieto.dev/ -> $code"
+          redirect=$(curl -sS -o /dev/null -w '%{redirect_url}' http://inquieto.dev/)
+          echo "http://inquieto.dev/ -> $redirect"
+          case "$redirect" in
+            https://inquieto.dev/*) ;;
+            *) echo "평문 HTTP가 HTTPS로 넘어가지 않는다" >&2; exit 1 ;;
+          esac

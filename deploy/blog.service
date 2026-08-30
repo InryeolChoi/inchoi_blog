@@ -1,7 +1,7 @@
 # /etc/systemd/system/blog.service
 #
-# 배포물은 바이너리 하나와 SQLite 파일 하나다. 리버스 프록시도 컨테이너도
-# 없다 — e2-micro(1GB)에서 프로세스를 하나라도 덜 띄우는 편이 낫다.
+# 배포물은 바이너리 하나와 SQLite 파일 하나다. 앞에 Caddy가 하나 서 있고
+# (HTTPS와 인증서), 그 뒤는 예전 그대로다 — 컨테이너도 런타임도 없다.
 [Unit]
 Description=열렬히.뛰기 (blog)
 Documentation=https://github.com/inryeol/blog
@@ -13,21 +13,34 @@ Type=simple
 User=blog
 Group=blog
 
-# -drafts와 -admin을 **절대 붙이지 않는다.**
-#   -drafts  작성 중인 글 366편이 그대로 공개된다.
-#   -admin   글쓰기 화면이 공개 주소에 열린다. **인증(GitHub)이 붙긴 했지만
-#            여기는 아직 평문 HTTP다** — 세션 쿠키가 그대로 오가므로 같은 망에
-#            있는 사람이 주워서 그대로 들어올 수 있다. HTTPS가 먼저다.
-#   -admin-no-auth  아예 쓸 일이 없다. 0.0.0.0에서는 서버가 뜨지도 않는다.
-# 전부 기본값이 "안 한다"라서 아무것도 안 쓰는 것이 맞다.
-ExecStart=/opt/blog/blog -db /var/lib/blog/blog.db -addr 0.0.0.0:80
+# admin 로그인 설정(GitHub client id/secret, 허용 계정, 세션 키)이 여기 있다.
+# **저장소에 없고 인스턴스에만 있다.** client secret을 유닛 파일에 적으면
+# systemctl show로 아무나 읽을 수 있고 저장소에도 남는다.
+#
+# 앞의 "-"는 파일이 없어도 서비스가 뜨라는 뜻이다. 없으면 BLOG_ADMIN_FLAG가
+# 비어서 admin이 그냥 안 열린다 — 모자란 설정으로 반쯤 열리는 것보다 낫다.
+EnvironmentFile=-/etc/blog/admin.env
+
+# -drafts는 **절대 붙이지 않는다.** 작성 중인 글 366편이 그대로 공개된다.
+#
+# -admin은 /etc/blog/admin.env의 BLOG_ADMIN_FLAG로 켠다. 여기 직접 적지
+# 않는 이유는 그 파일이 있어야만(=client id/secret/허용 계정이 갖춰져야만)
+# 켜지게 하려는 것이다. 설정이 모자란 채로 -admin을 주면 서버가 아예
+# 안 뜨고(cmd/blog의 adminAuth), 그러면 admin이 아니라 사이트가 죽는다.
+#
+# **$BLOG_ADMIN_FLAG는 중괄호 없이 쓴다.** systemd는 ${VAR}는 한 덩어리로,
+# $VAR는 공백으로 쪼개서 넘긴다. 비어 있을 때 빈 인자 하나가 남지 않아야 한다.
+#
+# -addr는 loopback이다. **밖에서 이 포트에 직접 닿을 수 없다.** 방화벽에
+# 8080 규칙이 없어서가 아니라, 소켓 자체가 127.0.0.1에만 붙기 때문이다.
+ExecStart=/opt/blog/blog -db /var/lib/blog/blog.db -addr 127.0.0.1:8080 $BLOG_ADMIN_FLAG
 
 Restart=always
 RestartSec=2s
 
-# 80번은 특권 포트다. root로 돌리는 대신 이 능력 하나만 준다.
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+# 80번을 Caddy가 가져갔으므로 특권 포트에 붙을 일이 없다. 능력을 통째로 비운다.
+CapabilityBoundingSet=
+AmbientCapabilities=
 NoNewPrivileges=true
 
 # 파일시스템은 DB가 있는 곳만 쓸 수 있다. 마이그레이션과 SQLite 저널이
@@ -47,7 +60,8 @@ RestrictNamespaces=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 
-# 1GB짜리 기계다. 여기서 새면 SSH까지 같이 죽는다.
+# 1GB짜리 기계다. 여기서 새면 SSH까지 같이 죽는다. Caddy 몫(192M)을
+# 남겨둔 값이다.
 MemoryHigh=384M
 MemoryMax=512M
 

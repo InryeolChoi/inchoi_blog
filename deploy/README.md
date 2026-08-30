@@ -1,16 +1,22 @@
 # 배포
 
-바이너리 하나와 SQLite 파일 하나다. 컨테이너도 리버스 프록시도 없다 —
-e2-micro(1GB)에서 프로세스를 하나라도 덜 띄우는 편이 낫다.
+바이너리 하나와 SQLite 파일 하나, 그 앞에 Caddy 하나다. 컨테이너도 런타임도
+없다.
 
 | | |
 |---|---|
 | 프로젝트 | `statcode` |
 | 인스턴스 | `playground` (us-west1-a, e2-micro, Ubuntu 22.04, amd64) |
-| 외부 주소 | `http://35.230.119.252` (`default-allow-http` + `http-server` 태그로 이미 열려 있다) |
+| 외부 주소 | **`https://inquieto.dev`** (A 레코드 → 35.230.119.252) |
+| 앞단 | Caddy — 80/443을 듣고 `127.0.0.1:8080`으로 넘긴다. 인증서는 자동 (`deploy/Caddyfile`) |
 | 바이너리 | `/opt/blog/blog` — **GitHub Actions가 관리한다** |
 | DB | `/var/lib/blog/blog.db` — **사람이 관리한다. CI는 절대 안 건드린다** |
-| 서비스 | `systemd`의 `blog` (`deploy/blog.service`) |
+| 서비스 | `systemd`의 `blog` (`deploy/blog.service`)와 `caddy` |
+| admin 설정 | `/etc/blog/admin.env` (0600 root:root) — **저장소에 없다. 이 기계에만 있다** |
+
+**밖에서 닿는 것은 80과 443과 22뿐이다.** blog 자신은 `127.0.0.1:8080`에만
+붙으므로 방화벽 규칙과 무관하게 밖에서 직접 못 부른다. Caddy의 관리 API도
+`127.0.0.1:2019`라 마찬가지다.
 
 **CI가 DB를 안 올리는 이유:** `blog.db`가 정본이고 앞으로 admin 화면이 거기에
 글을 쓴다. 배포마다 DB를 덮으면 그 사이에 쓴 글이 통째로 사라진다. 로컬
@@ -105,7 +111,62 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
 `blog` 사용자, `/opt/blog`, `/var/lib/blog`, systemd 유닛을 만든다. 몇 번을
 다시 돌려도 결과가 같다. **DB는 만들지 않는다.**
 
-### 1-6. DB 올리기
+### 1-6. Caddy와 HTTPS
+
+```sh
+gcloud compute scp deploy/setup-caddy.sh deploy/Caddyfile deploy/blog.service \
+  deploy/caddy.service.d/limits.conf \
+  playground:/tmp/ --zone=us-west1-a --project=statcode --tunnel-through-iap
+
+gcloud compute ssh playground --zone=us-west1-a --project=statcode \
+  --tunnel-through-iap --command='sudo bash /tmp/setup-caddy.sh'
+```
+
+Caddy를 깔고, `blog`를 `127.0.0.1:8080`으로 내리고, `/etc/blog/admin.env`를
+만든다(세션 키는 거기서 생성한다). 몇 번을 다시 돌려도 결과가 같다.
+
+- **DNS A 레코드가 먼저 붙어 있어야 한다.** Caddy는 HTTP-01로 검증하므로
+  `inquieto.dev`가 이 기계로 와야 인증서가 나온다. 올리기 전에 확인:
+  `dig +short @8.8.8.8 inquieto.dev A`
+- **`www`는 Caddyfile에 없다.** 지금 `www.inquieto.dev`는 Porkbun 파킹을
+  가리킨다. 적으면 그 이름의 검증이 실패하고 **발급 전체가 막힌다.** 쓰려면
+  A 레코드를 먼저 옮긴다.
+- **설치 중에 Caddy가 저절로 뜨지 않게 막는다**(`policy-rc.d`). 그 시점에는
+  blog가 아직 80번을 물고 있어서, 뜨자마자 바인드에 실패하고 postinst가
+  0이 아닌 값을 돌려주면 스크립트가 통째로 죽는다.
+- 사이트가 멈추는 것은 blog를 8080으로 내리고 Caddy를 켜는 사이 몇 초뿐이다.
+
+### 1-7. admin 켜기 (선택)
+
+**글쓰기 화면은 기본으로 꺼져 있다.** 켜려면 GitHub OAuth 앱이 필요하다.
+
+```
+GitHub → Settings → Developer settings → OAuth Apps → New OAuth App
+  Homepage URL:               https://inquieto.dev
+  Authorization callback URL: https://inquieto.dev/admin/auth/callback
+```
+
+callback은 **정확히** 저것이어야 한다. 서버가 `redirect_uri`를 직접 만들어
+보내지 않고 GitHub에 등록된 것을 쓴다(`internal/admin/auth.go`).
+
+```sh
+gcloud compute scp deploy/enable-admin.sh playground:/tmp/ \
+  --zone=us-west1-a --project=statcode --tunnel-through-iap
+
+# -t: 터미널을 붙인다. 스크립트가 물어보는 것이 있다.
+gcloud compute ssh playground --zone=us-west1-a --project=statcode \
+  --tunnel-through-iap -- -t 'sudo bash /tmp/enable-admin.sh'
+```
+
+- **client secret을 인자로도 환경변수로도 받지 않는다.** 인자는 `ps`에 보이고
+  셸 히스토리에 남는다. 스크립트가 물어보고, 입력은 화면에 안 찍히며,
+  곧장 `/etc/blog/admin.env`(0600 root:root)로 들어간다.
+- **저장소에도, GitHub Secret에도 넣지 않는다.** CI는 이 파일을 모른다.
+- 끄려면 `BLOG_ADMIN_FLAG`를 주석 처리하고 `systemctl restart blog`.
+  사이트는 그대로 돈다.
+- **허용 계정이 비면 "전부 허용"이 아니라 "전부 차단"이다.**
+
+### 1-8. DB 올리기
 
 ```sh
 # 로컬 blog.db가 최신인지 먼저 확인한다 (파이프라인을 두 바퀴 돌려 0건)
@@ -155,7 +216,7 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
   올린 뒤 화면을 로컬과 비교한다:
 
 ```sh
-diff <(curl -s http://127.0.0.1:8080/) <(curl -s http://35.230.119.252/)
+diff <(curl -s http://127.0.0.1:8080/) <(curl -s https://inquieto.dev/)
 ```
 
 ---
@@ -173,12 +234,26 @@ diff <(curl -s http://127.0.0.1:8080/) <(curl -s http://35.230.119.252/)
 ```sh
 S="gcloud compute ssh playground --zone=us-west1-a --project=statcode --tunnel-through-iap --command"
 
-$S 'sudo systemctl status blog'
+$S 'sudo systemctl status blog caddy'
 $S 'sudo journalctl -u blog -n 100 --no-pager'
+$S 'sudo journalctl -u caddy -n 100 --no-pager'   # 인증서 발급/갱신도 여기
 $S 'sudo journalctl -u blog -f'          # 따라가기
-$S 'curl -sI http://127.0.0.1/'
+$S 'curl -sI http://127.0.0.1:8080/'              # blog 자신
+$S 'curl -sI -H "Host: inquieto.dev" http://127.0.0.1/'   # Caddy를 거쳐서
+$S 'sudo ss -tlnp'
 $S 'free -m; df -h /'
 ```
+
+```sh
+# 밖에서
+curl -sI https://inquieto.dev/
+echo | openssl s_client -servername inquieto.dev -connect inquieto.dev:443 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates
+```
+
+**인증서 갱신은 Caddy가 알아서 한다.** 만료 30일 전부터 시도하고, 실패하면
+journal에 남는다. 사람이 할 일은 없지만, 도메인을 옮기거나 DNS를 바꾸면
+그때는 여기를 본다.
 
 ### 되돌리기
 
@@ -190,13 +265,12 @@ $S 'free -m; df -h /'
 
 ## 3. 아직 안 한 것
 
-- **HTTPS.** 지금은 `http://35.230.119.252`뿐이다. 도메인을 정하면 Caddy를
-  앞에 두고(자동 인증서) `blog.service`의 `-addr`를 `127.0.0.1:8080`으로,
-  `AmbientCapabilities`를 빼면 된다. e2-micro에 프로세스가 하나 늘어난다.
-- **방화벽 정리.** `default-allow-ssh`(22, 0.0.0.0/0)와 `test-jupyter`,
-  `test-rstudio`, `test-vscode-server`, `test-http`가 전부 0.0.0.0/0으로
-  열려 있다. IAP SSH가 생겼으니 22번은 닫아도 되고, 안 쓰는 `test-*`는
-  지워도 된다.
+- **`www.inquieto.dev`.** 지금 Porkbun 파킹을 가리킨다. A 레코드를 옮기고
+  Caddyfile에 `www.inquieto.dev { redir https://inquieto.dev{uri} }`를
+  더하면 된다. **DNS를 먼저 옮기지 않고 Caddyfile부터 고치면 발급이 막힌다.**
+- **방화벽 정리.** `default-allow-ssh`(22, 0.0.0.0/0)가 남아 있다. IAP SSH가
+  있으니 닫아도 되지만, 닫으면 `--tunnel-through-iap` 말고는 들어갈 길이
+  없어진다. 익숙해지면 지운다.
 - **백업.** DB가 인스턴스 안에만 있다. 디스크 스냅샷이든 `sqlite3 .backup`을
   버킷에 올리든 정해야 한다. admin 화면이 생겨 사람이 직접 글을 쓰기
   시작하면 그때부터는 **로컬 blog.db가 더 이상 정본이 아니라서** 미룰 수 없다.

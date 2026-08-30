@@ -573,10 +573,12 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
 | | |
 |---|---|
 | 프로젝트 / 인스턴스 | `statcode` / `playground` (us-west1-a, e2-micro, Ubuntu 22.04, amd64) |
-| 주소 | `http://35.230.119.252` (`default-allow-http`가 이미 열어둔 80번) |
+| 주소 | **`https://inquieto.dev`** (A 레코드 → 35.230.119.252) |
+| 앞단 | Caddy가 80/443을 듣고 `127.0.0.1:8080`으로 넘긴다. 인증서는 자동 |
 | 바이너리 | `/opt/blog/blog` — `main` push → GitHub Actions |
 | DB | `/var/lib/blog/blog.db` — **사람이 올린다** |
-| 서비스 | systemd `blog` (`deploy/blog.service`) |
+| 서비스 | systemd `blog` (`deploy/blog.service`) + `caddy` |
+| admin 설정 | `/etc/blog/admin.env` (0600 root:root) — **저장소에 없다** |
 
 - **`blog.db`는 WAL 모드다.** 인스턴스로 옮기기 전에 반드시
   `pragma wal_checkpoint(truncate)`를 하고 `blog.db-wal`이 0바이트인지 본다.
@@ -591,11 +593,19 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
 - **CI는 `blog.db`를 절대 안 건드린다.** DB가 정본이고 앞으로 admin 화면이
   거기에 글을 쓴다. 배포마다 덮으면 그 사이에 쓴 글이 통째로 사라진다.
   로컬 파이프라인 결과를 올릴 때는 사람이 서버를 멈추고 바꾼다.
-- **`-drafts`와 `-admin`을 유닛에 넣지 마라.** `-drafts`는 작성 중인 글 366편을
-  그대로 공개한다. `-admin`은 이제 GitHub 로그인을 요구하지만(로드맵 2단계),
-  **여기는 아직 평문 HTTP라** 세션 쿠키가 그대로 오간다 — 같은 망에 있는 사람이
-  주워서 그대로 들어올 수 있다. **HTTPS가 먼저다.** 전부 기본값이 "안 한다"라서
-  아무것도 안 쓰는 것이 맞다.
+- **`-drafts`를 유닛에 넣지 마라.** 작성 중인 글 366편을 그대로 공개한다.
+- **`-admin`은 유닛에 직접 적지 않는다.** 유닛은 `$BLOG_ADMIN_FLAG`를 넘기고,
+  그 값은 인스턴스의 `/etc/blog/admin.env`에만 있다. 그 파일이 곧 client
+  id·secret·허용 계정이 들어 있는 파일이라, **설정이 갖춰진 기계에서만 켜진다.**
+  유닛에 `-admin`을 박으면 설정이 없는 기계에서 서버가 아예 안 뜨고
+  (`adminAuth`의 "애매하면 안 뜬다"), 그러면 admin이 아니라 사이트가 죽는다.
+  - `$BLOG_ADMIN_FLAG`는 **중괄호 없이** 쓴다. systemd는 `${VAR}`를 한 덩어리로,
+    `$VAR`를 공백으로 쪼개서 넘긴다 — 비었을 때 빈 인자가 남으면 안 된다.
+  - `EnvironmentFile` 앞의 `-`는 파일이 없어도 뜨라는 뜻이다. 없으면 플래그가
+    비어서 admin이 그냥 안 열린다.
+- **`blog`는 `127.0.0.1:8080`에만 붙는다.** 밖에서 그 포트에 직접 못 닿는 이유는
+  방화벽 규칙이 없어서가 아니라 **소켓이 loopback에만 붙기 때문이다.** 방화벽만
+  믿으면 규칙 하나 잘못 건드릴 때 그대로 열린다. Caddy의 관리 API(2019)도 같다.
 - **인스턴스의 Go로는 이 저장소를 못 빌드한다** (거기는 1.23.4, `go.mod`는
   1.26.6). 빌드는 CI에서만 한다 — `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`로
   13MB짜리 정적 ELF가 나온다.
@@ -607,12 +617,62 @@ go run ./cmd/relink -db blog.db -apply   # 실제로 고침
 - **재시작 확인만으로는 부족하다.** 마이그레이션이나 DB 때문에 뜨자마자 죽는
   경우가 있어서, 워크플로가 실제로 `http://127.0.0.1/`에서 200이 나오는지 본다.
 - **되돌리기는 revert 후 재배포뿐이다.** 이전 바이너리를 남기지 않는다.
+- **배포 확인은 두 군데를 본다.** 인스턴스 안에서 8080(blog 자신)과 80(Caddy를
+  거친 길), 그리고 러너에서 `https://inquieto.dev/`다. 앞엣것만 보면 Caddy가
+  죽었을 때 배포가 초록으로 끝나고, 인스턴스 안만 보면 DNS·방화벽·인증서가
+  빠진 채로 초록이 된다.
 - 인증은 서비스 계정 키(`GCP_SA_KEY` Secret) + OS Login + IAP 터널이다.
   22번을 0.0.0.0/0에 여는 대신 `allow-iap-ssh`(35.235.240.0/20)만 쓴다.
 
-### 밖에서 닿는 곳 (2026-08-24 점검)
+### HTTPS (2026-08-30)
 
-**열린 포트는 80(블로그)과 22(SSH) 둘뿐이다.** 실제로 듣고 있는 것도 그 둘이다.
+**`https://inquieto.dev`가 정본 주소다.** Caddy가 80/443을 듣고
+`127.0.0.1:8080`의 blog로 넘긴다. 인증서는 Let's Encrypt에서 자동으로 받고
+자동으로 갱신한다 — 사람이 할 일이 없다.
+
+- **`deploy/Caddyfile`이 정본이다.** 인스턴스에서 손으로 고치면 다음
+  `setup-caddy.sh`와 갈라진다.
+- **`www.inquieto.dev`는 Caddyfile에 없다.** 지금 그 이름은 Porkbun 파킹
+  (`pixie.porkbun.com`)을 가리킨다. **적으면 그 이름의 HTTP-01 검증이 실패하고
+  발급 전체가 막힌다** — 인증서 하나에 이름이 여럿이면 하나만 실패해도 다 안
+  나온다. 쓰려면 A 레코드를 먼저 이 기계로 옮기고 그 다음 Caddyfile에 더한다.
+- **Caddy를 깔 때 `policy-rc.d`로 자동 시작을 막는다.** 그 시점에는 blog가 아직
+  80번을 물고 있어서, 뜨자마자 바인드에 실패하고 postinst가 0이 아닌 값을
+  돌려주면 설치 스크립트가 통째로 죽는다.
+- **`X-Forwarded-Proto`가 세션 쿠키의 `Secure`를 켜는 유일한 근거다.**
+  blog 자신은 평문 8080을 듣고 있어서 `r.TLS`가 언제나 nil이다
+  (`internal/admin/auth.go`의 `secure()`). 프록시를 바꿀 일이 생기면 그것도
+  이 헤더를 붙이는지부터 본다.
+- **HSTS는 `max-age=31536000`, `includeSubDomains`도 `preload`도 없다.**
+  서브도메인을 나중에 HTTP로 쓸 여지를 남기고, preload는 목록에 올라가면
+  되돌리는 데 몇 달이 걸린다. 되돌려야 하면 `max-age=0`으로 배포하고
+  브라우저들이 그 값을 받아갈 때까지 기다린다.
+- `encode zstd gzip`도 같이 켰다. `/dev`가 70,482 → 12,548바이트다.
+- Caddy에 메모리 drop-in을 뒀다(`deploy/caddy.service.d/limits.conf`,
+  128M/192M). **1GB짜리 기계라 여기서 새면 blog와 SSH가 같이 죽는다.**
+  패키지가 가져온 유닛은 고치지 않는다 — 패키지를 올릴 때 덮인다.
+
+확인한 것: `https://inquieto.dev/` 200(HTTP/2), `http://` → 308 →
+`https://`, 인증서 `CN=inquieto.dev` / Let's Encrypt / 2026-11-28까지,
+3.4MB 이미지 BLOB이 바이트까지 동일, 밖에서 8080·2019 둘 다 닿지 않음.
+
+### 밖에서 닿는 곳 (2026-08-24 점검, 2026-08-30 갱신)
+
+**열린 포트는 80·443(블로그)과 22(SSH)뿐이다.** 실제로 듣고 있는 것은
+Caddy(80, 443)와 sshd(22)이고, **blog(8080)와 Caddy 관리 API(2019)는
+`127.0.0.1`에만 붙는다.**
+
+```
+LISTEN 127.0.0.1:2019   caddy   ← 관리 API. 밖에서 못 닿는다
+LISTEN 127.0.0.1:8080   blog    ← **방화벽이 아니라 소켓이 막는다**
+LISTEN         *:80     caddy   → 308로 443에 보낸다
+LISTEN         *:443    caddy
+LISTEN         *:22     sshd
+```
+
+**"방화벽에 규칙이 없으니 안전하다"로 두지 않았다.** 규칙은 사람이 실수로 열 수
+있고 실제로 이 프로젝트에도 껍데기 규칙이 다섯 개 있었다. loopback에만 붙이면
+규칙과 무관하게 닫힌다.
 
 | 규칙 | 허용 | 출처 | 대상 태그 |
 |---|---|---|---|
@@ -648,13 +708,11 @@ DB 접속 문자열을 정규식으로 찾아 **0건**이다. `password=` 5건�
   사실상 닿을 수 없어 그냥 뒀다. **draft를 더 가려야 할 일이 생기면 여기가
   마지막 구멍이다.**
 
-**아직 안 한 것:** HTTPS(도메인을 정하면 Caddy를 앞에 둔다), DB 백업,
-robots.txt/sitemap.xml, 속도 제한(HTTPS를 붙이며 Caddy에서 같이 하면 된다),
-배포 키를 Workload Identity Federation으로 옮기기.
+**아직 안 한 것:** DB 백업, robots.txt/sitemap.xml, 속도 제한(Caddy에서 하면
+된다), `www` 리다이렉트, 배포 키를 Workload Identity Federation으로 옮기기.
 
-**HTTPS가 이제 그냥 "남은 일"이 아니다.** admin에 로그인이 붙어서(2026-08-26)
-세션 쿠키라는 훔칠 것이 생겼는데, 평문 HTTP에서는 그게 그대로 오간다. **admin을
-공개 주소에 여는 것도, 로드맵 3단계(서버 DB에 쓰기)도 HTTPS 다음이다.**
+**HTTPS가 붙어서 3단계(서버 DB에 쓰기)를 막던 것이 없어졌다**(2026-08-30).
+이제 남은 선행 조건은 **DB 정본 방향**이다 — 아래 "Admin 화면" 참고.
 
 ## 마이그레이션
 
@@ -1334,7 +1392,8 @@ $$
 
 1. **✅ CSR 골격** (화면만, 저장·인증 없음) — 2026-08-25
 2. **✅ 인증** — GitHub OAuth, 허용 목록의 계정만 — 2026-08-26
-3. **저장** — 실제 DB 쓰기, 트랜잭션, 이미지 업로드 실제 저장 ← 다음. **HTTPS가 먼저다**
+3. **저장** — 실제 DB 쓰기, 트랜잭션, 이미지 업로드 실제 저장 ← 다음.
+   **HTTPS는 끝났다**(2026-08-30). 남은 선행 조건은 아래 DB 정본 방향이다
 4. **AI 삽입** — MCP로 admin API를 노출해서 수식·이미지·코드 삽입을 AI에게 요청
 
 > **참고: 3단계(저장)를 하면 DB 정본이 로컬 → 서버로 뒤바뀐다.**
@@ -1533,18 +1592,37 @@ slug·제목·status·카테고리·바이트·날짜뿐인데, 글 하나를 �
 경우를 만들 수가 없다. 돌연변이 셋을 넣어 테스트가 **실제로 실패하는 것**을
 확인했다: `allows()`가 늘 통과, `guard`를 뺌, `":8080"`을 loopback으로 침.
 
-### 아직 HTTPS가 아니다
+### 배포에서 admin 켜기 (2026-08-30)
 
-**지금 배포는 평문 HTTP다**(`http://35.230.119.252`). 세션 쿠키가 평문으로
-오가면 같은 망에 있는 사람이 그걸 주워 그대로 admin에 들어올 수 있다.
-`Secure` 플래그를 조건부로 둔 것은 그 사실을 감추는 게 아니라 **HTTPS가 붙는
-순간 저절로 켜지게** 해둔 것이다.
+**HTTPS가 붙었다**(위 "배포 > HTTPS"). `secure()`가 Caddy의
+`X-Forwarded-Proto`를 보고 세션 쿠키에 `Secure`를 자동으로 켠다 — 조건부로
+둔 것이 여기서 값을 한다.
 
-- **그래서 `deploy/blog.service`는 여전히 `-admin`을 주지 않는다.** 인증이
-  생겼다고 공개 주소에 여는 것은 아직 이르다. 순서는 **HTTPS(Caddy) → 그다음
-  admin 공개**다. "남은 일"의 HTTPS 항목과 같은 것이다.
-- 그때까지 admin은 로컬에서 쓴다. 3단계(저장)가 서버 쓰기를 전제하므로,
-  **HTTPS는 3단계보다 먼저다.**
+**켜는 스위치는 인스턴스의 `/etc/blog/admin.env` 하나뿐이다.**
+
+```
+BLOG_GITHUB_CLIENT_ID=...
+BLOG_GITHUB_CLIENT_SECRET=...
+BLOG_ADMIN_LOGINS=InryeolChoi
+BLOG_SESSION_KEY=...        # setup-caddy.sh가 만든다
+BLOG_ADMIN_FLAG=-admin      # 이 줄이 곧 스위치
+```
+
+- **`deploy/blog.service`에는 `-admin`이 없다.** 유닛은 `$BLOG_ADMIN_FLAG`를
+  넘길 뿐이라, 설정이 갖춰진 기계에서만 켜진다. 유닛에 박으면 설정이 없는
+  기계에서 **admin이 아니라 사이트가 죽는다**(`adminAuth`는 애매하면 안 뜬다).
+- **client secret은 저장소에도 GitHub Secret에도 없다.** `deploy/enable-admin.sh`가
+  인스턴스에서 물어보고, 입력은 화면에 안 찍히며, 곧장 0600 root:root 파일로
+  들어간다. **인자로도 환경변수로도 받지 않는다** — 인자는 `ps`에 보이고 셸
+  히스토리에 남는다.
+- **세션 키는 `setup-caddy.sh`가 인스턴스에서 만든다.** 사람 손도 저장소도
+  거치지 않는다. 바꾸면 살아 있는 로그인이 전부 풀리므로 있으면 덮지 않는다.
+- OAuth 앱의 callback은 **정확히** `https://inquieto.dev/admin/auth/callback`이어야
+  한다. 서버가 `redirect_uri`를 만들어 보내지 않고 등록된 것을 쓴다.
+- 끄는 것은 그 한 줄을 주석 처리하고 `systemctl restart blog`다. 사이트는 그대로
+  돈다.
+
+**3단계(저장) 전에 남은 것은 DB 정본 방향이다.** 이 절 맨 위의 블록인용 참고.
 
 ### 로컬에서 보기
 
@@ -1579,7 +1657,7 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
   사이트에서 온 POST를 막아주지만, 그건 브라우저에 기대는 한 겹이다. 실제로
   DB를 쓰기 시작하면 토큰을 얹거나 `Origin` 헤더를 확인한다.
 
-## 진행 상황 (2026-08-26 기준)
+## 진행 상황 (2026-08-30 기준)
 
 ### 끝난 것
 
@@ -1777,6 +1855,28 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
   `PostSummariesBySlug`로 바꿔 status와 `original_created_at`을 함께 가져온다.
   글 1357편과 카테고리 87개를 전부 훑어, 날짜 없는 줄이 이름 없는 인라인
   데이터베이스를 가리키는 3곳(posts에 행이 없다)만 남은 것을 확인했다.
+
+**2026-08-30에 한 것**
+
+- **HTTPS를 붙였다.** `https://inquieto.dev`. Caddy가 80/443을 듣고
+  `127.0.0.1:8080`의 blog로 넘긴다. 인증서는 Let's Encrypt에서 자동으로 받고
+  자동으로 갱신한다. 위 "배포 > HTTPS" 참고.
+  - **blog를 loopback으로 내렸다.** 밖에서 8080에 못 닿는 이유는 방화벽 규칙이
+    없어서가 아니라 소켓이 127.0.0.1에만 붙기 때문이다. 특권 포트에 붙을 일이
+    없어져 `AmbientCapabilities`도 비웠다.
+  - **`www`는 일부러 안 넣었다.** Porkbun 파킹을 가리키고 있어서, 적으면 그
+    이름의 검증이 실패하며 **인증서 발급 전체가 막힌다.**
+  - 밖에서 확인: `/` 200(HTTP/2), `http://` → 308, 인증서 2026-11-28까지,
+    3.4MB 이미지 BLOB이 바이트까지 동일, 8080·2019 둘 다 안 닿음, admin 404.
+  - 배포 워크플로가 이제 **세 군데**를 본다: 인스턴스의 8080(blog 자신),
+    인스턴스의 80(Caddy를 거친 길), 러너에서 `https://inquieto.dev/`.
+    앞엣것만 보면 Caddy가 죽어도 초록이고, 인스턴스 안만 보면 DNS·방화벽·
+    인증서가 빠진 채로 초록이다.
+- **배포에서 admin을 켜는 길을 만들었다.** 유닛에 `-admin`을 박지 않고
+  `/etc/blog/admin.env`의 `$BLOG_ADMIN_FLAG`로 켠다 — 그 파일이 곧 client
+  id·secret·허용 계정이 든 파일이라 **설정이 갖춰진 기계에서만 켜진다.**
+  `deploy/enable-admin.sh`가 인스턴스에서 secret을 물어보고(화면에 안 찍힌다)
+  0600 root:root로 넣는다. **저장소에도 GitHub Secret에도 secret이 없다.**
 
 **2026-08-26에 한 것**
 
