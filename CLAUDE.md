@@ -1592,11 +1592,24 @@ slug·제목·status·카테고리·바이트·날짜뿐인데, 글 하나를 �
 경우를 만들 수가 없다. 돌연변이 셋을 넣어 테스트가 **실제로 실패하는 것**을
 확인했다: `allows()`가 늘 통과, `guard`를 뺌, `":8080"`을 loopback으로 침.
 
-### 배포에서 admin 켜기 (2026-08-30)
+### 배포에서 admin 켜기 (2026-08-30) — **켜져 있다**
+
+`https://inquieto.dev/admin`이 **지금 살아 있다.** 허용 목록의 GitHub 계정으로
+로그인해야 들어간다. 저장은 아직 501이다(3단계).
 
 **HTTPS가 붙었다**(위 "배포 > HTTPS"). `secure()`가 Caddy의
 `X-Forwarded-Proto`를 보고 세션 쿠키에 `Secure`를 자동으로 켠다 — 조건부로
-둔 것이 여기서 값을 한다.
+둔 것이 여기서 값을 한다. 실물에서 갈리는 것을 확인했다:
+
+| 경로 | `Set-Cookie` |
+|---|---|
+| Caddy 거쳐 HTTPS | `HttpOnly; **Secure**; SameSite=Lax` |
+| loopback 평문 8080 | `HttpOnly; SameSite=Lax` |
+
+밖에서 확인한 관문: `/admin` 303 → `/admin/login`, `/admin/login` 200,
+`/api/admin/posts` GET·POST 모두 **401 JSON**(HTML 로그인 화면이 아니다),
+`/api/admin/images` POST 401, `/admin/auth/start`가 `scope=`를 비운 채
+GitHub으로 보내고 state 쿠키를 심는다.
 
 **켜는 스위치는 인스턴스의 `/etc/blog/admin.env` 하나뿐이다.**
 
@@ -1872,6 +1885,9 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
     인스턴스의 80(Caddy를 거친 길), 러너에서 `https://inquieto.dev/`.
     앞엣것만 보면 Caddy가 죽어도 초록이고, 인스턴스 안만 보면 DNS·방화벽·
     인증서가 빠진 채로 초록이다.
+- **admin을 공개 주소에 열었다.** `https://inquieto.dev/admin`. 허용 목록의
+  계정만 들어오고, 저장은 아직 501이다. 관문을 밖에서 전수로 확인했다 —
+  위 "배포에서 admin 켜기" 참고.
 - **배포에서 admin을 켜는 길을 만들었다.** 유닛에 `-admin`을 박지 않고
   `/etc/blog/admin.env`의 `$BLOG_ADMIN_FLAG`로 켠다 — 그 파일이 곧 client
   id·secret·허용 계정이 든 파일이라 **설정이 갖춰진 기계에서만 켜진다.**
