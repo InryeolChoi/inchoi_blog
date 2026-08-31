@@ -30,3 +30,22 @@ where m.updated_at > n.updated_at;
 select 'LOSTIMG ' || substr(sha256, 1, 12)
 from main.images
 where sha256 not in (select sha256 from newdb.images);
+
+-- ④ 웹에서 지운 글이 **되살아난다.**
+--
+--    앞의 셋과 방향이 반대다. 저 셋은 "덮으면 잃는 것"을 묻는데, 이건
+--    "덮으면 돌아오는 것"이다. admin에 지우기가 생기면서 열린 자리다
+--    (2026-08-31).
+--
+--    **notion_page_id가 NULL인 글만 본다.** import는 native 글을 절대
+--    만들지 않으므로(언제나 노션 page id를 넣는다), 올릴 파일에만 있는
+--    native 글은 **서버에서 지웠다는 뜻밖에 없다.** 그래서 오탐이 없다.
+--
+--    노션에서 온 글은 여기서 안 본다. 그건 재이관이 되살리는 것이 이미
+--    정해진 계약이고(지우기 화면도 그렇게 경고한다), 진짜로 빼려면
+--    internal/curation의 DropPosts에 적어야 한다. 여기서 같이 막으면
+--    멀쩡한 재이관마다 걸려서, 확인이 습관이 되고 습관은 곧 안 읽는 것이다.
+select 'BACK  ' || slug || '  (' || status || ', 웹에서 쓴 글)'
+from newdb.posts
+where notion_page_id is null
+  and slug not in (select slug from main.posts);

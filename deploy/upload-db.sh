@@ -69,7 +69,7 @@ gcloud compute scp deploy/upload-guard.sql "$INSTANCE:/tmp/upload-guard.sql" \
   --zone="$ZONE" --project="$PROJECT" --tunnel-through-iap
 
 echo
-echo "== 덮으면 사라지는 것이 있는지 본다 =="
+echo "== 덮으면 사라지거나 되살아나는 것이 있는지 본다 =="
 # blog 사용자로 읽는다. root로 열면 SQLite가 만드는 -shm의 소유가 어긋난다.
 GUARD=$(ssh_ "sudo runuser -u blog -- sqlite3 /var/lib/blog/blog.db \
   \"attach 'file:/tmp/blog-upload.db?mode=ro' as newdb\" '.read /tmp/upload-guard.sql'")
@@ -78,7 +78,9 @@ if [[ -n ${GUARD//[[:space:]]/} ]]; then
   echo
   echo "$GUARD"
   echo
-  echo "**올리지 않았다.** 서버에만 있는 것을 이 파일이 안 들고 있다." >&2
+  echo "**올리지 않았다.**" >&2
+  echo "  LOST/STALE/LOSTIMG — 서버에만 있는 것을 이 파일이 안 들고 있다." >&2
+  echo "  BACK              — 서버에서 지운 글을 이 파일이 되살린다." >&2
   echo "서버가 정본이다. 먼저 ./deploy/fetch-db.sh로 내려받아 합친 뒤에 올려라." >&2
   ssh_ 'rm -f /tmp/blog-upload.db /tmp/upload-guard.sql' >/dev/null
   exit 1

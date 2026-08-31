@@ -245,7 +245,7 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
 1. 로컬 WAL을 접고(`wal_checkpoint(truncate)`) `integrity_check`
 2. **서버에서 백업을 먼저 뜬다**
 3. 올려놓기만 하고, 아직 안 바꾼다
-4. `deploy/upload-guard.sql`로 **덮으면 사라지는 것이 있는지 본다.**
+4. `deploy/upload-guard.sql`로 **덮으면 무엇이 달라지는지 본다.**
    한 줄이라도 나오면 멈춘다
 
    | 표시 | 뜻 |
@@ -253,6 +253,14 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
    | `LOST` | 웹에서 쓴 글이 사라진다 (`notion_page_id`가 NULL) |
    | `STALE` | 서버 쪽이 더 최근이다 — 그 뒤에 웹에서 고쳤다는 뜻 |
    | `LOSTIMG` | 웹에서 올린 이미지가 사라진다 |
+   | `BACK` | **서버에서 지운 글이 되살아난다** |
+
+   앞의 셋은 "잃는 것"이고 `BACK`은 **반대 방향**이다 — admin에 지우기가
+   생기면서 열린 자리다(2026-08-31). `notion_page_id`가 NULL인 글만 보는데,
+   `import`는 native 글을 절대 만들지 않으므로 올릴 파일에만 있는 native
+   글은 **서버에서 지웠다는 뜻밖에 없다.** 그래서 오탐이 없다.
+   노션에서 온 글은 여기서 안 본다 — 그건 재이관이 되살리는 것이 이미
+   정해진 계약이고, 진짜로 빼려면 `internal/curation`의 `DropPosts`에 적는다.
 
 5. 그제서야 **서버를 멈추고** 갈아끼운다. 도는 중에 바꾸면 열려 있던
    커넥션이 옛 파일을 들고 있고, 남은 `-wal`이 새 본체와 짝이 안 맞는다.
