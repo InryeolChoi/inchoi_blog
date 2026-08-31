@@ -73,6 +73,7 @@
   //   /admin                  목록
   //   /admin/edit/{slug}      기존 글 편집
   //   /admin/new              새 글
+  //   /admin/data             데이터 보기
 
   function go(path) {
     history.pushState({}, "", path);
@@ -86,6 +87,7 @@
     var m = /^\/admin\/edit\/(.+)$/.exec(path);
     if (m) return showEditor(decodeURIComponent(m[1]));
     if (path === "/admin/new") return showEditor(null);
+    if (path === "/admin/data") return showStats();
     return showList();
   }
 
@@ -109,6 +111,7 @@
         el("p", { class: "ad-counts" }, config.statuses.map(function (s) {
           return el("span", { class: "ad-chip st-" + s, text: s + " " + (counts[s] || 0) });
         })),
+        el("button", { class: "ad-btn", onclick: function () { go("/admin/data"); }, text: "데이터" }),
         el("button", { class: "ad-btn primary", onclick: function () { go("/admin/new"); }, text: "새 글" }),
       ]);
       root.appendChild(head);
@@ -127,7 +130,7 @@
           el("th", { text: "상태" }),
           el("th", { class: "num", text: "본문" }),
           el("th", { text: "수정" }),
-          el("th", { text: "" }),
+          el("th", { class: "ad-acts-head", text: "" }),
         ])]),
       ]);
       var tbody = el("tbody");
@@ -147,14 +150,185 @@
             text: p.bodyBytes.toLocaleString(),
           }),
           el("td", { class: "ad-dim", text: dateText(p.updatedAt) }),
-          el("td", {}, [el("a", {
-            class: "ad-dim", href: "/p/" + encodeURIComponent(p.slug),
-            target: "_blank", rel: "noreferrer", text: "보기 ↗",
-          })]),
+          // **손댈 것을 한 줄에서 끝낸다.** 예전에는 "보기"만 있어서 고치거나
+          // 치우려면 제목을 눌러 편집 화면까지 들어가야 했다.
+          el("td", { class: "ad-acts" }, [
+            el("a", {
+              class: "ad-act", href: "/admin/edit/" + encodeURIComponent(p.slug),
+              onclick: function (e) { e.preventDefault(); go("/admin/edit/" + encodeURIComponent(p.slug)); },
+              text: "고치기",
+            }),
+            el("a", {
+              class: "ad-act", href: "/p/" + encodeURIComponent(p.slug),
+              target: "_blank", rel: "noreferrer", text: "보기 ↗",
+            }),
+            el("button", {
+              type: "button", class: "ad-act danger", text: "지우기",
+              onclick: function () { removeFromList(p, showList); },
+            }),
+          ]),
         ]));
       });
       table.appendChild(tbody);
       root.appendChild(table);
+    });
+  }
+
+  // removeFromList는 목록에서 글 하나를 지운다.
+  //
+  // **편집 화면의 지우기와 같은 흐름이다** — refs로 무엇을 잃는지 먼저 묻고,
+  // 자식이 있으면 아예 막고, 잃을 것이 있으면 확인을 받는다. 규칙을 두 곳에
+  // 따로 적으면 한쪽이 느슨해진다. 다른 점은 끝난 뒤에 목록을 다시 그리는
+  // 것뿐이다.
+  function removeFromList(post, done) {
+    api("GET", "/api/admin/posts/" + encodeURIComponent(post.slug) + "/refs")
+      .then(function (r) {
+        if (!r.ok) return alert(r.data.error || "무엇이 걸리는지 알아내지 못했다");
+        var refs = r.data;
+        if (refs.children && refs.children.length) {
+          return alert("하위 글 " + refs.children.length + "편이 매달려 있다: " +
+            refs.children.slice(0, 3).join(", ") +
+            (refs.children.length > 3 ? " 외" : "") +
+            "\n\n그것들을 먼저 옮기거나 지워라.");
+        }
+        var lose = [];
+        if (refs.notion) lose.push("노션에서 온 글이라 다음 재이관이 되살린다 (진짜로 빼려면 internal/curation의 DropPosts에 적어야 한다)");
+        if (refs.coverOf && refs.coverOf.length) lose.push("분류 " + refs.coverOf.join(", ") + "의 표지가 사라진다");
+        if (refs.linkedFrom && refs.linkedFrom.length) lose.push("이 글을 가리키던 " + refs.linkedFrom.length + "편의 링크를 글자로 푼다");
+
+        var msg = "\"" + (post.title || post.slug) + "\"을(를) 지운다.";
+        if (lose.length) msg += "\n\n" + lose.map(function (l, i) { return (i + 1) + ". " + l; }).join("\n");
+        msg += "\n\n되돌릴 수 없다. 지울까?";
+        if (!window.confirm(msg)) return;
+
+        // **목록에는 rev가 없다.** 지우기는 저장과 같은 rev 표를 요구하므로
+        // 지금 값을 한 번 더 받아온다 — 그 사이에 다른 탭이 고쳤으면 거절된다.
+        api("GET", "/api/admin/posts/" + encodeURIComponent(post.slug)).then(function (g) {
+          if (!g.ok) return alert(g.data.error || "글을 못 가져왔다");
+          api("DELETE", "/api/admin/posts/" + encodeURIComponent(post.slug),
+            { rev: g.data.rev || "", force: lose.length > 0 }).then(function (d) {
+            if (!d.ok) return alert(d.data.error || ("지우지 못했다 (HTTP " + d.status + ")"));
+            if (done) done();
+          });
+        });
+      });
+  }
+
+  // ---------------------------------------------------------------- 데이터 보기
+  //
+  // **이 아카이브가 지금 어떤 상태인지 한 화면에서 본다.** 글이 1,356편이라
+  // 목록을 넘겨서는 전체 모양이 안 보인다 — 어느 분류에 쏠려 있나, 안 쓰는
+  // 이미지가 있나 같은 것은 지금까지 sqlite3을 직접 열어야 알 수 있었고,
+  // 그게 "DB를 손으로 열지 마라"와 부딪혔다.
+  //
+  // **방문자 수는 없다.** 이 서버는 그런 것을 남기지 않는다. 여기서 세는 것은
+  // 전부 내가 쓴 것이다.
+
+  function num(n) { return (n || 0).toLocaleString(); }
+  function kb(n) {
+    if (!n) return "0";
+    if (n < 1024) return n + "B";
+    if (n < 1024 * 1024) return Math.round(n / 1024) + "KB";
+    return (n / 1024 / 1024).toFixed(1) + "MB";
+  }
+
+  // 막대 하나. 값이 아니라 **가장 큰 것에 대한 비율**로 그린다.
+  function bar(value, max) {
+    var w = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+    return el("span", { class: "ad-bar" }, [
+      el("span", { class: "ad-bar-fill", style: "width:" + w + "%" }),
+    ]);
+  }
+
+  function statCard(label, value, note) {
+    return el("div", { class: "ad-stat" }, [
+      el("p", { class: "ad-stat-label", text: label }),
+      el("p", { class: "ad-stat-value", text: value }),
+      note ? el("p", { class: "ad-stat-note", text: note }) : null,
+    ]);
+  }
+
+  function showStats() {
+    clear(root);
+    root.appendChild(el("p", { class: "ad-empty", text: "세는 중…" }));
+
+    api("GET", "/api/admin/stats").then(function (r) {
+      clear(root);
+      if (!r.ok) {
+        root.appendChild(el("p", { class: "ad-error", text: r.data.error || "데이터를 못 가져왔다" }));
+        return;
+      }
+      var d = r.data;
+
+      root.appendChild(el("div", { class: "ad-editbar" }, [
+        el("a", {
+          class: "ad-back", href: "/admin",
+          onclick: function (e) { e.preventDefault(); go("/admin"); }, text: "← 목록",
+        }),
+        el("h1", { text: "데이터" }),
+      ]));
+
+      // ── 한눈에
+      root.appendChild(el("div", { class: "ad-stats" }, [
+        statCard("전체 글", num(d.posts.total),
+          "공개 " + num(d.posts.unlisted + d.posts.published) + " · draft " + num(d.posts.draft)),
+        statCard("본문", kb(d.body.bytes),
+          "중앙값 " + num(d.body.median) + "자 · 최대 " + num(d.body.max) + "자"),
+        statCard("이미지", num(d.images.count) + "장",
+          kb(d.images.bytes) + (d.images.unused ? " · 안 쓰는 것 " + d.images.unused + "장" : "")),
+        statCard("분류", num(d.categories.length),
+          d.orphans.emptyCats ? "글 없는 분류 " + d.orphans.emptyCats + "개" : "전부 글이 있다"),
+      ]));
+
+      // ── 손볼 곳. **0이면 줄을 안 그린다** — 할 일 없는 목록에 0을 늘어놓으면
+      //    진짜 할 일이 묻힌다.
+      var todo = [];
+      if (d.posts.draft) todo.push(["draft", d.posts.draft + "편이 아직 공개되지 않았다"]);
+      if (d.body.empty) todo.push(["본문이 빈 글", d.body.empty + "편"]);
+      if (d.orphans.noCategory) todo.push(["분류 없는 글", d.orphans.noCategory + "편"]);
+      if (d.orphans.noDate) todo.push(["작성일 없는 글", d.orphans.noDate + "편 (목록에서 날짜가 빈다)"]);
+      if (d.orphans.emptyCats) todo.push(["글 없는 분류", d.orphans.emptyCats + "개"]);
+      if (d.images.unused) todo.push(["아무 글도 안 쓰는 이미지", d.images.unused + "장 (지우는 도구가 아직 없다)"]);
+      if (d.orphans.native) todo.push(["웹에서 쓴 글", d.orphans.native + "편 — 재이관이 되살리지 않는다"]);
+      if (todo.length) {
+        root.appendChild(el("section", { class: "ad-panel" }, [
+          el("h2", { text: "눈여겨볼 것" }),
+          el("ul", { class: "ad-todo" }, todo.map(function (t) {
+            return el("li", {}, [el("b", { text: t[0] }), el("span", { text: t[1] })]);
+          })),
+        ]));
+      }
+
+      // ── 해마다 쓴 글
+      if (d.years && d.years.length) {
+        var ymax = Math.max.apply(null, d.years.map(function (y) { return y.count; }));
+        root.appendChild(el("section", { class: "ad-panel" }, [
+          el("h2", { text: "해마다 쓴 글" }),
+          el("p", { class: "ad-note", text: "원본 작성일 기준이다. 이관 시점이 아니라 실제로 쓴 해다." }),
+          el("ul", { class: "ad-rows" }, d.years.map(function (y) {
+            return el("li", {}, [
+              el("span", { class: "ad-row-name mono", text: y.name }),
+              bar(y.count, ymax),
+              el("span", { class: "ad-row-num", text: num(y.count) }),
+            ]);
+          })),
+        ]));
+      }
+
+      // ── 분류별. 직속 글만 센다.
+      var top = d.categories.filter(function (c) { return c.posts > 0; });
+      var cmax = top.length ? top[0].posts : 0;
+      root.appendChild(el("section", { class: "ad-panel" }, [
+        el("h2", { text: "분류별 글" }),
+        el("p", { class: "ad-note", text: "직속 글만 센다 — 하위까지 더하면 상위 분류가 전부를 삼켜서 쏠림이 안 보인다." }),
+        el("ul", { class: "ad-rows" }, top.map(function (c) {
+          return el("li", {}, [
+            el("span", { class: "ad-row-name", title: c.path, text: c.path }),
+            bar(c.posts, cmax),
+            el("span", { class: "ad-row-num", text: num(c.posts) + (c.drafts ? " (draft " + c.drafts + ")" : "") }),
+          ]);
+        })),
+      ]));
     });
   }
 

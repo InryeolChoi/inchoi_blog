@@ -219,3 +219,74 @@ body.admin > * { max-width: none; }
 .ad-btn.danger:hover, .ad-btn.danger:focus-visible {
   background: var(--warn); color: var(--bg);
 }
+
+/* ── 데이터 보기 ────────────────────────────────────────────────────
+   세는 화면이라 숫자가 주인공이다. 막대는 값이 아니라 가장 큰 것에 대한
+   비율을 그린다 — 눈금 없는 막대에 절대값을 기대면 거짓말이 된다. */
+.ad-stats {
+  display: grid; gap: .8rem; margin: 1rem 0 1.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.ad-stat { border: 2px solid var(--ink); padding: .8rem .9rem; }
+.ad-stat-label {
+  margin: 0; font: 700 .68rem var(--mono); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-dim);
+}
+.ad-stat-value { margin: .3rem 0 0; font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+.ad-stat-note { margin: .35rem 0 0; font-size: .76rem; color: var(--ink-dim); line-height: 1.5; }
+
+.ad-panel { border: 2px solid var(--ink); margin: 0 0 1.4rem; }
+.ad-panel > h2 {
+  margin: 0; padding: .45rem .8rem;
+  font: 700 .72rem var(--mono); letter-spacing: .08em;
+  background: var(--band-bg); color: var(--band-fg);
+}
+.ad-panel > .ad-note { margin: 0; padding: .5rem .8rem 0; }
+
+.ad-todo { list-style: none; margin: 0; padding: .4rem .8rem .7rem; }
+.ad-todo li {
+  display: flex; gap: .7rem; align-items: baseline;
+  padding: .3rem 0; border-top: 1px solid var(--line); font-size: .87rem;
+}
+.ad-todo li:first-child { border-top: none; }
+.ad-todo b { flex: none; }
+.ad-todo span { color: var(--ink-dim); }
+
+.ad-rows { list-style: none; margin: 0; padding: .5rem .8rem .8rem; }
+.ad-rows li { display: flex; align-items: center; gap: .7rem; padding: .22rem 0; font-size: .85rem; }
+.ad-row-name {
+  flex: 0 0 12rem; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.ad-row-num {
+  flex: none; font-family: var(--mono); font-size: .78rem;
+  color: var(--ink-dim); font-variant-numeric: tabular-nums;
+}
+/* 막대는 잉크 테두리 안의 노랑(다크에서는 초록) 블록이다 — 강조는 언제나 지면이다. */
+.ad-bar { flex: 1; height: .75rem; border: 1px solid var(--ink); min-width: 3rem; }
+.ad-bar-fill { display: block; height: 100%; background: var(--rail); }
+
+@media (max-width: 40rem) {
+  .ad-row-name { flex: 0 0 7rem; }
+}
+
+/* 목록 한 줄의 손댈 것들. **한 줄에서 끝낸다** — 예전에는 "보기"뿐이라
+   고치거나 치우려면 편집 화면까지 들어가야 했다. */
+.ad-acts { white-space: nowrap; }
+.ad-acts .ad-act {
+  font: inherit; font-size: .76rem; line-height: 1;
+  padding: .25rem .45rem; margin-left: .25rem;
+  color: var(--ink-dim); background: transparent;
+  border: 1px solid var(--line-mid); cursor: pointer; text-decoration: none;
+  display: inline-block;
+}
+.ad-acts .ad-act:first-child { margin-left: 0; }
+.ad-acts .ad-act:hover, .ad-acts .ad-act:focus-visible {
+  color: var(--ink); border-color: var(--ink); background: var(--rail);
+}
+/* 되돌릴 수 없는 것은 되돌릴 수 없어 보여야 한다. 평소에는 테두리만이고
+   가까이 가야 채워진다 — 손이 먼저 가지 않게. */
+.ad-acts .ad-act.danger { color: var(--warn); border-color: var(--warn); }
+.ad-acts .ad-act.danger:hover, .ad-acts .ad-act.danger:focus-visible {
+  background: var(--warn); color: var(--bg); border-color: var(--warn);
+}

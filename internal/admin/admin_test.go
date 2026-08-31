@@ -33,10 +33,17 @@ func testDB(t *testing.T) *sql.DB {
 		}
 	}
 	exec(`INSERT INTO categories (id, name, slug, sort_order) VALUES (1, '개발', 'dev', 0)`)
-	exec(`INSERT INTO posts (id, slug, title, body, status, source, category_id, sort_order, created_at, updated_at)
-	      VALUES (1, 'live-post', '보이는 글', '# 제목\n\n본문이다.', 'unlisted', 'notion', 1, 0, ?, ?)`, now, now)
-	exec(`INSERT INTO posts (id, slug, title, body, status, source, category_id, sort_order, created_at, updated_at)
-	      VALUES (2, 'draft-post', '숨긴 글', '아직 안 썼다.', 'draft', 'notion', 1, 0, ?, ?)`, now, now)
+	// **노션에서 온 글에는 notion_page_id가 있다.** 이관은 언제나 그것을 넣는다.
+	// 픽스처가 비워두면 "웹에서 쓴 글"(native)과 구별되지 않아서, 그 구별에
+	// 기대는 것들(deploy/upload-guard.sql, 데이터 보기)을 확인할 수 없다.
+	exec(`INSERT INTO posts (id, slug, title, body, status, source, notion_page_id,
+	                         category_id, sort_order, created_at, updated_at)
+	      VALUES (1, 'live-post', '보이는 글', '# 제목\n\n본문이다.', 'unlisted', 'notion',
+	              'aaaaaaaa-0000-0000-0000-000000000001', 1, 0, ?, ?)`, now, now)
+	exec(`INSERT INTO posts (id, slug, title, body, status, source, notion_page_id,
+	                         category_id, sort_order, created_at, updated_at)
+	      VALUES (2, 'draft-post', '숨긴 글', '아직 안 썼다.', 'draft', 'notion',
+	              'aaaaaaaa-0000-0000-0000-000000000002', 1, 0, ?, ?)`, now, now)
 	return sqlDB
 }
 

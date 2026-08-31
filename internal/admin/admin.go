@@ -114,6 +114,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/posts", s.handleList)
 	mux.HandleFunc("GET /api/admin/posts/{slug}", s.handleGet)
 	mux.HandleFunc("GET /api/admin/categories", s.handleCategories)
+	// 데이터 보기. 이 아카이브가 지금 어떤 상태인지 한 화면에서 본다(stats.go).
+	mux.HandleFunc("GET /api/admin/stats", s.handleStats)
 	mux.HandleFunc("POST /api/admin/preview", s.handlePreview)
 	mux.HandleFunc("POST /api/admin/posts", s.handleSave)
 	mux.HandleFunc("PUT /api/admin/posts/{slug}", s.handleSave)

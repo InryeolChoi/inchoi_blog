@@ -8,63 +8,66 @@
 {{/* 공개 페이지와 같은 스타일시트다. 로그인 화면만 남의 집처럼 보이지 않게. */}}
 <style>{{.SiteCSS}}</style>
 <style>
+  /* 로그인 화면도 사이트와 같은 언어다 — 잉크 테두리, 반전 머리띠, 노랑 블록.
+     예전에는 둥근 모서리에 회색 카드라 이 화면만 남의 집처럼 보였다. */
   .lg-wrap {
     min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     padding: 2rem 1.25rem;
   }
   .lg-box {
-    width: 100%;
-    max-width: 26rem;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: var(--surface);
-    padding: 2rem 1.75rem;
+    width: 100%; max-width: 26rem;
+    border: 2px solid var(--ink);
+    background: var(--bg);
   }
+  /* 머리띠. 코드 라벨·목차와 같은 신호라 어느 화면인지 한눈에 붙는다. */
   .lg-kicker {
-    font-size: .78rem;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--ink-dim);
-    margin: 0 0 .6rem;
+    font: 700 .72rem var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    background: var(--band-bg); color: var(--band-fg);
+    margin: 0; padding: .45rem .8rem;
   }
-  .lg-box h1 { font-size: 1.35rem; margin: 0 0 .5rem; }
+  .lg-body { padding: 1.5rem 1.4rem 1.4rem; }
+  .lg-box h1 { font-size: 1.45rem; margin: 0 0 .5rem; letter-spacing: -.01em; }
+  .lg-box h1 mark {
+    background: var(--rail); color: #121415;
+    padding: 0 .12em; box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  }
   .lg-box p { color: var(--ink-dim); margin: 0 0 1.5rem; line-height: 1.6; }
+  /* 주 동작은 노랑 블록이다. 그 위 글자는 언제나 검정이라 테마가 같다. */
   .lg-btn {
-    display: block;
-    text-align: center;
+    display: block; text-align: center;
     padding: .8rem 1rem;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-    text-decoration: none;
-    font-weight: 600;
-    color: var(--ink);
+    border: 2px solid var(--ink);
+    background: var(--rail); color: #121415;
+    text-decoration: none; font-weight: 700;
+    transition: transform .12s ease, box-shadow .12s ease;
   }
-  .lg-btn:hover, .lg-btn:focus-visible { border-color: var(--rail); }
+  .lg-btn:hover, .lg-btn:focus-visible {
+    transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--hard-shadow);
+  }
   .lg-err {
-    border: 1px solid var(--line);
-    border-left: 3px solid var(--rail);
-    border-radius: 8px;
-    padding: .7rem .9rem;
-    margin: 0 0 1.25rem;
-    font-size: .9rem;
-    color: var(--ink);
-    line-height: 1.55;
+    border: 2px solid var(--warn);
+    padding: .7rem .9rem; margin: 0 0 1.25rem;
+    font-size: .9rem; color: var(--ink); line-height: 1.55;
   }
-  .lg-foot { margin: 1.5rem 0 0; font-size: .82rem; }
+  .lg-foot { margin: 1.4rem 0 0; font-size: .82rem; }
+  @media (prefers-reduced-motion: reduce) {
+    .lg-btn { transition: none; }
+    .lg-btn:hover, .lg-btn:focus-visible { transform: none; }
+  }
 </style>
 </head>
 <body>
 <div class="lg-wrap">
   <main class="lg-box">
-    <p class="lg-kicker">열렬히 · 뛰기</p>
-    <h1>글쓰기 화면</h1>
-    {{if .Error}}<p class="lg-err">{{.Error}}</p>{{end}}
-    <p>이 화면은 주인만 쓴다. GitHub으로 확인한다.</p>
-    <a class="lg-btn" href="/admin/auth/start">GitHub으로 로그인</a>
-    <p class="lg-foot"><a href="/">← 블로그로 돌아가기</a></p>
+    <p class="lg-kicker">열렬히.뛰기 / admin</p>
+    <div class="lg-body">
+      <h1><mark>글쓰기 화면</mark></h1>
+      {{if .Error}}<p class="lg-err">{{.Error}}</p>{{end}}
+      <p>이 화면은 주인만 쓴다. GitHub으로 확인한다.</p>
+      <a class="lg-btn" href="/admin/auth/start">GitHub으로 로그인</a>
+      <p class="lg-foot"><a href="/">← 블로그로 돌아가기</a></p>
+    </div>
   </main>
 </div>
 </body>
