@@ -1,3 +1,7 @@
+/* 2026-09-01 개편: 둥근 모서리와 부드러운 그림자를 걷어내고, 판을 나누는
+ * 것은 2px 잉크 테두리, 강조는 하늘색 블록으로 통일했다. 토큰은 공개 화면과
+ * 같은 것을 쓴다.
+ */
 /* admin 화면의 껍데기 스타일.
  *
  * **본문(article) 스타일은 여기 없다.** 미리보기는 공개 페이지와 같은
@@ -29,7 +33,7 @@ body.admin > * { max-width: none; }
 .ad-tag {
   font: 600 .7rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
   color: var(--badge-fg); background: var(--badge-bg);
-  border: 1px solid var(--badge-line); border-radius: 999px;
+  border: 1px solid var(--badge-line); border-radius: 0;
   padding: .25em .6em; margin-left: .4rem; vertical-align: .1em;
 }
 .ad-top-nav {
@@ -45,7 +49,7 @@ body.admin > * { max-width: none; }
 .ad-logout button {
   font: inherit; font-size: .8rem;
   padding: .25rem .6rem;
-  border: 1px solid var(--line-mid); border-radius: 6px;
+  border: 1px solid var(--line-mid); border-radius: 0;
   background: none; color: var(--ink-dim); cursor: pointer;
 }
 .ad-logout button:hover { color: var(--ink); border-color: var(--rail); }
@@ -59,7 +63,7 @@ body.admin > * { max-width: none; }
 }
 .ad-warn code {
   font: .9em/1 var(--mono); background: rgba(0,0,0,.07);
-  padding: .15em .4em; border-radius: 3px;
+  padding: .15em .4em; border-radius: 0;
 }
 
 .ad-main { padding: 1.4rem 1.2rem 4rem; }
@@ -73,9 +77,9 @@ body.admin > * { max-width: none; }
 
 .ad-chip {
   font: 600 .72rem/1 var(--mono);
-  border: 1px solid var(--line-mid); border-radius: 999px;
+  border: 1px solid var(--line-mid); border-radius: 0;
   padding: .32em .7em; white-space: nowrap;
-  color: var(--ink-dim); background: var(--surface);
+  color: var(--band-fg); background: var(--band-bg);
 }
 /* draft만 눈에 띄게 한다 — 공개 화면에서 숨겨지는 것이 그것뿐이다. */
 .ad-chip.st-draft { color: #8a5a00; background: var(--mark-bg); border-color: var(--line-mid); }
@@ -118,7 +122,7 @@ body.admin > * { max-width: none; }
 @media (max-width: 60rem) { .ad-split { grid-template-columns: 1fr; } }
 
 .ad-pane {
-  border: 1px solid var(--line); border-radius: 8px;
+  border: 2px solid var(--ink); border-radius: 0;
   background: var(--bg); padding: 1rem; min-width: 0;
 }
 .ad-panehead { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .6rem; }
@@ -134,7 +138,7 @@ body.admin > * { max-width: none; }
 
 .ad-input {
   font: inherit; color: var(--ink); background: var(--bg);
-  border: 1px solid var(--line-mid); border-radius: 5px;
+  border: 1px solid var(--line-mid); border-radius: 0;
   padding: .45rem .6rem; min-width: 0;
 }
 .ad-input.mono { font: .85rem/1.4 var(--mono); }
@@ -147,7 +151,7 @@ body.admin > * { max-width: none; }
   min-height: 26rem; resize: vertical;
   font: .85rem/1.7 var(--mono);
   color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line-mid); border-radius: 5px;
+  border: 1px solid var(--line-mid); border-radius: 0;
   padding: .8rem; tab-size: 2;
 }
 
@@ -161,11 +165,13 @@ body.admin > * { max-width: none; }
 .ad-btn {
   font: 600 .85rem/1 inherit; cursor: pointer;
   color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line-mid); border-radius: 5px;
+  border: 1px solid var(--line-mid); border-radius: 0;
   padding: .5rem .9rem;
 }
 .ad-btn:hover { background: var(--hover-bg); }
-.ad-btn.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* 주 동작은 **하늘색 블록**이다. 이 팔레트에서 강조는 색 글자가 아니라
+   색 지면이고, 그 위 글자는 언제나 검정이라 라이트·다크가 같다. */
+.ad-btn.primary { color: #121415; background: var(--rail); border-color: var(--ink); font-weight: 700; }
 .ad-btn.primary:hover { filter: brightness(1.1); }
 .ad-btn:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }
 
@@ -190,7 +196,7 @@ body.admin > * { max-width: none; }
 /* ── 메타 패널 ──────────────────────────────────────────────────────
    분류·계층·날짜는 늘 보일 필요가 없다. 글을 쓰는 동안 자리를 차지하면
    본문과 미리보기가 좁아진다. <details>라 스크립트가 없어도 여닫힌다. */
-.ad-meta { margin: .6rem 0 .2rem; border: 1px solid var(--line); border-radius: .4rem; }
+.ad-meta { margin: .6rem 0 .2rem; border: 2px solid var(--ink); border-radius: 0; }
 .ad-meta > summary {
   cursor: pointer; padding: .45rem .7rem;
   font-size: .82rem; color: var(--ink-dim); user-select: none;

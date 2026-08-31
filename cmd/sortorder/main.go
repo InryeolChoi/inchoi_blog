@@ -248,7 +248,11 @@ func applyManualOrders(assigns []assignment) []assignment {
 		out[i].order = edit.SortOrder
 		out[i].src = srcManual
 		out[i].tied = false
-		out[i].groupID = "manual:linear-algebra"
+		// **묶음 이름을 표에서 가져온다.** 예전에는 "manual:linear-algebra"가
+		// 박혀 있었는데, 수동 묶음이 둘이 되면서 두 묶음의 sort_order 0이
+		// 한 묶음 안에서 겹치는 것으로 보였다 — 아래 중복 검사가 거짓으로
+		// 실패한다. sort_order는 묶음 안에서만 0부터 센다.
+		out[i].groupID = "manual:" + edit.Group
 	}
 	return out
 }
@@ -413,14 +417,17 @@ func applyOrders(sqlDB *sql.DB, assigns []assignment) (int, error) {
 	}
 	defer tx.Rollback()
 
-	sel, err := tx.Prepare(`SELECT sort_order FROM posts WHERE notion_page_id = ?`)
+	sel, err := tx.Prepare(`SELECT sort_order, sort_order_manual FROM posts WHERE notion_page_id = ?`)
 	if err != nil {
 		return 0, fmt.Errorf("SELECT 준비: %w", err)
 	}
 	defer sel.Close()
 
+	// **"사람이 정했다"는 표시도 같이 쓴다.** 그게 없으면 웹이 이 값을
+	// 믿지 않고 제목 순으로 다시 세운다(migrations/005 참고).
 	upd, err := tx.Prepare(
-		`UPDATE posts SET sort_order = ?, updated_at = datetime('now') WHERE notion_page_id = ?`)
+		`UPDATE posts SET sort_order = ?, sort_order_manual = ?, updated_at = datetime('now')
+		 WHERE notion_page_id = ?`)
 	if err != nil {
 		return 0, fmt.Errorf("UPDATE 준비: %w", err)
 	}
@@ -428,8 +435,8 @@ func applyOrders(sqlDB *sql.DB, assigns []assignment) (int, error) {
 
 	changed := 0
 	for _, a := range assigns {
-		var current int
-		switch err := sel.QueryRow(a.pageID).Scan(&current); err {
+		var current, currentManual int
+		switch err := sel.QueryRow(a.pageID).Scan(&current, &currentManual); err {
 		case nil:
 		case sql.ErrNoRows:
 			// 덤프에는 있는데 posts에 없는 페이지. 이관 대상이 아니었다는 뜻이다.
@@ -437,10 +444,16 @@ func applyOrders(sqlDB *sql.DB, assigns []assignment) (int, error) {
 		default:
 			return 0, fmt.Errorf("현재 sort_order 조회(%s): %w", a.pageID, err)
 		}
-		if current == a.order {
+		manual := 0
+		if a.src == srcManual {
+			manual = 1
+		}
+		// **표시가 바뀌는 것도 변경이다.** 값만 견주면, 순서는 그대로인데
+		// 사람이 정했다는 사실만 새로 생긴 글을 건너뛴다.
+		if current == a.order && currentManual == manual {
 			continue
 		}
-		if _, err := upd.Exec(a.order, a.pageID); err != nil {
+		if _, err := upd.Exec(a.order, manual, a.pageID); err != nil {
 			return 0, fmt.Errorf("sort_order 갱신(%s): %w", a.pageID, err)
 		}
 		changed++

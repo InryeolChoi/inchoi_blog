@@ -36,6 +36,11 @@ type PostSummary struct {
 	// sort_order가 이 값에서 나온 목록이 많아서, 순서가 이상해 보일 때
 	// 근거를 눈으로 확인할 수 있게 목록에 같이 찍는다.
 	CreatedAt sql.NullTime
+	// ManualOrder는 이 글의 sort_order를 **사람이 정했다**는 표시다
+	// (migrations/005). 참이면 sortPosts가 제목으로 다시 세우지 않는다 —
+	// 그 재정렬은 created_time에서 나온 못 믿을 값을 위한 것이지, 사람이
+	// 직접 적어둔 순서까지 뒤집으라는 뜻이 아니다.
+	ManualOrder bool
 	// Children은 이 글에 달린 하위 글이다. nestPosts가 채운다.
 	Children []PostSummary
 	// Hidden은 이 글이 남에게 안 보이는 글(draft)이라는 표시다.
@@ -218,7 +223,7 @@ func (s *store) CategoryBySlug(slug string, parentID sql.NullInt64) (*Category, 
 
 // postColumns는 목록 한 줄에 필요한 컬럼이다.
 const postColumns = `p.id, p.parent_id, p.slug, p.title, p.status, p.sort_order,
-	       p.original_created_at`
+	       p.original_created_at, p.sort_order_manual`
 
 func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	defer rows.Close()
@@ -226,7 +231,7 @@ func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	for rows.Next() {
 		var p PostSummary
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.CreatedAt); err != nil {
+			&p.SortOrder, &p.CreatedAt, &p.ManualOrder); err != nil {
 			return nil, fmt.Errorf("글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -461,8 +466,25 @@ func scanNumber(rs []rune, i int) (int, int) {
 // `practice problem 1 / 2022년 탐자 1차 / practice problem 2 / 연습문제 …`처럼
 // 시리즈가 서로 엇갈려 보였다. 제목에 이미 번호가 적혀 있는데 그걸 안 읽고
 // 작성 시각을 따르는 것이라, 없는 순서를 지어내는 것과는 반대쪽 문제였다.
+//
+// # 사람이 정한 순서는 예외다
+//
+// **불신의 근거는 "이 값이 created_time에서 나왔다"는 것이지 "sort_order라서"가
+// 아니다.** 사람이 직접 적어둔 순서(ManualOrder)까지 제목으로 뒤집으면, 정하라고
+// 만든 자리가 무시되는 셈이다. 실제로 `다변량분석 : 코드` 12편이 그랬다 — 표에
+// 0~11을 적고 반영했는데 화면은 가나다순이었다.
+//
+// 그런 글은 **맨 앞에 자기 순서대로** 놓고, 나머지는 그 뒤에 예전 규칙으로
+// 세운다. 섞인 목록에서 "전부 sort_order"로 돌아서면 나머지 글들이 못 믿을
+// created_time 순서로 되돌아가고, 반대로 무시하면 사람이 정한 것이 사라진다.
 func sortPosts(in []PostSummary) {
 	sort.SliceStable(in, func(i, j int) bool {
+		if in[i].ManualOrder != in[j].ManualOrder {
+			return in[i].ManualOrder
+		}
+		if in[i].ManualOrder {
+			return in[i].SortOrder < in[j].SortOrder
+		}
 		ni, oki := postNumber(in[i].Title)
 		nj, okj := postNumber(in[j].Title)
 		if oki != okj {
@@ -583,7 +605,7 @@ func (s *store) PostAncestors(postID int64) ([]PostSummary, error) {
 		var p PostSummary
 		var depth int
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.CreatedAt, &depth); err != nil {
+			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &depth); err != nil {
 			return nil, fmt.Errorf("상위 글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -735,7 +757,7 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 		var p PostSummary
 		var path string
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.CreatedAt, &path); err != nil {
+			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &path); err != nil {
 			return nil, fmt.Errorf("인라인 데이터베이스 스캔: %w", err)
 		}
 		rest := strings.Split(strings.TrimPrefix(path, prefix), " > ")

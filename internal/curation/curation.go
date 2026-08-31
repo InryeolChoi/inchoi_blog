@@ -191,18 +191,27 @@ var PostMoves = []PostMove{
 // notion_page_id가 멱등 키라 다시 이관해도 같은 글에 적용된다. `OriginalTitle`은
 // 표를 잘못 적었거나 덤프 제목이 바뀌었을 때 조용히 엉뚱한 글을 고치지 않게 한다.
 type PostMetadataEdit struct {
-	NotionPageID      string
-	OriginalTitle     string
-	Title             string
-	OriginalCreatedAt string // YYYY-MM-DD, UTC
+	NotionPageID  string
+	OriginalTitle string
+	Title         string
+	// OriginalCreatedAt가 비어 있으면 노션 원본 작성일을 그대로 둔다 —
+	// **순서만 사람이 정한 글**이 이 경우다(다변량분석 : 코드 12편).
+	OriginalCreatedAt string // YYYY-MM-DD, UTC. 비면 원본 유지
 	SortOrder         int
+	// Group은 이 글이 속한 수동 묶음의 이름이다. **표에 손으로 적지 않고
+	// concatMetadataEdits가 찍는다** — 묶음마다 스물몇 줄에 같은 값을 반복하면
+	// 언젠가 한 줄이 어긋난다.
+	//
+	// sort_order는 묶음 **안에서만** 0부터 세므로, 이 이름이 다르지 않으면
+	// 두 묶음의 0번이 같은 자리를 다투는 것으로 보인다(cmd/sortorder의 중복 검사).
+	Group string
 }
 
-// PostMetadataEdits의 선형대수 순서는 일반적인 교과서 흐름을 따른다:
+// linearAlgebraMetadataEdits의 선형대수 순서는 일반적인 교과서 흐름을 따른다:
 // 벡터 → 행렬/소거 → 벡터공간 → 선형변환 → 역행렬 → 내적 → 고유값 → SVD.
 // 최적화 주제는 넣지 않는다. 날짜는 사용자의 요청대로 2022년 3~8월 안에서 순서가
 // 뒤집히지 않게 임의로 배정했다.
-var PostMetadataEdits = []PostMetadataEdit{
+var linearAlgebraMetadataEdits = []PostMetadataEdit{
 	{NotionPageID: "f69e826a-2112-4dbe-861d-8b61e0c136a5", OriginalTitle: "벡터", Title: "1. 벡터", OriginalCreatedAt: "2022-03-12", SortOrder: 0},
 	{NotionPageID: "7555c053-d6d0-404c-9282-43b737a4c063", OriginalTitle: "행렬", Title: "2. 행렬", OriginalCreatedAt: "2022-03-26", SortOrder: 1},
 	{NotionPageID: "c76070b0-c71d-45ba-82d7-a542f7dbab89", OriginalTitle: "피봇연산", Title: "3. 피봇연산", OriginalCreatedAt: "2022-04-09", SortOrder: 2},
@@ -214,6 +223,59 @@ var PostMetadataEdits = []PostMetadataEdit{
 	{NotionPageID: "2cb48833-6e6e-4b48-9f74-2855ef3c63db", OriginalTitle: "고유값과 대각화", Title: "9. 고유값과 대각화", OriginalCreatedAt: "2022-07-02", SortOrder: 8},
 	{NotionPageID: "5ef93000-4852-4af7-84cf-37c78b9b3774", OriginalTitle: "피봇연산과 대각화", Title: "10. 피봇연산과 대각화", OriginalCreatedAt: "2022-07-16", SortOrder: 9},
 	{NotionPageID: "f77c0e4e-dd54-4a4a-9534-e9f8ca1846a8", OriginalTitle: "특이값 분해", Title: "11. 특이값 분해", OriginalCreatedAt: "2022-07-30", SortOrder: 10},
+}
+
+// multivariateCodeOrderEdits는 `다변량분석 : 코드` 인라인 데이터베이스 12편의
+// **화면 순서만** 노션 원본과 같게 고정한다. 제목과 작성일은 원본 그대로다 —
+// Title은 OriginalTitle과 같고 OriginalCreatedAt는 비워서 노션 날짜를 유지한다.
+//
+// 필요한 이유: 이 목록은 표지 글 본문의 인라인 DB 링크가 펼치는데, 그 행의
+// sort_order는 created_time 순위라 신뢰도가 낮고(주성분(1)이 인자(1)보다 늦게
+// 만들어졌다), 제목에 앞 번호도 없어서 sortPosts의 자연 정렬이 가나다순으로
+// 세워 버린다. 사람이 정한 순서가 곧 노션 화면 순서다.
+//
+// 주의: `정준분석 : 코드 `의 끝 공백은 노션 원본 제목 그대로다. 지우면 대조에
+// 실패해 import가 멈춘다.
+var multivariateCodeOrderEdits = []PostMetadataEdit{
+	{NotionPageID: "ec0b947d-bbf6-499f-8645-b5fe394d10bc", OriginalTitle: "다변량분석?", Title: "다변량분석?", SortOrder: 0},
+	{NotionPageID: "394c5783-db1f-42b9-9476-a539bcbde6a4", OriginalTitle: "확률분포와 자료행렬", Title: "확률분포와 자료행렬", SortOrder: 1},
+	{NotionPageID: "71436e58-812a-4685-ad88-4f4a37a24536", OriginalTitle: "주성분분석 : 코드 (1)", Title: "주성분분석 : 코드 (1)", SortOrder: 2},
+	{NotionPageID: "8216bed7-2ce5-4555-8466-e321e8fb849c", OriginalTitle: "주성분분석 : 코드 (2)", Title: "주성분분석 : 코드 (2)", SortOrder: 3},
+	{NotionPageID: "0a86612d-5f9e-4724-b2e1-373fd4a8d013", OriginalTitle: "인자분석 : 코드 (1)", Title: "인자분석 : 코드 (1)", SortOrder: 4},
+	{NotionPageID: "bf3bee60-ca47-4f8e-b426-a82e989db0cd", OriginalTitle: "인자분석 : 코드 (2)", Title: "인자분석 : 코드 (2)", SortOrder: 5},
+	{NotionPageID: "2dba98b9-d19c-4975-980b-1eeab3b8478f", OriginalTitle: "인자분석 : 코드 (3)", Title: "인자분석 : 코드 (3)", SortOrder: 6},
+	{NotionPageID: "214d7452-4645-4cdf-8deb-8df6dfa7e74a", OriginalTitle: "인자분석 : 코드 (4)", Title: "인자분석 : 코드 (4)", SortOrder: 7},
+	{NotionPageID: "bf5789a3-3a6b-48b9-b674-b8dd0838a27d", OriginalTitle: "정준분석 : 코드 ", Title: "정준분석 : 코드 ", SortOrder: 8},
+	{NotionPageID: "765af940-662e-46a8-bbc7-4772ef58189c", OriginalTitle: "대응분석 : 코드", Title: "대응분석 : 코드", SortOrder: 9},
+	{NotionPageID: "88ce9e1d-247f-4f58-86ce-1c30c01e27fd", OriginalTitle: "군집분석 : 코드", Title: "군집분석 : 코드", SortOrder: 10},
+	{NotionPageID: "0cf2df56-37f2-4acc-ac3c-9a37513275de", OriginalTitle: "판별분석 : 코드", Title: "판별분석 : 코드", SortOrder: 11},
+}
+
+// PostMetadataEdits는 사람이 제목·작성일·순서(또는 순서만)를 정한 글 전체다.
+// **import가 DB에 넣기 직전에 적용하고 sortorder(-only all)가 같은 표로 덮는다.**
+// 웹은 이 표를 모른다 — DB의 sort_order를 읽을 뿐이라, 표를 고친 뒤에는
+// 파이프라인을 다시 돌려야 화면이 바뀐다.
+var PostMetadataEdits = concatMetadataEdits(
+	metadataGroup{"linear-algebra", linearAlgebraMetadataEdits},
+	metadataGroup{"multivariate-code", multivariateCodeOrderEdits},
+)
+
+// metadataGroup은 이름 하나와 그 묶음의 글들이다.
+type metadataGroup struct {
+	name  string
+	edits []PostMetadataEdit
+}
+
+// concatMetadataEdits는 묶음들을 합치면서 각 글에 묶음 이름을 찍는다.
+func concatMetadataEdits(groups ...metadataGroup) []PostMetadataEdit {
+	var out []PostMetadataEdit
+	for _, g := range groups {
+		for _, e := range g.edits {
+			e.Group = g.name
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // PostTitleEdit는 작성일과 순서는 그대로 두고 제목만 바꾸는 예외다.
@@ -268,11 +330,15 @@ func ApplyPostMetadata(pageID, title string, createdAt *time.Time) (string, *tim
 		return "", nil, nil, fmt.Errorf("%s: 메타데이터 표의 원본 제목 %q와 실제 제목 %q가 다르다",
 			pageID, edit.OriginalTitle, title)
 	}
+	order := edit.SortOrder
+	if edit.OriginalCreatedAt == "" {
+		// 순서만 사람이 정한 글이다. 작성일은 노션 원본을 그대로 둔다.
+		return edit.Title, createdAt, &order, nil
+	}
 	date, err := time.Parse("2006-01-02", edit.OriginalCreatedAt)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("%s: 수동 작성일 %q: %w", pageID, edit.OriginalCreatedAt, err)
 	}
-	order := edit.SortOrder
 	return edit.Title, &date, &order, nil
 }
 

@@ -229,15 +229,19 @@ func TestEcole42EntryPostsBecomeChildCategoryCovers(t *testing.T) {
 	}
 }
 
+// **묶음마다 규칙이 다르다.** 선형대수는 제목에 번호를 붙이고 날짜까지 사람이
+// 정했지만, 다변량분석은 순서만 정하고 제목·날짜는 원본 그대로다. 그래서 표
+// 전체에 한 가지 규칙을 걸 수 없다 — 묶음별로 따로 보고, 표 전체에는 겹치는
+// 것이 없다는 것만 본다.
 func TestLinearAlgebraMetadataIsCompleteAndOrdered(t *testing.T) {
-	if got, want := len(PostMetadataEdits), 11; got != want {
+	if got, want := len(linearAlgebraMetadataEdits), 11; got != want {
 		t.Fatalf("선형대수 메타데이터가 %d건이다, want %d", got, want)
 	}
 	moves := PostMoveBySlug()
 	seen := map[string]bool{}
 	start := time.Date(2022, 3, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2022, 8, 31, 23, 59, 59, 0, time.UTC)
-	for i, edit := range PostMetadataEdits {
+	for i, edit := range linearAlgebraMetadataEdits {
 		if seen[edit.NotionPageID] {
 			t.Errorf("중복 notion_page_id: %s", edit.NotionPageID)
 		}
@@ -261,8 +265,57 @@ func TestLinearAlgebraMetadataIsCompleteAndOrdered(t *testing.T) {
 			t.Errorf("%q가 선형대수 이동 대상이 아니다", edit.Title)
 		}
 	}
-	if got := PostMetadataEdits[3].Title; got != "4. 벡터공간" {
+	if got := linearAlgebraMetadataEdits[3].Title; got != "4. 벡터공간" {
 		t.Errorf("벡터공간 번호가 다르다: %q", got)
+	}
+}
+
+// 다변량분석은 **순서만** 사람이 정했다. 제목과 작성일을 건드리면 안 된다 —
+// 원본 그대로여야 재이관 때 노션 값이 그대로 살아난다.
+func TestMultivariateCodeOrderTouchesOnlyTheOrder(t *testing.T) {
+	want := []string{
+		"다변량분석?", "확률분포와 자료행렬",
+		"주성분분석 : 코드 (1)", "주성분분석 : 코드 (2)",
+		"인자분석 : 코드 (1)", "인자분석 : 코드 (2)",
+		"인자분석 : 코드 (3)", "인자분석 : 코드 (4)",
+		"정준분석 : 코드 ", "대응분석 : 코드",
+		"군집분석 : 코드", "판별분석 : 코드",
+	}
+	if got := len(multivariateCodeOrderEdits); got != len(want) {
+		t.Fatalf("다변량분석 메타데이터가 %d건이다, want %d", got, len(want))
+	}
+	for i, edit := range multivariateCodeOrderEdits {
+		if edit.Title != want[i] {
+			t.Errorf("%d번째 제목이 %q다, want %q", i, edit.Title, want[i])
+		}
+		// **제목을 바꾸지 않는다.** 둘이 다르면 사람이 제목까지 손댄 것이다.
+		if edit.Title != edit.OriginalTitle {
+			t.Errorf("%q: 제목을 바꾸고 있다 (원본 %q)", edit.Title, edit.OriginalTitle)
+		}
+		// **작성일을 비워야 노션 원본이 유지된다.** 값을 적으면 그날로 덮인다.
+		if edit.OriginalCreatedAt != "" {
+			t.Errorf("%q: 작성일 %q를 적었다. 순서만 정하는 묶음이다",
+				edit.Title, edit.OriginalCreatedAt)
+		}
+		if edit.SortOrder != i {
+			t.Errorf("%q sort_order=%d, want %d", edit.Title, edit.SortOrder, i)
+		}
+	}
+}
+
+// 표를 합쳤으므로 **묶음끼리 같은 글을 두 번 잡지 않는지**는 따로 봐야 한다.
+// 겹치면 PostMetadataByID가 조용히 한쪽을 이긴다.
+func TestMetadataEditsHaveNoDuplicates(t *testing.T) {
+	seen := map[string]string{}
+	for _, edit := range PostMetadataEdits {
+		if prev, dup := seen[edit.NotionPageID]; dup {
+			t.Errorf("%s를 두 번 잡는다: %q와 %q", edit.NotionPageID, prev, edit.Title)
+		}
+		seen[edit.NotionPageID] = edit.Title
+	}
+	if got, want := len(PostMetadataEdits),
+		len(linearAlgebraMetadataEdits)+len(multivariateCodeOrderEdits); got != want {
+		t.Errorf("합친 표가 %d건이다, want %d", got, want)
 	}
 }
 
@@ -317,6 +370,40 @@ func TestMathStatsTwoReferenceTitlesDropDuplicateSuffix(t *testing.T) {
 		}
 		if title != edit.Title || !created.Equal(original) || order != nil {
 			t.Errorf("title=%q created=%v order=%v", title, created, order)
+		}
+	}
+}
+
+// 묶음 이름은 표에 손으로 적지 않고 concatMetadataEdits가 찍는다.
+// **이름이 다르지 않으면 두 묶음의 0번이 같은 자리를 다투는 것으로 보인다**
+// (cmd/sortorder의 중복 검사).
+func TestMetadataGroupsAreNamedApart(t *testing.T) {
+	groups := map[string]int{}
+	for _, edit := range PostMetadataEdits {
+		if edit.Group == "" {
+			t.Fatalf("%q에 묶음 이름이 없다", edit.Title)
+		}
+		groups[edit.Group]++
+	}
+	if len(groups) < 2 {
+		t.Fatalf("묶음이 %d개다. 둘 이상이어야 이 검사가 뜻이 있다", len(groups))
+	}
+	// 묶음 안에서 sort_order가 0부터 빠짐없이 이어져야 한다.
+	for name := range groups {
+		seen := map[int]bool{}
+		for _, edit := range PostMetadataEdits {
+			if edit.Group != name {
+				continue
+			}
+			if seen[edit.SortOrder] {
+				t.Errorf("%s: sort_order %d가 겹친다", name, edit.SortOrder)
+			}
+			seen[edit.SortOrder] = true
+		}
+		for i := 0; i < groups[name]; i++ {
+			if !seen[i] {
+				t.Errorf("%s: sort_order %d가 비었다", name, i)
+			}
 		}
 	}
 }

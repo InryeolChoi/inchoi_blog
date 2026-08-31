@@ -43,14 +43,17 @@ func TestPreferencesScriptIsServed(t *testing.T) {
 	}
 }
 
-func TestPreferencesCircleMorphsIntoPanelAtBottomRight(t *testing.T) {
+func TestPreferencesButtonMorphsIntoPanelAtBottomRight(t *testing.T) {
 	body := get(t, testServer(t), "/dev/language").Body.String()
 	for _, want := range []string{
 		`right: max(1rem, env(safe-area-inset-right))`,
 		`.prefs-shell[data-open="true"] {`,
 		`width: min(19rem, calc(100vw - 2rem))`,
 		`height: min(17.5rem, calc(100vh - 2rem))`,
-		`border-radius: 1.375rem`,
+		// **모서리는 각지다** (2026-09-01의 디자인 개편). 예전에는 원이
+		// 둥근 사각형으로 자라는 모핑이었는데, 이 팔레트에는 둥근 모서리가
+		// 없다 — 사각 버튼이 사각 판으로 자란다. 자라는 것 자체는 그대로다.
+		`border: 2px solid var(--ink)`,
 		`.prefs-toggle[aria-expanded="true"] {`,
 		`.prefs-toggle[aria-expanded="true"] .prefs-glyph span:nth-child(1)`,
 		`transform-origin: right bottom`,
