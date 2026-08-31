@@ -8,50 +8,93 @@
 {{/* 공개 페이지와 같은 스타일시트다. 로그인 화면만 남의 집처럼 보이지 않게. */}}
 <style>{{.SiteCSS}}</style>
 <style>
-  /* 로그인 화면도 사이트와 같은 언어다 — 잉크 테두리, 반전 머리띠, 노랑 블록.
-     예전에는 둥근 모서리에 회색 카드라 이 화면만 남의 집처럼 보였다. */
+  /* 로그인 화면은 **터미널 창**이다.
+   *
+   * 이 화면이 하는 말은 "너는 아직 아무도 아니고, 주인임을 증명하면 쓸 수
+   * 있다"인데, 그건 셸에서 sudo를 치는 것과 같은 장면이다. 카드 한 장으로
+   * 두면 그 말이 안 들리고 남의 집 로그인 폼처럼 보인다.
+   *
+   * **위아래 띠가 창을 닫는다.** 위는 어느 창인지, 아래는 나가는 길이다 —
+   * nano의 `^X Exit`이 바닥에 있는 그 자리라, "돌아가기"가 허공에 뜨지 않고
+   * 제 집을 갖는다. 예전에는 버튼 아래에 그냥 매달려 있었다.
+   */
   .lg-wrap {
     min-height: 100vh;
     display: flex; align-items: center; justify-content: center;
-    padding: 2rem 1.25rem;
+    padding: 1.5rem 1.25rem;
+    /* 창 밖은 지면이 아니라 **책상**이다. 라이트에서도 어둡게 깔아 창이
+       떠 보이게 한다 — 터미널은 언제나 어두운 것에 얹혀 있다. */
+    background: var(--band-bg);
   }
   .lg-box {
-    width: 100%; max-width: 26rem;
-    border: 2px solid var(--ink);
-    background: var(--bg);
+    width: 100%; max-width: 33rem;
+    border: 2px solid var(--band-fg);
+    background: var(--ink);
+    color: #E6E9E7;
+    font-family: var(--mono);
   }
-  /* 머리띠. 코드 라벨·목차와 같은 신호라 어느 화면인지 한눈에 붙는다. */
-  .lg-kicker {
-    font: 700 .72rem var(--mono); letter-spacing: .12em; text-transform: uppercase;
-    background: var(--band-bg); color: var(--band-fg);
-    margin: 0; padding: .45rem .8rem;
+  /* 위 띠: 어느 창인가. 아래 띠와 같은 모양이라 창이 위아래로 닫힌다. */
+  .lg-bar {
+    display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+    background: var(--band-fg); color: var(--ink);
+    font: 700 .72rem var(--mono); letter-spacing: .08em;
+    padding: .42rem .8rem;
   }
-  .lg-body { padding: 1.5rem 1.4rem 1.4rem; }
-  .lg-box h1 { font-size: 1.45rem; margin: 0 0 .5rem; letter-spacing: -.01em; }
-  .lg-box h1 mark {
-    background: var(--rail); color: #121415;
-    padding: 0 .12em; box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  .lg-bar .dim { font-weight: 400; opacity: .6; }
+
+  .lg-body { padding: 1.5rem 1.1rem 1.3rem; }
+  /* 프롬프트 줄. 실제 셸처럼 읽히도록 줄바꿈을 그대로 살린다. */
+  .lg-line {
+    margin: 0; font-size: .92rem; line-height: 1.95; white-space: pre-wrap;
+    word-break: keep-all;
   }
-  .lg-box p { color: var(--ink-dim); margin: 0 0 1.5rem; line-height: 1.6; }
-  /* 주 동작은 노랑 블록이다. 그 위 글자는 언제나 검정이라 테마가 같다. */
+  .lg-p { color: var(--rail); }
+  .lg-dim { color: #7D8783; }
+  .lg-cur {
+    display: inline-block; width: .55em; height: 1.05em;
+    background: var(--rail); vertical-align: text-bottom; margin-left: 2px;
+    animation: lg-blink 1.1s steps(1) infinite;
+  }
+  @keyframes lg-blink { 50% { opacity: 0; } }
+
+  /* 주 동작. 창 안에서 유일하게 색이 채워진 자리라 눈이 먼저 간다. */
   .lg-btn {
-    display: block; text-align: center;
-    padding: .8rem 1rem;
-    border: 2px solid var(--ink);
+    display: flex; align-items: center; justify-content: center; gap: .55rem;
+    margin-top: 1.3rem; padding: .8rem 1rem;
+    border: 2px solid var(--band-fg);
     background: var(--rail); color: #121415;
-    text-decoration: none; font-weight: 700;
+    text-decoration: none; font-weight: 700; font-size: .95rem;
     transition: transform .12s ease, box-shadow .12s ease;
   }
   .lg-btn:hover, .lg-btn:focus-visible {
-    transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--hard-shadow);
+    transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--band-fg);
   }
+  .lg-btn svg { width: 17px; height: 17px; fill: currentColor; flex: none; }
+
+  /* 아래 띠: 나가는 길. 위 띠와 짝이라 창이 닫힌다. */
+  .lg-foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+    background: var(--band-fg); color: var(--ink);
+    font: .72rem var(--mono); letter-spacing: .04em;
+    padding: .42rem .8rem;
+  }
+  .lg-foot a { color: inherit; text-decoration: none; font-weight: 700; }
+  .lg-foot a:hover, .lg-foot a:focus-visible { background: var(--rail); }
+  .lg-key {
+    border: 1px solid currentColor; padding: 0 .3em; margin-right: .35em;
+    font-size: .92em; opacity: .75;
+  }
+  .lg-foot .dim { opacity: .6; }
+
+  /* 거절당했을 때. 창 안의 붉은 줄 하나다 — 셸이 뱉는 오류처럼. */
   .lg-err {
-    border: 2px solid var(--warn);
-    padding: .7rem .9rem; margin: 0 0 1.25rem;
-    font-size: .9rem; color: var(--ink); line-height: 1.55;
+    margin: 0 0 1rem; padding: .5rem .7rem;
+    border-left: 3px solid var(--warn); background: rgba(179, 38, 30, .14);
+    color: #F0938B; font-size: .88rem; line-height: 1.6;
   }
-  .lg-foot { margin: 1.4rem 0 0; font-size: .82rem; }
+
   @media (prefers-reduced-motion: reduce) {
+    .lg-cur { animation: none; }
     .lg-btn { transition: none; }
     .lg-btn:hover, .lg-btn:focus-visible { transform: none; }
   }
@@ -60,13 +103,32 @@
 <body>
 <div class="lg-wrap">
   <main class="lg-box">
-    <p class="lg-kicker">열렬히.뛰기 / admin</p>
+    <div class="lg-bar">
+      <span>inquieto.dev — admin</span>
+      <span class="dim">zsh</span>
+    </div>
+
     <div class="lg-body">
-      <h1><mark>글쓰기 화면</mark></h1>
       {{if .Error}}<p class="lg-err">{{.Error}}</p>{{end}}
-      <p>이 화면은 주인만 쓴다. GitHub으로 확인한다.</p>
-      <a class="lg-btn" href="/admin/auth/start">GitHub으로 로그인</a>
-      <p class="lg-foot"><a href="/">← 블로그로 돌아가기</a></p>
+      {{/* 프롬프트 두 줄이 이 화면이 하는 말을 그대로 한다: 너는 아직
+           아무도 아니고(whoami), 주인임을 증명하면 쓸 수 있다(sudo). */}}
+      <p class="lg-line"><span class="lg-p">$</span> whoami
+<span class="lg-dim">anonymous</span>
+
+<span class="lg-p">$</span> sudo write --as=owner
+<span class="lg-dim">주인만 쓰는 화면입니다. GitHub 계정으로 확인합니다.</span><span class="lg-cur" aria-hidden="true"></span></p>
+
+      <a class="lg-btn" href="/admin/auth/start">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.14.46.55.38A8 8 0 0 0 8 0z"/></svg>
+        GitHub으로 로그인
+      </a>
+    </div>
+
+    {{/* 나가는 길은 여기 하나다. nano의 `^X Exit`이 바닥에 있는 그 자리라,
+         버튼 밑에 매달려 있던 것보다 제 집이 분명하다. */}}
+    <div class="lg-foot">
+      <a href="/"><span class="lg-key">esc</span>블로그로 돌아가기</a>
+      <span class="dim">허용된 계정만</span>
     </div>
   </main>
 </div>
