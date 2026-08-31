@@ -4,10 +4,32 @@
      사이드바가 이미 들고 있어서, 홈이 같은 트리를 한 벌 더 그릴 이유가 없다.
      이 페이지 전용 JavaScript도 CSS 애니메이션도 없다. */}}
 <section class="home-hero" aria-labelledby="home-title">
-  <p class="home-eyebrow">최인렬 · 기술 블로그 겸 학습 아카이브</p>
+  <p class="home-eyebrow" data-i18n="homeKicker">기술 블로그 겸 학습 아카이브</p>
   <h1 id="home-title">배운 것을 연결하고,<br><span>만든 것으로 남깁니다.</span></h1>
   <p class="home-lead">개발, 컴퓨터과학, 데이터와 수학을 오가며 쌓은 기록입니다. 정답보다 이해의 과정과, 다시 찾아갈 길을 남깁니다.</p>
 </section>
+
+{{/* 최근에 쓴 글.
+
+     **날짜를 같이 찍는다.** 그래야 "최근"이라는 말이 날짜보다 앞서 나가지
+     않는다 — 읽는 사람이 날짜를 보고 스스로 판단한다. 목록에 원본 작성일을
+     찍어 순서의 근거를 보이게 한 것과 같은 이유다.
+
+     비어 있으면 섹션째 안 그린다. 빈 목록에 제목만 남으면 "여기 뭔가 있어야
+     하는데 없다"로 읽힌다. */}}
+{{with .Posts}}
+<section class="home-recent" aria-labelledby="recent-title">
+  <h2 id="recent-title" data-i18n="recentPosts">최근에 쓴 글</h2>
+  <ul class="home-recent-list">
+    {{range .}}
+    <li>
+      <a href="/p/{{.Slug}}">{{.Title}}</a>
+      {{if .CreatedAt.Valid}}<time datetime="{{.CreatedAt.Time.Format "2006-01-02"}}">{{.CreatedAt.Time.Format "2006-01-02"}}</time>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
 
 {{/* 아래는 직접 쓴 글이 쌓일 때 함께 재배치하려고 남겨둔 것이다. 지우지 않은
      이유는 구성 자체가 아니라 순서만 바뀔 물건이기 때문이다 — 되살릴 때는 새 글이

@@ -123,6 +123,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/posts/{slug}/refs", s.handleRefs)
 	mux.HandleFunc("DELETE /api/admin/posts/{slug}", s.handleDelete)
 
+	// 로그아웃은 인증이 꺼져 있어도 등록해 둔다. 읽는 화면의 사이드바가
+	// 부르는 자리라 언제나 있어야 하고, 하는 일은 쿠키 하나를 지우는 것뿐이다.
+	//
+	// **POST다.** GET이면 남의 페이지에 박아둔 <img> 하나로도 사람을
+	// 로그아웃시킬 수 있다.
+	mux.HandleFunc("POST /admin/logout", s.handleLogout)
+
 	// 어디에도 안 걸린 /api/admin/* 은 JSON 404를 준다.
 	mux.HandleFunc("/api/admin/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "그런 API가 없다: "+r.Method+" "+r.URL.Path)
@@ -134,9 +141,6 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /admin/login", s.auth.handleLoginPage)
 		mux.HandleFunc("GET /admin/auth/start", s.auth.handleStart)
 		mux.HandleFunc("GET /admin/auth/callback", s.auth.handleCallback)
-		// 로그아웃은 POST다. GET이면 남의 페이지에 박아둔 <img>만으로도
-		// 사람을 로그아웃시킬 수 있다.
-		mux.HandleFunc("POST /admin/logout", s.auth.handleLogout)
 
 		// **관문은 mux 바깥이다.** 안쪽에 두면 새 라우트를 더할 때마다 챙겨야
 		// 하고, 한 번 빠뜨리면 그게 곧 구멍이다. CSRF 검사도 같은 이유로

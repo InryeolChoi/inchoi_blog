@@ -18,6 +18,7 @@ import (
 	"github.com/inryeol/blog"
 	"github.com/inryeol/blog/internal/admin"
 	"github.com/inryeol/blog/internal/db"
+	"github.com/inryeol/blog/internal/throttle"
 	"github.com/inryeol/blog/internal/web"
 )
 
@@ -91,6 +92,16 @@ func main() {
 				*addr, strings.Join(auth.AllowedLogins, ", "))
 		}
 	}
+
+	// **한 주소가 쏟아내는 요청을 막는다.** 진짜 DDoS(회선 채우기)는 여기서
+	// 못 막고 앞단 몫이다 — internal/throttle의 패키지 주석 참고. 여기가
+	// 막는 것은 긁는 봇 하나, 로그인 두드리기, 폭주하는 스크립트 하나다.
+	//
+	// 값의 근거: 사람이 아카이브를 빠르게 넘겨도 초당 몇 페이지고, 페이지
+	// 하나가 이미지·정적 자산을 열몇 개 부른다. 지속 20/s에 burst 60이면
+	// 사람은 안 걸리고, 초당 수백을 쏘는 것만 걸린다. e2-micro(1GB)가
+	// 버티는 한계보다 한참 아래에서 끊는 것이 목적이다.
+	handler = throttle.New(throttle.Limit{Rate: 20, Burst: 60}, 4096).Middleware(handler)
 
 	log.Printf("http://%s 에서 대기 중 (db: %s, draft %s, admin %s)",
 		*addr, *dbPath,

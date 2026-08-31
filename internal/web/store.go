@@ -259,6 +259,44 @@ func (s *store) PostsInCategory(categoryID int64) ([]PostSummary, error) {
 	return nestPosts(flat), nil
 }
 
+// recentLimit은 홈에 세울 최근 글 수다. 홈은 표제지가 주인공이라 목록이
+// 길어지면 그 자리를 뺏는다.
+const recentLimit = 6
+
+// RecentPosts는 **가장 최근에 쓴 글**이다.
+//
+// # 왜 이제야 만들 수 있나
+//
+// 예전에는 이걸 정직하게 만들 수 없다고 적어뒀다(CLAUDE.md의 "홈에 최근 글을
+// 넣지 않는다"). 그때 이유는 하나였다 — 쓸 수 있는 날짜가 노션 작성일뿐인데
+// 그게 2022~2023년이라, "최근"이라 찍으면 없는 최신성을 지어내는 셈이었다.
+//
+// 그 전제가 바뀌었다. 아카이브의 최신 글은 실제로 2025년이고, admin이 붙어
+// 새 글은 쓰는 날짜가 그대로 들어간다. 그래서 **`original_created_at`이 곧
+// 진짜로 쓴 날**이다 — 이관 시점도, 재이관 때마다 움직이는 `updated_at`도 아니다.
+//
+// # 그래도 날짜를 같이 찍는다
+//
+// 목록에 날짜가 함께 나가므로 "최근"이라는 말이 날짜보다 앞서 나가지 않는다.
+// 읽는 사람이 2025-06을 보고 최근인지 아닌지 스스로 판단한다 — 목록에 원본
+// 작성일을 찍어 순서의 근거를 보이게 한 것과 같은 이유다.
+//
+// 날짜가 없는 글은 뺀다. 없는 순서를 지어내지 않는다.
+func (s *store) RecentPosts(limit int) ([]PostSummary, error) {
+	rows, err := s.db.Query(`
+		SELECT `+postColumns+`
+		FROM posts p
+		WHERE `+s.notHidden("p")+` AND p.original_created_at IS NOT NULL
+		ORDER BY p.original_created_at DESC, p.id DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("최근 글 조회: %w", err)
+	}
+	// **중첩하지 않는다.** 여기서는 부모-자식이 뜻이 없다 — 최근에 쓴 순서로
+	// 늘어놓는 목록이고, 그 안에서 계층을 그리면 순서가 계층에 눌린다.
+	return scanPostSummaries(rows)
+}
+
 // LanguageBranches는 평평한 `프로그래밍 언어` 카테고리를 original_path의
 // 세 번째 칸(C, C++, Java …)으로 다시 묶는다. 카테고리 트리는 3단계가 끝이라
 // 언어별 갈래가 categories에는 없지만, 원래 노션 경로에는 그대로 남아 있다.

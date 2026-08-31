@@ -424,8 +424,18 @@ func (a *authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-func (a *authenticator) handleLogout(w http.ResponseWriter, r *http.Request) {
+// handleLogout은 세션 쿠키를 지운다.
+//
+// **authenticator가 아니라 Server의 메서드다.** 하는 일이 쿠키 하나를 지우는
+// 것뿐이라 인증 설정이 필요 없고, 그래야 인증이 꺼진 채로 뜬 서버에서도
+// 등록해 둘 수 있다. 읽는 화면(사이드바)에서 부르는 자리라 언제나 있어야 한다.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	clearCookie(w, r, sessionCookie, "/")
+	// 인증이 꺼져 있으면 돌아갈 로그인 화면이 없다.
+	if s.auth == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }
 

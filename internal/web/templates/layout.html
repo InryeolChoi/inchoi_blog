@@ -132,6 +132,29 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm5.9 7H11.6c-.1-1.8-.5-3.4-1.1-4.5A6.5 6.5 0 0 1 13.9 7zM8 1.5c.8 0 1.8 2 2 5.5H6c.2-3.5 1.2-5.5 2-5.5zM2.1 7a6.5 6.5 0 0 1 3.4-4.5C4.9 3.6 4.5 5.2 4.4 7H2.1zm0 2h2.3c.1 1.8.5 3.4 1.1 4.5A6.5 6.5 0 0 1 2.1 9zM8 14.5c-.8 0-1.8-2-2-5.5h4c-.2 3.5-1.2 5.5-2 5.5zm2.5-1a10.9 10.9 0 0 0 1.1-4.5h2.3a6.5 6.5 0 0 1-3.4 4.5z"/></svg>
         Pages
       </a>
+      {{/* **글쓰기로 들어가는 문은 여기 하나다.** 예전에는 /admin/login이라는
+           주소를 알아야만 들어갈 수 있었다. 그걸 감추는 것이 방어가 아니다 —
+           진짜 관문은 허용 목록이지 주소를 모르는 것이 아니다(auth.go의 allows).
+           밖에서 /admin이 이미 303을 주고 있으므로 감춰서 얻는 것도 없었다.
+
+           .AdminOn과 .Editor는 다른 질문이다. 앞은 "글쓰기 화면이 있나",
+           뒤는 "지금 들어와 있나"다. 하나로 묶으면 로그인하기 전에는
+           로그인 링크가 안 나오는 우스운 상태가 된다. */}}
+      {{if .AdminOn}}
+        {{if .Editor}}
+      <a href="/admin" class="side-me" title="글 관리">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.1 2.3a1.7 1.7 0 0 1 2.4 2.4l-.9.9-2.4-2.4.9-.9zM10.3 4.1l2.4 2.4-6.5 6.5-3.1.7.7-3.1 6.5-6.5z"/></svg>
+        {{.Editor}}
+      </a>
+      {{/* 로그아웃은 POST다. GET이면 남의 페이지에 박아둔 <img> 하나로도
+           사람을 로그아웃시킬 수 있다. */}}
+      <form method="post" action="/admin/logout" class="side-out">
+        <button type="submit" data-i18n="logout">로그아웃</button>
+      </form>
+        {{else}}
+      <a href="/admin/login" data-i18n="login">로그인</a>
+        {{end}}
+      {{end}}
     </div>
   </aside>
 
@@ -144,7 +167,6 @@
       </nav>
       {{end}}
       {{template "content" .}}
-      <footer class="page-foot" data-i18n="footer">읽기 전용 아카이브 · 작성 중인 글은 공개하지 않습니다</footer>
     </div>
   </main>
 </div>
@@ -634,6 +656,39 @@
   }
   .edit-preview > :first-child { margin-top: 0; }
 
+  /* 사이드바 바닥의 글쓰기 입구. GitHub·Pages 링크와 같은 모양이라
+     "여기서 나간다"와 "여기서 들어간다"가 한 줄에 나란히 선다. */
+  .side-foot .side-me { color: var(--accent); border-color: var(--accent); }
+  .side-out { margin: 0; display: inline-flex; }
+  .side-out button {
+    font: inherit; font-size: .78rem; cursor: pointer;
+    color: var(--ink-dim); background: var(--bg);
+    border: 1px solid var(--line); border-radius: .35rem; padding: .25rem .55rem;
+  }
+  .side-out button:hover, .side-out button:focus-visible {
+    color: var(--warn); border-color: var(--warn);
+  }
+
+  /* ── 홈의 최근 글 ────────────────────────────────────────────────
+     표제지가 주인공이라 목록은 조용해야 한다. 제목과 날짜 두 칸뿐이고
+     테두리도 배경도 없다. */
+  .home-recent { margin-top: 3rem; max-width: var(--measure); }
+  .home-recent h2 {
+    margin: 0 0 .7rem; font-size: .82rem; font-weight: 600;
+    color: var(--ink-dim); letter-spacing: .02em;
+  }
+  .home-recent-list { list-style: none; margin: 0; padding: 0; }
+  .home-recent-list li {
+    display: flex; align-items: baseline; gap: 1rem;
+    padding: .5rem 0; border-top: 1px solid var(--line);
+  }
+  .home-recent-list li:last-child { border-bottom: 1px solid var(--line); }
+  .home-recent-list a { flex: 1; min-width: 0; }
+  .home-recent-list time {
+    font-size: .78rem; color: var(--ink-dim); font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   /* ── `/` 조각 팔레트 ────────────────────────────────────────────────
      body에 직접 붙는다(position: fixed). 편집 칸 안에 두면 textarea의
      overflow에 잘린다 — textarea 안에는 요소를 겹칠 수 없다. */
@@ -878,7 +933,11 @@
   .deck-card {
     position: relative; display: flex; flex-direction: column; gap: .45rem;
     padding: 1.15rem 1.15rem 1.2rem; border-radius: .55rem;
-    background: linear-gradient(155deg, var(--surface), var(--bg) 78%);
+    /* **평평한 면 하나다.** 예전에는 155도 그라데이션이라 카드 윗변에 밝은
+       띠가 생겨서, 조명이 위에서 오는 것처럼 보였다 — 그림도 글자도 평면인데
+       배경만 입체인 척하는 것이라 어긋났다. 깊이는 hover에서 실제로 기울 때만
+       준다. */
+    background: var(--surface);
     border: 1px solid var(--line); color: inherit; text-decoration: none;
     transform-style: preserve-3d; will-change: transform;
     transition: transform .35s cubic-bezier(.2,.7,.3,1), box-shadow .35s ease, border-color .35s ease;

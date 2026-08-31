@@ -174,6 +174,11 @@ type pageData struct {
 	// Editor는 지금 들어와 있는 계정 이름이다. 비어 있으면 **고치는 길이
 	// 화면에 아예 없다.** WithEditor를 안 준 서버에서는 언제나 비어 있다.
 	Editor string
+	// AdminOn은 이 서버에 글쓰기 화면이 있는지다. Editor와 다른 질문이다 —
+	// "글쓰기 화면이 있다"와 "지금 들어와 있다"를 구별해야 **로그인 링크를
+	// 보여줄지** 정할 수 있다. 둘을 하나로 묶으면 로그인하기 전에는 로그인
+	// 링크가 안 나오는 우스운 상태가 된다.
+	AdminOn bool
 }
 
 // TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
@@ -226,6 +231,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	// 빠뜨리고, 그 빠뜨림은 "고칠 수 있는데 버튼이 없다"로 조용히 나타난다.
 	// 사이드바와 자산 판정을 render가 채우는 것과 같은 이유다.
 	if s.editorFor != nil {
+		data.AdminOn = true
 		data.Editor = s.editorFor(r)
 	}
 	data.Nav = nav
@@ -325,9 +331,15 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	recent, err := s.store.RecentPosts(recentLimit)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	s.render(w, r, "home.html", pageData{
 		Title:      "열렬히.뛰기",
 		Categories: categories,
+		Posts:      recent,
 		HomeActive: true,
 	})
 }
