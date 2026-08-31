@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/inryeol/blog"
+	"github.com/inryeol/blog/internal/admin"
 	"github.com/inryeol/blog/internal/db"
 	"github.com/inryeol/blog/internal/web"
 )
@@ -73,10 +74,11 @@ func TestAdminIsOffUnlessAskedFor(t *testing.T) {
 
 	// -admin을 줬을 때는 반대로 실제로 붙어야 한다. 안 그러면 위 검사는
 	// 아무것도 확인하지 않는 셈이 된다.
-	withAdm, err := withAdmin(public, sqlDB, nil)
+	adm, err := admin.New(sqlDB, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	withAdm := withAdmin(public, adm)
 	rec := httptest.NewRecorder()
 	withAdm.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `id="ad-root"`) {
@@ -92,10 +94,11 @@ func TestPublicRoutesSurviveTheAdminMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := withAdmin(srv.Handler(), sqlDB, nil)
+	adm, err := admin.New(sqlDB, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	h := withAdmin(srv.Handler(), adm)
 	for path, want := range map[string]int{
 		"/":                http.StatusOK,
 		"/p/live-post":     http.StatusOK,

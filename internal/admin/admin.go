@@ -118,6 +118,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/posts", s.handleSave)
 	mux.HandleFunc("PUT /api/admin/posts/{slug}", s.handleSave)
 	mux.HandleFunc("POST /api/admin/images", s.handleUpload)
+	// 지우기 전에 무엇이 걸리는지 먼저 묻는 자리다. 무엇을 잃는지 모른 채
+	// 확인 창의 "예"를 누르게 하지 않는다.
+	mux.HandleFunc("GET /api/admin/posts/{slug}/refs", s.handleRefs)
+	mux.HandleFunc("DELETE /api/admin/posts/{slug}", s.handleDelete)
 
 	// 어디에도 안 걸린 /api/admin/* 은 JSON 404를 준다.
 	mux.HandleFunc("/api/admin/", func(w http.ResponseWriter, r *http.Request) {
@@ -298,4 +302,20 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, post)
+}
+
+// LoginFor는 이 요청에 들어와 있는 계정 이름을 준다. 없으면 빈 문자열이다.
+//
+// **공개 화면(internal/web)이 "고치기"를 보여줄지 정하는 데 쓴다.** web은
+// 세션이 무엇인지 몰라야 하므로 쿠키도 서명 키도 넘기지 않고 이 질문 하나만
+// 함수로 건넨다(web.WithEditor).
+//
+// 인증이 꺼진 채로 뜬 서버(-admin-no-auth)에서는 **누구나 들어와 있는 것과
+// 같다.** 그 모드는 loopback에서만 뜨고 화면 위에 그렇다고 띠가 붙어 있다.
+// 여기서 빈 문자열을 주면 로컬에서 이 기능만 확인할 수 없게 된다.
+func (s *Server) LoginFor(r *http.Request) string {
+	if s.auth == nil {
+		return "(인증 없음)"
+	}
+	return s.auth.currentLogin(r)
 }

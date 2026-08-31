@@ -203,3 +203,13 @@ body.admin > * { max-width: none; }
 /* 편집 화면 안에 뜨는 경고(노션에서 온 글 등). 머리의 띠와 같은 모양이지만
    글 하나에만 해당하는 말이라 폼 바로 위에 둔다. */
 .ad-warn-inline { margin: 0 0 .8rem; }
+
+/* 지우기 버튼. **되돌릴 수 없는 버튼은 되돌릴 수 없어 보여야 한다** —
+   저장 옆에 같은 모양으로 두면 손이 먼저 간다. 평소에는 테두리만 있고
+   가까이 가야 채워진다. */
+.ad-btn.danger {
+  border-color: var(--warn); color: var(--warn); background: transparent;
+}
+.ad-btn.danger:hover, .ad-btn.danger:focus-visible {
+  background: var(--warn); color: var(--bg);
+}

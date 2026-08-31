@@ -27,6 +27,8 @@ type assetNeeds struct {
 	// 코드는 그대로 있다. 껍데기 없는 <pre>(들여쓰기 코드 블록)도 마찬가지라
 	// 언어 클래스가 아니라 <pre> 자체를 센다.
 	Copy bool
+	// Anim은 이름 붙인 애니메이션 자리가 있는지다. 있을 때만 static/anim.js를 받는다.
+	Anim bool
 	// YouTube는 유튜브 재생 자리가 있는지다. 있을 때만 static/youtube.js를 받는다.
 	YouTube bool
 	// Langs는 본문에 나온 언어 이름이다. common 묶음에 없어서 따로 받는
@@ -54,6 +56,8 @@ func needsFor(body template.HTML) assetNeeds {
 	// math.go가 내보내는 형태는 <span class="math math-inline"> / <div class="math math-display">다.
 	n.Math = strings.Contains(s, `class="math math-`)
 	n.YouTube = strings.Contains(s, `class="ytembed"`)
+	// anim.go가 내보내는 형태는 <div class="anim" data-anim="이름">이다.
+	n.Anim = strings.Contains(s, `class="anim" data-anim=`)
 	// 본문에 진짜 <pre>가 있을 때만이다. 코드 안에 적힌 `&lt;pre` 글자는
 	// 이미 이스케이프돼 있어서 걸리지 않는다.
 	n.Copy = strings.Contains(s, "<pre")

@@ -268,6 +268,9 @@
         class: "ad-dim", href: "/p/" + encodeURIComponent(post.slug),
         target: "_blank", rel: "noreferrer", text: "공개 화면에서 보기 ↗",
       }),
+      isNew ? null : el("button", {
+        class: "ad-btn danger", id: "ad-delete", onclick: remove, text: "지우기",
+      }),
       el("button", { class: "ad-btn primary", id: "ad-save", onclick: save, text: "저장" }),
     ]));
 
@@ -333,6 +336,16 @@
     }
     bodyAreaRef.addEventListener("input", schedulePreview);
 
+    // `/`를 치면 조각 팔레트가 뜬다. **서버에 묻지 않으므로 지연이 없다.**
+    // "이미지 올리기"만은 조각이 아니라 파일 고르는 창을 여는 항목이라,
+    // 팔레트가 그걸 여기로 넘긴다.
+    if (window.blogPalette) {
+      window.blogPalette.attach(bodyAreaRef, null, function () {
+        var picker = document.getElementById("ad-image");
+        if (picker) picker.click();
+      });
+    }
+
     function renderPreview() {
       api("POST", "/api/admin/preview", { markdown: bodyAreaRef.value }).then(function (r) {
         if (!r.ok) {
@@ -350,6 +363,8 @@
         // 복사 버튼도 같은 함수로 단다. innerHTML을 갈아치웠으니 버튼이 통째로
         // 사라졌다 — 다시 부르지 않으면 미리보기에만 버튼이 없다.
         if (window.blogCopyButtons) window.blogCopyButtons();
+        // 애니메이션도 다시 붙인다. innerHTML을 갈아치웠으니 통째로 사라졌다.
+        if (window.blogMountAnims) window.blogMountAnims();
 
         var heads = r.data.outline || [];
         previewNote.className = "ad-note";
@@ -405,6 +420,51 @@
         post = saved;
         slugInput.value = saved.slug;
       });
+    }
+
+    // ── 지우기 ────────────────────────────────────────────────────
+    //
+    // **무엇을 잃는지 먼저 묻고 보여준다.** 확인 창의 "예"를 무엇인지 모른 채
+    // 누르게 하지 않는다. 서버가 refs로 알려주고, 자식이 있으면 아예 못 지운다.
+    function remove() {
+      api("GET", "/api/admin/posts/" + encodeURIComponent(post.slug) + "/refs")
+        .then(function (r) {
+          if (!r.ok) {
+            status.className = "ad-status ad-error";
+            status.textContent = r.data.error || "무엇이 걸리는지 알아내지 못했다";
+            return;
+          }
+          var refs = r.data;
+          if (refs.children && refs.children.length) {
+            status.className = "ad-status ad-error";
+            status.textContent = "하위 글 " + refs.children.length + "편이 매달려 있다: " +
+              refs.children.slice(0, 3).join(", ") +
+              (refs.children.length > 3 ? " 외" : "") +
+              " — 그것들을 먼저 옮기거나 지워라";
+            return;
+          }
+          var lose = [];
+          if (refs.notion) lose.push("노션에서 온 글이라 **다음 재이관이 되살린다** (진짜로 빼려면 internal/curation의 DropPosts에 적어야 한다)");
+          if (refs.coverOf && refs.coverOf.length) lose.push("분류 " + refs.coverOf.join(", ") + "의 표지가 사라진다");
+          if (refs.linkedFrom && refs.linkedFrom.length) lose.push("이 글을 가리키던 " + refs.linkedFrom.length + "편의 링크를 글자로 푼다 (" + refs.linkedFrom.slice(0, 3).join(", ") + ")");
+
+          var msg = "\"" + post.title + "\"을(를) 지운다.";
+          if (lose.length) msg += "\n\n" + lose.map(function (l, i) { return (i + 1) + ". " + l; }).join("\n");
+          msg += "\n\n되돌릴 수 없다. 지울까?";
+          if (!window.confirm(msg)) return;
+
+          status.className = "ad-status";
+          status.textContent = "지우는 중…";
+          api("DELETE", "/api/admin/posts/" + encodeURIComponent(post.slug),
+            { rev: post.rev || "", force: lose.length > 0 }).then(function (d) {
+            if (!d.ok) {
+              status.className = "ad-status ad-error";
+              status.textContent = d.data.error || ("지우지 못했다 (HTTP " + d.status + ")");
+              return;
+            }
+            go("/admin");
+          });
+        });
     }
   }
 

@@ -42,7 +42,16 @@
      admin.js가 다시 부른다. admin에는 preferences.js가 없어서 버튼 라벨은
      한국어로 남는데, 그건 서버가 내보내는 기본값과 같다. */}}
 <script defer src="/static/copy.js"></script>
+{{/* 이름 붙인 애니메이션. 미리보기를 다시 그릴 때마다 admin.js가 다시 부른다. */}}
+<script defer src="/static/anim.js"></script>
 
+{{/* `/` 조각 팔레트. **서버에 묻지 않는다** — 목록이 이 파일 안에 다 있어서
+     `/`를 친 순간 바로 뜬다. admin.js보다 먼저 실어 window.blogPalette이
+     준비된 뒤에 편집 화면이 그려지게 한다.
+
+     **internal/web/static에 둔다.** admin 편집기와 공개 글 화면의 바로
+     고치기가 같은 팔레트를 쓴다 — 두 벌로 두면 반드시 갈라진다. */}}
+<script defer src="/static/palette.js"></script>
 <script defer src="/admin/static/admin.js"></script>
 </head>
 <body class="admin">

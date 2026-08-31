@@ -34,6 +34,9 @@ type Server struct {
 	md    *markdown.Renderer
 	// pages는 페이지 이름 → 그 페이지만 담은 템플릿 집합이다.
 	pages map[string]*template.Template
+	// editorFor는 "지금 누가 들어와 있나"를 묻는다. nil이면 **글 화면에서
+	// 고치는 길이 아예 없다** — 버튼도 스크립트도 나가지 않는다.
+	editorFor func(*http.Request) string
 }
 
 // pageTemplates는 layout과 함께 묶을 페이지 템플릿 목록이다.
@@ -44,14 +47,38 @@ var pageTemplates = []string{"home.html", "index.html", "category.html", "post.h
 // 페이지마다 따로 파싱한다. Go 템플릿은 이름 공간이 하나라, 여러 파일을 한 번에
 // 파싱하면 각 파일의 {{define "content"}}가 서로를 덮어써서 마지막 것만 남는다.
 // 그러면 모든 페이지가 같은 내용을 그린다.
+// options는 서버를 만들 때 정하는 것들이다.
+type options struct {
+	showDrafts bool
+	editorFor  func(*http.Request) string
+}
+
 // Option은 서버를 만들 때 주는 선택지다.
-type Option func(*store)
+type Option func(*options)
 
 // WithDrafts는 draft 글까지 보여준다. **로컬에서 눈으로 확인할 때만 쓴다.**
 //
 // 기본값이 "가린다"인 이유: 공개 배포가 기본이고, 안 가리는 쪽이 사고다.
 // 켜고 끄는 것을 실수해도 새는 방향이 아니라 막는 방향으로 틀리게 둔다.
-func WithDrafts() Option { return func(s *store) { s.showDrafts = true } }
+func WithDrafts() Option { return func(o *options) { o.showDrafts = true } }
+
+// WithEditor는 **글 화면에서 바로 고치는 길**을 연다. fn은 요청을 보고
+// 들어와 있는 계정 이름을 주거나, 없으면 빈 문자열을 준다.
+//
+// # 왜 함수로 받나
+//
+// web은 "읽기 전용 공개 페이지"고 admin은 따로 있다. 세션이 무엇인지 web이
+// 알게 되면 그 경계가 무너지므로, **"지금 누가 들어와 있나"라는 질문 하나만**
+// 함수로 받는다. 쿠키도 서명 키도 web은 모른다.
+//
+// # 기본값은 "닫힘"이다
+//
+// 이 옵션을 안 주면 글 화면은 예전 그대로다 — 고치기 버튼도, 편집기
+// 스크립트도 나가지 않는다. `-admin`이 없는 배포에서 실수로 열리는 일이
+// 없어야 한다. cmd/blog가 admin을 켤 때만 이걸 건넨다.
+func WithEditor(fn func(*http.Request) string) Option {
+	return func(o *options) { o.editorFor = fn }
+}
 
 func New(db *sql.DB, opts ...Option) (*Server, error) {
 	pages := make(map[string]*template.Template, len(pageTemplates))
@@ -62,14 +89,15 @@ func New(db *sql.DB, opts ...Option) (*Server, error) {
 		}
 		pages[name] = t
 	}
-	st := &store{db: db}
+	var o options
 	for _, opt := range opts {
-		opt(st)
+		opt(&o)
 	}
 	return &Server{
-		store: st,
-		md:    markdown.New(),
-		pages: pages,
+		store:     &store{db: db, showDrafts: o.showDrafts},
+		md:        markdown.New(),
+		pages:     pages,
+		editorFor: o.editorFor,
 	}, nil
 }
 
@@ -143,6 +171,9 @@ type pageData struct {
 	Links []SiteLink
 	// Err은 404·500 화면에만 채워진다 (errorpage.go).
 	Err *errorInfo
+	// Editor는 지금 들어와 있는 계정 이름이다. 비어 있으면 **고치는 길이
+	// 화면에 아예 없다.** WithEditor를 안 준 서버에서는 언제나 비어 있다.
+	Editor string
 }
 
 // TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
@@ -191,6 +222,12 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		return
 	}
 	markNav(nav, data.openCats, data.activeCat)
+	// **여기 한 곳에서 채운다.** 핸들러마다 챙기게 하면 새 화면을 더할 때마다
+	// 빠뜨리고, 그 빠뜨림은 "고칠 수 있는데 버튼이 없다"로 조용히 나타난다.
+	// 사이드바와 자산 판정을 render가 채우는 것과 같은 이유다.
+	if s.editorFor != nil {
+		data.Editor = s.editorFor(r)
+	}
 	data.Nav = nav
 	// 최상위 분류의 글 수 합이 곧 전체다. 카테고리 없는 글은 현재 0건이라
 	// 따로 세지 않는다 — 생기면 여기에 안 잡힌다.

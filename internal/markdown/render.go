@@ -33,6 +33,9 @@ func New() *Renderer {
 				&codeBlockExtension{},
 				// 제 문단을 통째로 차지한 외부 링크를 카드로 그린다.
 				&extCardExtension{},
+				// `:::anim 이름` 한 줄을 이름 붙인 애니메이션 자리로 바꾼다.
+				// **본문에 <script>를 담는 길은 열지 않는다** — anim.go 참고.
+				&animExtension{},
 			),
 			goldmark.WithParserOptions(
 				// 제목에 id를 달아 목차와 앵커 링크에 쓴다.

@@ -6,7 +6,6 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -57,21 +56,32 @@ func main() {
 	if *drafts {
 		opts = append(opts, web.WithDrafts())
 	}
+
+	// **admin을 먼저 만든다.** 공개 화면의 "고치기"가 admin에게 "지금 누가
+	// 들어와 있나"를 물어야 하기 때문이다. -admin이 없으면 그 질문 자체가
+	// 없고, 그러면 글 화면은 예전 그대로다 — 버튼도 스크립트도 안 나간다.
+	var adm *admin.Server
+	adminState := "닫힘"
+	var auth *admin.AuthConfig
+	if *adminOn {
+		var err error
+		if auth, err = adminAuth(*addr, *noAuth); err != nil {
+			log.Fatalf("admin: %v", err)
+		}
+		if adm, err = admin.New(sqlDB, auth); err != nil {
+			log.Fatal(err)
+		}
+		opts = append(opts, web.WithEditor(adm.LoginFor))
+	}
+
 	srv, err := web.New(sqlDB, opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	handler := srv.Handler()
-	adminState := "닫힘"
-	if *adminOn {
-		auth, err := adminAuth(*addr, *noAuth)
-		if err != nil {
-			log.Fatalf("admin: %v", err)
-		}
-		if handler, err = withAdmin(handler, sqlDB, auth); err != nil {
-			log.Fatal(err)
-		}
+	if adm != nil {
+		handler = withAdmin(handler, adm)
 		if auth == nil {
 			adminState = "열림 (인증 없음)"
 			log.Printf("admin: http://%s/admin — **인증이 없다. 이 주소를 밖에 열지 마라.**", *addr)
@@ -185,17 +195,13 @@ func isLoopback(addr string) bool {
 // 어디에도 안 걸린 경로를 404 화면으로 받는다. 같은 mux에 admin을 넣으면 두
 // 패키지가 라우팅을 나눠 갖게 되므로, 여기서 접두사로만 가른다.
 // ServeMux는 더 구체적인 패턴을 먼저 고르므로 "/admin/"이 "/"를 이긴다.
-func withAdmin(public http.Handler, sqlDB *sql.DB, auth *admin.AuthConfig) (http.Handler, error) {
-	adm, err := admin.New(sqlDB, auth)
-	if err != nil {
-		return nil, err
-	}
+func withAdmin(public http.Handler, adm *admin.Server) http.Handler {
 	root := http.NewServeMux()
 	root.Handle("/admin", adm.Handler())
 	root.Handle("/admin/", adm.Handler())
 	root.Handle("/api/admin/", adm.Handler())
 	root.Handle("/", public)
-	return root, nil
+	return root
 }
 
 // httpServer는 타임아웃을 건 서버를 만든다.
