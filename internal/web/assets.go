@@ -20,6 +20,13 @@ type assetNeeds struct {
 	// Code는 **색칠될** 코드 블록이 있는지다. 아래 skipLangs는 색칠 대상이
 	// 아니라서 그것만 있는 글에는 highlight.js를 받지 않는다.
 	Code bool
+	// Copy는 복사 버튼을 달 코드 블록이 있는지다.
+	//
+	// **Code를 재활용하면 안 된다.** 그건 "색칠할 것이 있는가"이고, `text`
+	// 265건처럼 일부러 색칠을 건너뛰는 블록만 있는 글은 Code가 거짓인데 복사할
+	// 코드는 그대로 있다. 껍데기 없는 <pre>(들여쓰기 코드 블록)도 마찬가지라
+	// 언어 클래스가 아니라 <pre> 자체를 센다.
+	Copy bool
 	// YouTube는 유튜브 재생 자리가 있는지다. 있을 때만 static/youtube.js를 받는다.
 	YouTube bool
 	// Langs는 본문에 나온 언어 이름이다. common 묶음에 없어서 따로 받는
@@ -47,6 +54,9 @@ func needsFor(body template.HTML) assetNeeds {
 	// math.go가 내보내는 형태는 <span class="math math-inline"> / <div class="math math-display">다.
 	n.Math = strings.Contains(s, `class="math math-`)
 	n.YouTube = strings.Contains(s, `class="ytembed"`)
+	// 본문에 진짜 <pre>가 있을 때만이다. 코드 안에 적힌 `&lt;pre` 글자는
+	// 이미 이스케이프돼 있어서 걸리지 않는다.
+	n.Copy = strings.Contains(s, "<pre")
 
 	for _, m := range langClass.FindAllStringSubmatch(s, -1) {
 		lang := strings.ToLower(m[1])

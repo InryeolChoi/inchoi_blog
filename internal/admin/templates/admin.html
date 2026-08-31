@@ -38,6 +38,10 @@
      미리보기를 새로 그릴 때마다 다시 부른다. */}}
 <script defer src="/static/math.js"></script>
 <script defer src="/static/highlight-init.js"></script>
+{{/* 복사 버튼도 공개 화면과 같은 스크립트다. 미리보기를 다시 그릴 때마다
+     admin.js가 다시 부른다. admin에는 preferences.js가 없어서 버튼 라벨은
+     한국어로 남는데, 그건 서버가 내보내는 기본값과 같다. */}}
+<script defer src="/static/copy.js"></script>
 
 <script defer src="/admin/static/admin.js"></script>
 </head>

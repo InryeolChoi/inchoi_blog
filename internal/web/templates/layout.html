@@ -63,6 +63,18 @@
      아이콘 떠 있기는 그대로 동작한다. */}}
 <script defer src="/static/deck.js"></script>
 {{end}}
+{{if .Assets.Copy}}
+{{/* 코드 블록 오른쪽 위의 복사 버튼. **버튼은 서버가 아니라 이 스크립트가
+     만든다** — 클립보드는 JS 없이 못 쓰므로 미리 찍으면 스크립트가 꺼진
+     브라우저에 죽은 버튼이 남는다.
+
+     Assets.Code(색칠할 것이 있는가)와 다른 판단이다. `text` 265건처럼 일부러
+     색칠을 건너뛰는 블록만 있는 글에도 복사할 코드는 있다.
+
+     **preferences.js보다 앞이어야 한다.** defer끼리는 순서가 지켜지므로,
+     여기서 만든 버튼의 aria-label을 뒤이어 도는 사전이 세 언어로 바꿔준다. */}}
+<script defer src="/static/copy.js"></script>
+{{end}}
 {{/* 사이드바 아코디언과 좁은 화면의 서랍. 스크립트가 못 떠도 지금 보고 있는
      곳까지는 서버가 이미 펼쳐서 보내므로 길이 막히지는 않는다. */}}
 <script defer src="/static/sidebar.js"></script>
@@ -231,6 +243,7 @@
     --accent:    #0C64B2;  /* 링크. 흰 바탕에서 대비 6.0:1 */
     --rail:      #29B6F0;  /* 쨍한 하늘색. 현재 위치와 포커스에만 */
     --mark-bg:   #FFE28A;  /* 형광펜 */
+    --warn:      #B3261E;  /* 실패한 동작(복사 실패 등). 흰 바탕에서 6.0:1 */
 
     --side-bg:   #FFFDF7;
     --side-line: #EDE3CC;
@@ -246,6 +259,10 @@
     --float-shadow: 0 18px 50px rgba(23, 37, 43, .18), 0 3px 12px rgba(23, 37, 43, .09);
     --card-shine:  rgba(255, 255, 255, .55);
     --card-shadow: rgba(20, 40, 55, .45);
+
+    /* 코드 블록 위쪽 모서리에 붙는 조각(언어 라벨, 복사 버튼)의 높이.
+       둘이 나란히 붙어 한 띠로 보이므로 같은 값을 써야 아랫변이 맞는다. */
+    --code-tab-h: 1.45rem;
 
     --measure: 46rem;  /* 글줄 길이. 산문은 여기서 멈춘다 */
     --column:  62rem;  /* 콘텐츠 전체 폭. 코드·표는 여기까지 쓴다 */
@@ -264,6 +281,7 @@
     --accent:    #82BCEB;
     --rail:      #59B8E3;
     --mark-bg:   #675923;
+    --warn:      #F0938B;
 
     --side-bg:   #0E1417;
     --side-line: #263238;
@@ -546,6 +564,48 @@
     background: var(--bg);
     border-left: 1px solid var(--line); border-bottom: 1px solid var(--line);
     border-radius: 0 .35rem 0 .3rem; padding: .06rem .5rem;
+  }
+
+  /* ── 복사 버튼 ────────────────────────────────────────────────── */
+  /* **버튼은 static/copy.js가 만든다.** 클립보드는 스크립트 없이 못 쓰므로
+     서버가 미리 찍으면 스크립트가 꺼진 브라우저에 죽은 버튼이 남는다.
+     navigator.clipboard가 없는(비보안 컨텍스트) 브라우저에서는 아예 안 생긴다.
+
+     기준은 <pre>가 아니라 껍데기(.codeblock)다. **pre는 가로로 스크롤하므로**
+     그 안에 absolute로 두면 긴 줄을 밀 때 버튼이 코드와 함께 흘러간다.
+     껍데기는 스크롤하지 않아서 375px 화면에서도 모서리에 붙어 있다.
+     껍데기가 없는 <pre>(들여쓰기 코드 블록)는 copy.js가 씌우고 나서 단다. */
+  .copy {
+    position: absolute; top: 0; right: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    width: 1.8rem; height: var(--code-tab-h); padding: 0;
+    color: var(--ink-dim); background: var(--bg); cursor: pointer;
+    border: 1px solid var(--line); border-top: none; border-right: none;
+    border-radius: 0 .35rem 0 .3rem;
+    /* **모바일에는 hover가 없다.** 평소에도 무엇인지 알아볼 만큼은 보이게 두고,
+       hover/focus에서 또렷해진다. */
+    opacity: .68;
+    transition: opacity .15s ease, color .15s ease;
+    /* prefers-reduced-motion에서는 위쪽의 * 규칙이 이 transition을 끈다. */
+  }
+  .copy:hover, .copy:focus-visible { opacity: 1; color: var(--accent); }
+  .copy svg {
+    width: 13px; height: 13px; fill: none; stroke: currentColor;
+    stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+  }
+  /* 어느 아이콘을 보일지는 CSS가 정한다. JS는 data-state 하나만 바꾼다. */
+  .copy .copy-ico { display: none; }
+  .copy[data-state="idle"] .copy-ico-copy,
+  .copy[data-state="done"] .copy-ico-done,
+  .copy[data-state="fail"] .copy-ico-fail { display: block; }
+  .copy[data-state="done"] { opacity: 1; color: var(--accent); }
+  .copy[data-state="fail"] { opacity: 1; color: var(--warn); }
+  /* 언어 라벨과 버튼이 같은 모서리를 쓴다. 버튼이 달린 껍데기에서만 라벨을
+     그만큼 왼쪽으로 밀고 높이를 맞춘다 — copy.js가 data-copy="on"을 남긴다.
+     둘이 붙어 한 줄짜리 띠로 보이므로 아랫변이 어긋나면 눈에 띈다. */
+  .codeblock[data-copy="on"] .lang {
+    right: 1.8rem; border-radius: 0 0 0 .3rem;
+    height: var(--code-tab-h); display: flex; align-items: center;
   }
   article code { font-family: var(--mono); font-size: .875em; }
   /* highlight.js 테마가 자기 배경·여백·가로 스크롤을 code에 건다. 바깥 pre가

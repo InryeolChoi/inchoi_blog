@@ -29,6 +29,8 @@
       backHome: "홈으로 돌아가기",
       brandHead: "열렬히", brandTail: "뛰기",
       personalSite: "최인렬의 개인 페이지",
+      copyCode: "코드 복사", copyCodeDone: "복사했습니다",
+      copyCodeFailed: "복사하지 못했습니다",
       translating: "본문을 기기에서 번역하는 중…",
       translationUnavailable: "이 브라우저는 기기 내 본문 번역을 지원하지 않습니다."
     },
@@ -49,6 +51,8 @@
       backHome: "Back to home",
       brandHead: "Real", brandTail: "Leaner",
       personalSite: "Inryeol Choi's personal site",
+      copyCode: "Copy code", copyCodeDone: "Copied",
+      copyCodeFailed: "Could not copy",
       translating: "Translating the post on this device…",
       translationUnavailable: "This browser does not support on-device post translation."
     },
@@ -69,6 +73,8 @@
       backHome: "Volver al inicio",
       brandHead: "Real", brandTail: "Leaner",
       personalSite: "Sitio personal de Inryeol Choi",
+      copyCode: "Copiar código", copyCodeDone: "Copiado",
+      copyCodeFailed: "No se pudo copiar",
       translating: "Traduciendo el artículo en este dispositivo…",
       translationUnavailable: "Este navegador no admite la traducción local del artículo."
     }
@@ -165,16 +171,25 @@
     });
   }
 
+  // labelOne은 요소 하나에 지금 언어의 사전 글자를 입힌다.
+  //
+  // **나중에 생긴 요소를 위해 열어둔다**(window.blogLabel). copy.js가 만드는
+  // 복사 버튼은 페이지가 그려진 뒤에 상태에 따라 aria-label 키를 바꾸는데,
+  // 그때마다 문서 전체를 다시 훑으면 본문 번역까지 다시 돌게 된다.
+  function labelOne(el, lang) {
+    if (!messages[lang]) lang = messages[root.lang] ? root.lang : "ko";
+    var text = messages[lang][el.dataset.i18n];
+    if (text) el.textContent = format(text, el);
+    var aria = messages[lang][el.dataset.i18nAriaLabel];
+    if (aria) el.setAttribute("aria-label", aria);
+  }
+  window.blogLabel = function (el) { labelOne(el, root.lang); };
+
   function applyLanguage(lang) {
     if (!messages[lang]) lang = "ko";
     root.lang = lang;
-    document.querySelectorAll("[data-i18n]").forEach(function (el) {
-      var text = messages[lang][el.dataset.i18n];
-      if (text) el.textContent = format(text, el);
-    });
-    document.querySelectorAll("[data-i18n-aria-label]").forEach(function (el) {
-      var text = messages[lang][el.dataset.i18nAriaLabel];
-      if (text) el.setAttribute("aria-label", text);
+    document.querySelectorAll("[data-i18n], [data-i18n-aria-label]").forEach(function (el) {
+      labelOne(el, lang);
     });
     document.querySelectorAll("[data-language]").forEach(function (button) {
       button.setAttribute("aria-pressed", button.dataset.language === lang ? "true" : "false");

@@ -264,6 +264,9 @@
         // 공개 페이지가 쓰는 것과 **같은 함수**로 수식과 코드를 처리한다.
         if (window.blogRenderMath) window.blogRenderMath();
         if (window.blogHighlight) window.blogHighlight();
+        // 복사 버튼도 같은 함수로 단다. innerHTML을 갈아치웠으니 버튼이 통째로
+        // 사라졌다 — 다시 부르지 않으면 미리보기에만 버튼이 없다.
+        if (window.blogCopyButtons) window.blogCopyButtons();
 
         var heads = r.data.outline || [];
         previewNote.className = "ad-note";
