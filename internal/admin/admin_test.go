@@ -58,6 +58,13 @@ func do(t *testing.T, h http.Handler, method, path, body string) *httptest.Respo
 		r = httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
+	// **브라우저 흉내를 낸다.** 진짜 브라우저는 POST·PUT에 Origin을 반드시
+	// 붙이고 그 값은 스크립트가 못 바꾼다(csrf.go의 sameOrigin). 여기서 안
+	// 붙이면 테스트가 브라우저가 아닌 것으로 보여 403에 걸린다.
+	// httptest.NewRequest의 Host는 example.com이다.
+	if !safeMethod(method) {
+		r.Header.Set("Origin", "http://"+r.Host)
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
 	return rec
@@ -163,48 +170,9 @@ func TestPreviewMatchesTheSiteRenderer(t *testing.T) {
 	}
 }
 
-// **저장은 200을 주면 안 된다.** 성공으로 답하면 화면이 "저장됨"이라 말하고,
-// 쓰는 사람은 안 들어간 글을 들어갔다고 믿는다. 3단계가 오면 이 테스트를 뒤집는다.
-func TestSaveIsNotImplementedYet(t *testing.T) {
-	h := testHandler(t)
-	for _, tc := range []struct{ method, path string }{
-		{http.MethodPost, "/api/admin/posts"},
-		{http.MethodPut, "/api/admin/posts/live-post"},
-	} {
-		rec := do(t, h, tc.method, tc.path,
-			mustJSON(t, saveReq{Slug: "live-post", Title: "고친 제목", Body: "고친 본문", Status: "draft"}))
-		if rec.Code != http.StatusNotImplemented {
-			t.Errorf("%s %s: 상태 코드 %d, 501이어야 한다", tc.method, tc.path, rec.Code)
-		}
-	}
-}
-
-// 저장이 정말로 DB를 안 건드리는지 본다. 501을 주면서 몰래 쓰면 더 나쁘다.
-func TestSaveDoesNotTouchTheDatabase(t *testing.T) {
-	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := s.Handler()
-
-	var before string
-	if err := sqlDB.QueryRow(`SELECT title || '|' || body || '|' || status FROM posts WHERE slug='live-post'`).
-		Scan(&before); err != nil {
-		t.Fatal(err)
-	}
-	do(t, h, http.MethodPut, "/api/admin/posts/live-post",
-		mustJSON(t, saveReq{Title: "덮어쓴 제목", Body: "덮어쓴 본문", Status: "published"}))
-
-	var after string
-	if err := sqlDB.QueryRow(`SELECT title || '|' || body || '|' || status FROM posts WHERE slug='live-post'`).
-		Scan(&after); err != nil {
-		t.Fatal(err)
-	}
-	if before != after {
-		t.Errorf("저장이 DB를 바꿨다:\n전: %s\n후: %s", before, after)
-	}
-}
+// 저장·업로드 테스트는 save_test.go와 upload_test.go에 있다.
+// (여기 있던 TestSaveIsNotImplementedYet / TestSaveDoesNotTouchTheDatabase는
+//  3단계에서 실제 저장이 붙으면서 뒤집혔다.)
 
 // API가 실패할 때 HTML을 돌려주면 fetch()가 파싱에서 터지고 진짜 원인이 가려진다.
 func TestAPIErrorsAreJSON(t *testing.T) {

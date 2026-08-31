@@ -297,6 +297,8 @@ func TestLogoutClearsTheSession(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodPost, "/admin/logout", nil)
 	r.AddCookie(session)
+	// 로그아웃도 POST라 sameOrigin을 지난다. 브라우저는 폼 전송에도 Origin을 붙인다.
+	r.Header.Set("Origin", "http://"+r.Host)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusSeeOther {

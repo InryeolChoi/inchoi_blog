@@ -3,13 +3,15 @@
 //
 // # 지금 어디까지 와 있나
 //
-// 1단계(화면)와 2단계(인증)가 끝났다. 아직 없는 것은 둘이다:
-//
-//	저장  — "저장"은 서버 로그만 남기고 DB를 건드리지 않는다 (handleSave).
-//	업로드 — 이미지 고르는 UI만 있고 받은 파일을 버린다 (handleUpload).
+// 1단계(화면)·2단계(인증)·3단계(저장)가 끝났다. 글은 실제로 DB에 들어가고
+// 이미지도 BLOB으로 저장된다(save.go, upload.go). 남은 것은 4단계(AI 삽입)다.
 //
 // 인증은 auth.go에 있다. 허용 목록(AuthConfig.AllowedLogins)에 적은 GitHub
 // 계정만 들어올 수 있고, 관문은 Handler()가 mux 바깥에 두른다.
+//
+// **쓰기에는 관문이 하나 더 있다**(sameOrigin). 남의 사이트에서 온 POST/PUT을
+// 막는다 — 세션 쿠키가 SameSite=Lax라 브라우저가 이미 한 겹 막아주지만,
+// 그건 브라우저에 기대는 것이라 서버도 자기 눈으로 본다.
 //
 // 순서는 CLAUDE.md의 "Admin 화면" 로드맵에 적혀 있다. **인증이 붙었다고 이걸
 // 배포에서 함부로 켜지 않는다** — 켜는 스위치는 인스턴스의
@@ -111,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 	// 자리라 오류 화면이 오면 파싱에서 터지고 진짜 원인이 가려진다.
 	mux.HandleFunc("GET /api/admin/posts", s.handleList)
 	mux.HandleFunc("GET /api/admin/posts/{slug}", s.handleGet)
+	mux.HandleFunc("GET /api/admin/categories", s.handleCategories)
 	mux.HandleFunc("POST /api/admin/preview", s.handlePreview)
 	mux.HandleFunc("POST /api/admin/posts", s.handleSave)
 	mux.HandleFunc("PUT /api/admin/posts/{slug}", s.handleSave)
@@ -132,10 +135,15 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /admin/logout", s.auth.handleLogout)
 
 		// **관문은 mux 바깥이다.** 안쪽에 두면 새 라우트를 더할 때마다 챙겨야
-		// 하고, 한 번 빠뜨리면 그게 곧 구멍이다.
-		return recovering(s.auth.guard(mux))
+		// 하고, 한 번 빠뜨리면 그게 곧 구멍이다. CSRF 검사도 같은 이유로
+		// mux 바깥이지만 **관문보다는 안쪽**이다 — 로그인하지 않은 요청의
+		// 진짜 이유는 "출처가 다르다"가 아니라 "로그인이 필요하다"이고,
+		// CSRF는 살아 있는 세션을 지키는 장치라 세션이 있을 때 의미가 있다.
+		return recovering(s.auth.guard(sameOrigin(mux)))
 	}
-	return recovering(mux)
+	// 인증이 없어도 CSRF 검사는 남긴다. 이 모드는 loopback 전용이지만,
+	// 그렇다고 남의 페이지가 이 서버에 글을 쓰게 둘 이유는 없다.
+	return recovering(sameOrigin(mux))
 }
 
 // recovering은 admin에서 난 panic이 연결만 끊고 끝나지 않게 한다.

@@ -186,3 +186,20 @@ body.admin > * { max-width: none; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ── 메타 패널 ──────────────────────────────────────────────────────
+   분류·계층·날짜는 늘 보일 필요가 없다. 글을 쓰는 동안 자리를 차지하면
+   본문과 미리보기가 좁아진다. <details>라 스크립트가 없어도 여닫힌다. */
+.ad-meta { margin: .6rem 0 .2rem; border: 1px solid var(--line); border-radius: .4rem; }
+.ad-meta > summary {
+  cursor: pointer; padding: .45rem .7rem;
+  font-size: .82rem; color: var(--ink-dim); user-select: none;
+}
+.ad-meta > summary:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }
+.ad-meta[open] > summary { border-bottom: 1px solid var(--line); }
+.ad-meta .ad-fields { padding: .7rem; }
+.ad-meta > .ad-note { padding: 0 .7rem .6rem; margin: 0; }
+
+/* 편집 화면 안에 뜨는 경고(노션에서 온 글 등). 머리의 띠와 같은 모양이지만
+   글 하나에만 해당하는 말이라 폼 바로 위에 둔다. */
+.ad-warn-inline { margin: 0 0 .8rem; }

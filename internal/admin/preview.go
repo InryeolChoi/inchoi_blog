@@ -3,7 +3,6 @@ package admin
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -69,77 +68,4 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		out.Outline = append(out.Outline, outlineItem{Level: h.Level, Text: h.Text, ID: h.ID})
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-// saveReq는 편집 폼이 보내는 것이다. 3단계에서 이 구조 그대로 DB에 들어간다.
-type saveReq struct {
-	Slug   string `json:"slug"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
-	Status string `json:"status"`
-}
-
-// handleSave는 **아직 아무것도 저장하지 않는다.**
-//
-// 로드맵 3단계(저장)가 오기 전까지 이 자리는 일부러 비어 있다. 그래도 라우트와
-// 요청 모양은 지금 만들어 둔다 — 화면 쪽 배선이 이미 맞아 있으면 3단계에서
-// 고칠 곳이 이 함수 하나가 된다.
-//
-// **200을 주지 않는다.** 성공으로 답하면 화면이 "저장됨"이라고 말하고, 쓰는
-// 사람은 안 들어간 글을 들어갔다고 믿는다. 501(Not Implemented)로 분명히 한다.
-func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, previewMaxBytes))
-	if err != nil {
-		writeErr(w, http.StatusRequestEntityTooLarge, "본문이 너무 크다")
-		return
-	}
-	var req saveReq
-	if err := json.Unmarshal(body, &req); err != nil {
-		writeErr(w, http.StatusBadRequest, "JSON을 읽지 못했다: "+err.Error())
-		return
-	}
-	if slug := r.PathValue("slug"); slug != "" {
-		req.Slug = slug
-	}
-	log.Printf("admin 저장 요청(아직 저장 안 함): slug=%q title=%q status=%q 본문 %d바이트",
-		req.Slug, req.Title, req.Status, len(req.Body))
-	writeErr(w, http.StatusNotImplemented,
-		"저장은 아직 안 만들었다 (로드맵 3단계). 서버 로그에 요청만 남겼다.")
-}
-
-// uploadMaxBytes는 이미지 업로드로 받을 최대 크기다. 지금 DB에 있는 가장 큰
-// 이미지가 3.3MB라 그보다 넉넉하게 잡는다.
-const uploadMaxBytes = 8 << 20 // 8MB
-
-// handleUpload도 **아직 아무것도 저장하지 않는다.** 받은 파일을 버린다.
-//
-// 그래도 파일을 실제로 읽어서 크기와 형식을 확인한다 — 화면이 "고른 파일이
-// 서버까지 갔다"는 것까지는 지금 확인할 수 있어야 껍데기가 쓸모 있다.
-func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(uploadMaxBytes); err != nil {
-		writeErr(w, http.StatusBadRequest, "파일을 읽지 못했다: "+err.Error())
-		return
-	}
-	file, header, err := r.FormFile("image")
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, "image 필드가 없다")
-		return
-	}
-	defer file.Close()
-
-	// io.Copy로 버린다. 크기를 알려면 끝까지 읽어야 하고, 다음 단계에서
-	// 여기가 sha256 계산 + BLOB 저장이 될 자리다.
-	n, err := io.Copy(io.Discard, io.LimitReader(file, uploadMaxBytes+1))
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "파일을 읽다 실패했다")
-		return
-	}
-	if n > uploadMaxBytes {
-		writeErr(w, http.StatusRequestEntityTooLarge, "파일이 너무 크다 (8MB까지)")
-		return
-	}
-	log.Printf("admin 이미지 업로드(아직 저장 안 함): %q %s %d바이트",
-		header.Filename, header.Header.Get("Content-Type"), n)
-	writeErr(w, http.StatusNotImplemented,
-		"이미지 저장은 아직 안 만들었다 (로드맵 3단계). 파일은 서버까지 왔고 버렸다.")
 }
