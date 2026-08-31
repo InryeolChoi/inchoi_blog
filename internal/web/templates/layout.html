@@ -264,10 +264,14 @@
   /* 토큰 이름을 색이 아니라 **역할**로 지었다(--sand가 아니라 --surface).
      다크를 얹을 때 같은 이름에 다른 색을 매핑하면 되고, 아래 컴포넌트
      규칙은 한 줄도 안 건드려도 된다. */
-  /* "제도판" 팔레트 (2026-09-01). 흰 지면에 잉크빛 괘선, 포인트는 옅은
-     하늘색 블록 하나다. 그림자·그라데이션·둥근 모서리를 쓰지 않고 **테두리
+  /* "편집숍" 팔레트 (2026-09-01). 흰 지면에 잉크빛 괘선, 포인트는 형광
+     노랑 블록 하나다. 그림자·그라데이션·둥근 모서리를 쓰지 않고 **테두리
      두께**로 위계를 만든다. 허용하는 그림자는 블러 없는 오프셋(--hard-shadow)
-     뿐이다 — 인쇄물의 판 어긋남이지 빛이 아니다. */
+     뿐이다 — 인쇄물의 판 어긋남이지 빛이 아니다.
+
+     **노랑은 잉크가 아니라 지면이다.** 글자색으로 쓰면 흰 바탕에서 대비가
+     1.2:1이라 읽을 수 없다. 언제나 블록으로 깔고 그 위에 검정 글자를 얹는다 —
+     형광펜으로 그은 자리에 가깝다. 링크가 노랗지 않은 이유가 이것이다. */
   :root {
     --ink:       #121415;  /* 본문이자 구조 괘선 */
     --ink-dim:   #5B6467;  /* 부가 정보(날짜, 뱃지, 경로). 흰 바탕 5.9:1 */
@@ -275,9 +279,12 @@
     --surface:   #F5F6F5;  /* 코드·표 머리. 지면에서 반 단계만 가라앉는다 */
     --line:      #C6CBC9;  /* 보조 괘선(목록 구분 등) */
     --line-mid:  #9AA19E;
-    --accent:    #0369A1;  /* 링크. 흰 바탕에서 대비 6.6:1 */
-    --rail:      #7DD3FC;  /* 옅은 하늘색. 현재 위치·강조 블록 — 늘 검정 글자를 얹는다 */
-    --mark-bg:   #BAE6FD;  /* 형광펜. rail보다 한 단계 옅다 */
+    /* 링크는 잉크에 가깝게 두고 밑줄로 알린다. 노랑이 블록을 다 가져가므로
+       링크까지 색을 다투면 지면이 시끄러워진다 — 편집숍의 절제는 색을 하나만
+       쓰는 데서 온다. */
+    --accent:    #1F2937;
+    --rail:      #FFE600;  /* 형광 노랑. 현재 위치·강조 블록 — 늘 검정 글자를 얹는다 */
+    --mark-bg:   #FFF07A;  /* 형광펜. rail보다 한 단계 옅다 */
     --warn:      #B3261E;
 
     /* 반전 블록(머리띠). 지면의 잉크를 뒤집은 것이라, 다크에서는 밝은 띠에
@@ -289,13 +296,13 @@
 
     --side-bg:   #FFFFFF;
     --side-line: #D8DBDA;
-    --hover-bg:  #EFF8FE;
-    --active-bg: #7DD3FC;
+    --hover-bg:  #FFFBE0;
+    --active-bg: #FFE600;
     --active-fg: #121415;
 
-    --badge-bg:   #E0F2FE;
-    --badge-fg:   #075985;
-    --badge-line: #7DD3FC;
+    --badge-bg:   #FFF6BF;
+    --badge-fg:   #4A3B00;
+    --badge-line: #E5CE00;
 
     --float-bg:    #FFFFFF;
     --float-shadow: 8px 8px 0 rgba(18, 20, 21, .9);
@@ -323,9 +330,10 @@
     --surface:   #191C1F;
     --line:      #34393C;
     --line-mid:  #4C5255;
-    --accent:    #7DD3FC;
-    --rail:      #7DD3FC;
-    --mark-bg:   #0B4A66;
+    /* 다크에서는 지면이 어두우므로 링크가 밝은 잉크다. 노랑은 그대로 블록이다. */
+    --accent:    #E6E9E7;
+    --rail:      #FFE600;
+    --mark-bg:   #5C4A00;
     --warn:      #F0938B;
 
     --band-bg:   #E6E9E7;
@@ -334,13 +342,13 @@
 
     --side-bg:   #0C0E10;
     --side-line: #26292C;
-    --hover-bg:  #16232B;
-    --active-bg: #7DD3FC;
+    --hover-bg:  #23200F;
+    --active-bg: #FFE600;
     --active-fg: #101214;
 
-    --badge-bg:   #0B3A52;
-    --badge-fg:   #A5E3FC;
-    --badge-line: #075985;
+    --badge-bg:   #3A3100;
+    --badge-fg:   #FFE600;
+    --badge-line: #6B5A00;
 
     --float-bg:    #191C1F;
     --float-shadow: 8px 8px 0 rgba(0, 0, 0, .9);
@@ -369,7 +377,15 @@
     transition: color .18s ease, background-color .18s ease, border-color .18s ease;
   }
 
-  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: .15em; }
+  /* **링크는 밑줄로 알린다.** 색이 잉크에 가까워서 색만으로는 구별이 안 된다 —
+     노랑을 블록에만 쓰기로 한 대가다. 대신 hover에서 노랑이 깔린다. */
+  a {
+    color: var(--accent);
+    text-decoration-thickness: 1px; text-underline-offset: .15em;
+  }
+  article a:hover, .list a:hover, .home-recent-list a:hover {
+    background: var(--rail); color: #121415; text-decoration-color: #121415;
+  }
   a:hover { text-decoration-thickness: 2px; }
   :focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; border-radius: 0; }
 
@@ -402,7 +418,9 @@
   .burger:hover { background: var(--hover-bg); }
   .burger svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
   .brand { font-weight: 700; letter-spacing: -.015em; text-decoration: none; color: var(--ink); }
-  .brand .dot { color: var(--accent); }
+  /* 점 하나에만 노랑을 쓴다. 글자 위 노랑은 안 읽히지만 마침표 한 점은
+     기호라 읽을 것이 없다 — 브랜드에 색을 남기는 유일한 자리다. */
+  .brand .dot { color: var(--rail); -webkit-text-stroke: .5px var(--ink); }
 
   .scrim { position: fixed; inset: 0; z-index: 29; background: rgba(23, 37, 43, .38); }
   .scrim[hidden] { display: none; }
@@ -435,7 +453,7 @@
   /* ══ 사이드바 ═════════════════════════════════════════════════════ */
   .side-brand { margin: 0 0 .05rem; padding: 0 .4rem; font-size: 1.05rem; font-weight: 700; letter-spacing: -.02em; }
   .side-brand a { color: var(--ink); text-decoration: none; }
-  .side-brand .dot { color: var(--accent); }
+  .side-brand .dot { color: var(--rail); -webkit-text-stroke: .5px var(--ink); }
   .side-sub { margin: 0 0 1.1rem; padding: 0 .4rem; font-size: .74rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 
   .nav-list { list-style: none; margin: 0; padding: 0; }
@@ -709,7 +727,7 @@
     padding: .55rem .8rem; border-top: 1px solid var(--line);
   }
   .home-recent-list li:first-child { border-top: none; }
-  .home-recent-list a { flex: 1; min-width: 0; }
+  .home-recent-list a { flex: 1; min-width: 0; font-weight: 600; }
   .home-recent-list time {
     font-size: .78rem; color: var(--ink-dim); font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -984,7 +1002,7 @@
     box-shadow: 5px 5px 0 var(--hard-shadow);
   }
   .deck-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .deck-icon { width: 2.4rem; height: 2.4rem; color: var(--accent); }
+  .deck-icon { width: 2.4rem; height: 2.4rem; color: var(--ink); }
   .deck-icon svg {
     width: 100%; height: 100%; fill: none; stroke: currentColor;
     stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
@@ -1020,7 +1038,7 @@
   nav.toc summary.toc-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 0; }
   nav.toc ul { list-style: none; padding: .55rem .9rem .7rem; margin: 0; font-size: .88rem; }
   nav.toc li { padding: .1rem 0; }
-  nav.toc li::before { content: "# "; color: var(--accent); font-family: var(--mono); }
+  nav.toc li::before { content: "# "; color: var(--ink-dim); font-family: var(--mono); }
   nav.toc .toc-h2 { padding-left: 1rem; }
   nav.toc .toc-h3 { padding-left: 2rem; }
   nav.toc a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
