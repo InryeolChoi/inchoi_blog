@@ -22,5 +22,8 @@ node_modules/
 *.db-wal
 *.db-shm
 
+# 서버에서 내려받은 DB 백업 (deploy/fetch-db.sh)
+/backups/
+
 # macOS
 .DS_Store

@@ -10,7 +10,8 @@
 | 외부 주소 | **`https://inquieto.dev`** (A 레코드 → 35.230.119.252) |
 | 앞단 | Caddy — 80/443을 듣고 `127.0.0.1:8080`으로 넘긴다. 인증서는 자동 (`deploy/Caddyfile`) |
 | 바이너리 | `/opt/blog/blog` — **GitHub Actions가 관리한다** |
-| DB | `/var/lib/blog/blog.db` — **사람이 관리한다. CI는 절대 안 건드린다** |
+| DB | `/var/lib/blog/blog.db` — **여기가 정본이다.** CI는 절대 안 건드린다 |
+| DB 백업 | `/var/backups/blog/` — `blog-backup.timer`가 하루 한 번 (`deploy/backup-db.sh`) |
 | 서비스 | `systemd`의 `blog` (`deploy/blog.service`)와 `caddy` |
 | admin 설정 | `/etc/blog/admin.env` (0600 root:root) — **저장소에 없다. 이 기계에만 있다** |
 
@@ -18,10 +19,13 @@
 붙으므로 방화벽 규칙과 무관하게 밖에서 직접 못 부른다. Caddy의 관리 API도
 `127.0.0.1:2019`라 마찬가지다.
 
-**CI가 DB를 안 올리는 이유:** `blog.db`가 정본이고 앞으로 admin 화면이 거기에
-글을 쓴다. 배포마다 DB를 덮으면 그 사이에 쓴 글이 통째로 사라진다. 로컬
-파이프라인(`import` → `relink` → `categorize` → `regroup`)의 결과를 올려야 할
-때는 아래 "DB 올리기"를 사람이 직접 한다.
+**정본은 서버의 `/var/lib/blog/blog.db`다** (2026-08-31에 뒤집었다). admin
+화면이 열려 있어서 글이 여기에 쓰인다. 그래서 평소 방향은 **서버 → 로컬**이고
+(`deploy/fetch-db.sh`), 올리는 쪽은 예외적인 일이다 — 로컬에서 이관
+파이프라인(`import` → `relink` → `categorize` → `regroup`)을 다시 돌렸을 때뿐이고,
+그때도 `deploy/upload-db.sh`가 **덮으면 사라지는 것이 있는지 먼저 본다.**
+
+**CI는 DB를 안 올린다.** 배포마다 덮으면 그 사이에 쓴 글이 통째로 사라진다.
 
 ---
 
@@ -166,39 +170,97 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
   사이트는 그대로 돈다.
 - **허용 계정이 비면 "전부 허용"이 아니라 "전부 차단"이다.**
 
-### 1-8. DB 올리기
+### 1-8. DB 백업 켜기
+
+**정본이 서버로 넘어온 이상 백업은 미룰 수 없다.** 하루 한 번
+`VACUUM INTO`로 스냅샷을 뜨고 gzip해서 `/var/backups/blog/`에 7벌까지 둔다.
 
 ```sh
-# 로컬 blog.db가 최신인지 먼저 확인한다 (파이프라인을 두 바퀴 돌려 0건)
-go test ./...
-
-# ① 이 DB는 WAL 모드다. 최근 변경이 blog.db-wal에만 있을 수 있으므로
-#    반드시 checkpoint부터 한다. 서버가 떠 있으면 먼저 끈다.
-sqlite3 blog.db "pragma wal_checkpoint(truncate);"   # 0|0|0 이 나와야 한다
-ls -l blog.db-wal                                    # 0 바이트여야 한다
-
-# ② 파일 해시가 아니라 **내용**을 적어둔다 (아래 "왜 해시로 확인하면 안 되나")
-sqlite3 blog.db "select id||'|'||slug||'|'||status from posts order by id" | shasum -a 256
-sqlite3 blog.db "select id||'|'||slug||'|'||coalesce(parent_id,-1) from categories order by id" | shasum -a 256
-
-# ③ 올린다
-gcloud compute scp blog.db playground:/tmp/blog.db \
-  --zone=us-west1-a --project=statcode --tunnel-through-iap
+gcloud compute scp deploy/setup-backup.sh deploy/backup-db.sh \
+  deploy/blog-backup.service deploy/blog-backup.timer \
+  playground:/tmp/ --zone=us-west1-a --project=statcode --tunnel-through-iap
 
 gcloud compute ssh playground --zone=us-west1-a --project=statcode \
-  --tunnel-through-iap --command='set -eux
-    sudo systemctl stop blog
-    sudo cp -a /var/lib/blog/blog.db /var/lib/blog/blog.db.prev
-    sudo rm -f /var/lib/blog/blog.db-wal /var/lib/blog/blog.db-shm
-    sudo install -o blog -g blog -m 0644 /tmp/blog.db /var/lib/blog/blog.db
-    rm -f /tmp/blog.db
-    sudo systemctl start blog'
+  --tunnel-through-iap --command='sudo bash /tmp/setup-backup.sh'
 ```
 
-- **서버를 멈추고 바꾼다.** 도는 중에 갈아끼우면 열려 있던 커넥션이 옛 파일을
-  들고 있고, 남은 `-wal`이 새 본체와 짝이 안 맞는다.
-- **옛 `-wal`/`-shm`을 반드시 지운다.** 본체만 갈아끼우고 남겨두면 SQLite가
-  다른 DB의 WAL을 새 본체에 얹으려 든다.
+- **서버를 멈추지 않는다.** `VACUUM INTO`는 읽기 트랜잭션 하나로 일관된
+  스냅샷을 뜨므로 글을 쓰는 도중에 돌아도 반쪽짜리가 나오지 않는다.
+  그냥 `cp`는 그렇지 않다 — 아래 "WAL 때문에 실제로 한 번 틀렸다" 참고.
+- **`.backup`이 아니라 `VACUUM INTO`인 이유**는 결과가 새 파일 하나라
+  `-wal`/`-shm` 짝을 따로 챙길 필요가 없어서다. 덤으로 압축된다
+  (82.6MB → 78.2MB, gzip 뒤 68.6MB).
+- **뜬 백업을 그 자리에서 열어본다.** `pragma integrity_check`가 `ok`가
+  아니면 지우고 실패한다. 못 여는 백업은 백업이 아닌데, 그걸 복구하는
+  날에 알게 되면 이미 늦다.
+- **`setup-backup.sh`는 timer만 켜고 끝내지 않고 지금 한 번 돌려본다.**
+  안 그러면 첫 실패를 하루 뒤에, 그것도 아무도 안 볼 때 알게 된다.
+- 지우는 것은 **새 백업이 성공한 뒤에만** 한다.
+- `sqlite3`을 여기서 깐다. 백업에도 쓰고 진단에도 쓴다.
+
+**7벌은 인스턴스 안에만 있다.** 디스크가 통째로 날아가면 같이 날아간다.
+**기계 밖으로 꺼내는 것은 `deploy/fetch-db.sh`다** (아래 §2). 자동으로
+버킷에 올리는 길도 있지만(GCS + 서비스 계정), 지금은 사람이 내려받는 것으로
+둔다 — 쓰는 사람이 하나고, 내려받은 것이 곧 로컬 작업본이라 어차피 필요하다.
+
+---
+
+## 2. 그 뒤로는
+
+`main`에 push하면 `.github/workflows/deploy.yml`이 돈다:
+테스트 → 빌드(`CGO_ENABLED=0 GOOS=linux GOARCH=amd64`) → scp → rename으로
+갈아끼우기 → `systemctl restart` → 실제로 200이 나오는지 확인.
+
+수동으로 다시 올리려면 GitHub의 Actions 탭에서 `deploy` → Run workflow.
+
+### DB — 정본은 서버다
+
+**2026-08-31에 방향을 뒤집었다.** admin 화면이 열려 있어서 글이 서버의
+`/var/lib/blog/blog.db`에 쓰인다. 로컬 `blog.db`는 이관 파이프라인을 돌리는
+작업본일 뿐이다.
+
+#### 평소: 내려받기
+
+```sh
+./deploy/fetch-db.sh          # → backups/blog-<UTC>.db(.gz)
+```
+
+- 있는 것 중 최신을 가져오는 게 아니라 **지금 새로 뜬 것**을 가져온다.
+  어제 것을 받아놓고 오늘 것이라 믿는 일이 없어야 한다.
+- **로컬 `blog.db`를 덮지 않는다.** `backups/`(gitignore)에 날짜 이름으로
+  떨어뜨린다. 덮어쓰는 것은 사람이 보고 직접 한다 — 그 한 번이 이관
+  작업본을 날리는 수다.
+- 받은 뒤 `integrity_check`와 **행 지문**이 서버 것과 맞는지 본다.
+
+#### 예외: 올리기
+
+로컬에서 `import` → `relink` → `categorize` → `regroup`을 다시 돌렸을 때만이다.
+
+```sh
+./deploy/upload-db.sh
+```
+
+**묻지 않고 덮지 않는다.** 순서가 이렇다:
+
+1. 로컬 WAL을 접고(`wal_checkpoint(truncate)`) `integrity_check`
+2. **서버에서 백업을 먼저 뜬다**
+3. 올려놓기만 하고, 아직 안 바꾼다
+4. `deploy/upload-guard.sql`로 **덮으면 사라지는 것이 있는지 본다.**
+   한 줄이라도 나오면 멈춘다
+
+   | 표시 | 뜻 |
+   |---|---|
+   | `LOST` | 웹에서 쓴 글이 사라진다 (`notion_page_id`가 NULL) |
+   | `STALE` | 서버 쪽이 더 최근이다 — 그 뒤에 웹에서 고쳤다는 뜻 |
+   | `LOSTIMG` | 웹에서 올린 이미지가 사라진다 |
+
+5. 그제서야 **서버를 멈추고** 갈아끼운다. 도는 중에 바꾸면 열려 있던
+   커넥션이 옛 파일을 들고 있고, 남은 `-wal`이 새 본체와 짝이 안 맞는다.
+   **옛 `-wal`/`-shm`을 반드시 지운다.**
+6. 서버 지문이 올린 것과 같은지, 사이트가 200인지 본다
+
+가드가 멈추면 **먼저 내려받아 합친 뒤에** 올린다. 가드를 끄는 스위치는
+두지 않았다 — 끄고 싶어지는 순간이 바로 잃는 순간이다.
 
 #### WAL 때문에 실제로 한 번 틀렸다 (2026-08-24, 첫 배포)
 
@@ -212,22 +274,18 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
   로컬에서 서버를 한 번 띄우자 SQLite가 WAL을 checkpoint하면서 본체가 바뀌었고,
   그제서야 해시가 갈라졌다.
 - **그래서 파일 해시로 "같은 DB냐"를 판정하면 안 된다.** 열기만 해도 바뀌고,
-  달라야 할 때 같게 나온다. 위 ②처럼 **행을 뽑아 해싱**하거나, 가장 확실하게는
-  올린 뒤 화면을 로컬과 비교한다:
+  달라야 할 때 같게 나온다. 지금 스크립트들은 전부 **행을 뽑아 해싱한다**:
 
-```sh
-diff <(curl -s http://127.0.0.1:8080/) <(curl -s https://inquieto.dev/)
-```
+  ```sh
+  sqlite3 "file:blog.db?immutable=1" \
+    "select id,slug,status,updated_at from posts order by id" | shasum -a 256
+  ```
 
----
+  가장 확실한 것은 화면을 견주는 것이다:
 
-## 2. 그 뒤로는
-
-`main`에 push하면 `.github/workflows/deploy.yml`이 돈다:
-테스트 → 빌드(`CGO_ENABLED=0 GOOS=linux GOARCH=amd64`) → scp → rename으로
-갈아끼우기 → `systemctl restart` → 실제로 200이 나오는지 확인.
-
-수동으로 다시 올리려면 GitHub의 Actions 탭에서 `deploy` → Run workflow.
+  ```sh
+  diff <(curl -s http://127.0.0.1:8080/) <(curl -s https://inquieto.dev/)
+  ```
 
 ### 자주 보는 것
 
@@ -242,6 +300,11 @@ $S 'curl -sI http://127.0.0.1:8080/'              # blog 자신
 $S 'curl -sI -H "Host: inquieto.dev" http://127.0.0.1/'   # Caddy를 거쳐서
 $S 'sudo ss -tlnp'
 $S 'free -m; df -h /'
+
+$S 'systemctl list-timers blog-backup.timer --no-pager'   # 다음 백업
+$S 'sudo journalctl -u blog-backup -n 20 --no-pager'      # 지난 백업
+$S 'sudo ls -la /var/backups/blog/'
+$S 'sudo systemctl start blog-backup'                     # 지금 한 벌 더
 ```
 
 ```sh
@@ -271,7 +334,8 @@ journal에 남는다. 사람이 할 일은 없지만, 도메인을 옮기거나 
 - **방화벽 정리.** `default-allow-ssh`(22, 0.0.0.0/0)가 남아 있다. IAP SSH가
   있으니 닫아도 되지만, 닫으면 `--tunnel-through-iap` 말고는 들어갈 길이
   없어진다. 익숙해지면 지운다.
-- **백업.** DB가 인스턴스 안에만 있다. 디스크 스냅샷이든 `sqlite3 .backup`을
-  버킷에 올리든 정해야 한다. admin 화면이 생겨 사람이 직접 글을 쓰기
-  시작하면 그때부터는 **로컬 blog.db가 더 이상 정본이 아니라서** 미룰 수 없다.
+- **백업을 기계 밖으로 자동으로 꺼내기.** 지금은 인스턴스 안에 7벌이 있고,
+  밖으로 나가는 것은 사람이 `deploy/fetch-db.sh`를 돌릴 때뿐이다. 디스크가
+  통째로 날아가면 그 사이 것은 같이 날아간다. GCS 버킷에 올리려면 서비스
+  계정과 수명주기 규칙을 먼저 정해야 한다.
 - **robots.txt / sitemap.xml.**
