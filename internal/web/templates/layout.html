@@ -1008,15 +1008,23 @@
 
   /* ── 본문에 펼친 인라인 데이터베이스 (노션에서 표로 보이던 목차) ── */
   /* 펼친 인라인 데이터베이스도 머리띠 상자다 — 목차·코드·표와 같은 신호다. */
-  .inline-db { margin: 1.2rem 0; padding: 0; background: var(--bg);
+  /* 머리띠를 두른 목록 상자. **인라인 데이터베이스와 하위 분류가 같은 모양을
+     쓴다** — 둘 다 "여기 이런 목록이 있다"를 말하는 자리라 생김새가 달라야 할
+     이유가 없다. 머리띠는 코드 라벨·목차·표 머리와 함께 이 디자인의 시그니처라
+     정의도 한 곳에 둔다. */
+  .inline-db, .listbox { margin: 1.2rem 0; padding: 0; background: var(--bg);
                border: 2px solid var(--ink); }
-  .inline-db-title {
+  .inline-db-title, .listbox-title {
     font: 700 .72rem var(--mono); letter-spacing: .08em;
     background: var(--band-bg); color: var(--band-fg);
     margin: 0; padding: .42rem .8rem;
   }
-  .inline-db ul.list { padding: 0 .8rem; }
-  .inline-db ul.list li:last-child { border-bottom: none; }
+  /* .section-title이 h2 크기와 바깥 여백, 그리고 꼬리 괘선을 들고 온다.
+     띠 안에서는 셋 다 뜻이 없다 — 괘선은 상자 테두리가 이미 하고 있다. */
+  .listbox-title { margin: 0; }
+  .listbox-title::after { content: none; }
+  .inline-db ul.list, .listbox ul.list { padding: 0 .8rem; }
+  .inline-db ul.list li:last-child, .listbox ul.list li:last-child { border-bottom: none; }
 
   /* ── 유튜브 재생 자리 ──────────────────────────────────────────── */
   /* 누르기 전에는 유튜브에 아무 요청도 가지 않는다. 섬네일도 안 받으므로

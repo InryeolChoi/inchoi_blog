@@ -353,18 +353,23 @@ func apply2(sqlDB *sql.DB, p *plan) (int, error) {
 		// source_name은 경로에서 온 이름이라 사람이 바꾸지 않는다.
 		//
 		// name/slug는 처음 만들 때만 정한다. 이미 있으면 사람이 바꿔둔 걸 존중한다.
+		//
+		// **sort_order도 처음 만들 때만 정한다.** 형제 순서는 사람이 정하는
+		// 것이라(regroup의 members·subs·topics) 경로가 알려줄 수 있는 것이
+		// 아니다. 여기서 덮으면 두 도구가 같은 칸을 서로 다른 방식으로 쓴다 —
+		// 이 도구는 계획 전체를 훑는 **전역 색인**을, regroup은 **부모별 색인**을
+		// 쓰므로 나중에 돈 쪽이 이긴다. 실제로 `categorize → regroup`과
+		// `regroup → categorize`가 다른 값을 남겼다(2026-09-02에 고쳤다).
 		stmt := `
 			INSERT INTO categories (parent_id, name, slug, sort_order, source_name)
 			VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT (source_name) DO UPDATE SET
-				parent_id  = excluded.parent_id,
-				sort_order = excluded.sort_order`
+				parent_id = excluded.parent_id`
 		if keepParent {
 			stmt = `
 			INSERT INTO categories (parent_id, name, slug, sort_order, source_name)
 			VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT (source_name) DO UPDATE SET
-				sort_order = excluded.sort_order`
+			ON CONFLICT (source_name) DO NOTHING`
 		}
 		_, err := tx.Exec(stmt, parentID, n.name, n.slug, order, n.name)
 		if err != nil {

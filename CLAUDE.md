@@ -114,8 +114,8 @@ go run ./cmd/import -db blog.db                # 변환 + DB 이관 (몇 번 돌
 
 ## DB 이관 현황
 
-덤프 1408개 중 사람이 빼기로 정한 `DropPosts` 137개를 제외한 **1271개**가 들어가
-있다(GitHub에서 온 16편을 더해 posts는 1287편이다). `-db`를 줄 때만 DB를 건드린다.
+덤프 1408개 중 사람이 빼기로 정한 `DropPosts` 152개를 제외한 **1256개**가 들어가
+있다(GitHub에서 온 16편을 더해 posts는 1272편이다). `-db`를 줄 때만 DB를 건드린다.
 
 - **글은 `notion_page_id`, 이미지는 `sha256`이 멱등 키다.** 다시 돌리면 갱신만 되고
   행이 늘지 않는다. `created_at`은 처음 넣을 때 값을 유지하고 `updated_at`만 바뀐다.
@@ -316,6 +316,14 @@ tooling은 노션 최상위가 그대로 한 갈래인데, `웹 프로그래밍`
     **하나라도 표에 없으면 예전대로 에러다** — 갈 곳이 정해지지 않은 것을 조용히
     지워서 잃는 것이 그 검사가 막으려는 일이다.
   - 그래서 **categorize → regroup을 두 바퀴** 돌려야 수렴한다. 세 번째 바퀴는 0건이다.
+- **`categories.sort_order`는 categorize가 덮지 않는다** (2026-09-02에 고쳤다).
+  형제 순서는 사람이 정하는 것이라(regroup의 `members`·`subs`·`topics`) 경로가
+  알려줄 수 있는 것이 아니다. 예전에는 두 도구가 같은 칸을 서로 다른 방식으로
+  썼다 — categorize는 계획 전체를 훑는 **전역 색인**을, regroup은 **부모별
+  색인**을 넣어서 **나중에 돈 쪽이 이겼다.** `categorize → regroup`과
+  `regroup → categorize`가 실제로 다른 값을 남겼고, 이 문서가 금지하는 바로
+  그 싸움이다. 이제 categorize는 **처음 만들 때만** 순서를 정한다 —
+  `name`/`slug`/`parent_id`를 안 덮는 것과 같은 이유다.
 - **`DropCategories`는 categorize도 봐야 한다.** 안 그러면 regroup이 지운 분류를
   categorize가 다음 실행에서 되살려서, 두 도구를 번갈아 돌릴 때마다 트리가 달라진다.
   실제로 그렇게 됐다가 고쳤다.
@@ -402,8 +410,8 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 | `PostMetadataEdits` | 글 제목·원작성일·순서를 사람이 지정 | `notion_page_id` | import·sortorder | 23건 (선형대수 11 + 다변량분석 12) |
 | `PostTitleEdits` | 작성일·순서는 유지하고 글 제목만 지정 | `notion_page_id` | import | 수리통계2 참고자료 4건의 `(1)` 제거 |
 | `StatusEdits` | **글의 status를 사람이 지정** | `notion_page_id` | **import** | 0건 (빅데이터 분석기사의 마디 둘은 커리어와 함께 뺐다) |
-| `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | 19건 (`컴퓨터 시스템` 계열, `웹 프로그래밍`, 커리어 4갈래, 옛 백준 묶음 4갈래 포함) |
-| `DropPosts` | **글을 이관에서 뺌** | `notion_page_id` | **import** | 137건 (커리어 50 · 백준 35 포함) |
+| `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | 21건 (`컴퓨터 시스템` 계열, `웹 프로그래밍`, 커리어 4갈래, 옛 백준 묶음 4갈래 포함) |
+| `DropPosts` | **글을 이관에서 뺌** | `notion_page_id` | **import** | 152건 (커리어 50 · 백준 35 · 알고리즘 이론 15 포함) |
 | `DropImages` | **이미지를 DB에서 뺌** | `sha256` | **import** | 1건 (증명사진) |
 | `BodyEdits` | **본문에서 줄 삭제·교체** | `notion_page_id` | **import** | 삭제 8줄 + 교체 5줄 |
 | `BodyAppends` | **본문 끝에 지속적으로 덧붙임** | `notion_page_id` | **import** | 확률과정론 시험 해답 1건 |
@@ -1393,6 +1401,18 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
   - **`deckFor`는 "자식이 있어야 한다"를 보지 않는다.** 그건 하위 분류를
     그대로 카드로 바꾸는 `childDeck`에만 해당하는 조건이라 그쪽이 제 눈으로
     본다 — 이 둘은 자식이 없는 말단 분류다.
+- **`하위 분류`는 머리띠를 두른 상자로 그린다** (2026-09-02, `.listbox`).
+  인라인 데이터베이스를 펼친 목록과 **같은 모양**이다 — 둘 다 "여기 이런 목록이
+  있다"를 말하는 자리라, 한 화면에서 생김새가 갈리면 무엇이 다른지 읽는 사람이
+  알 수 없다. 실제로 `알고리즘: 이론`은 상자로, `알고리즘: 실전`은 밑줄 목록으로
+  나와서 같은 것이 두 모양이었다.
+  - **머리띠 정의는 한 곳이다.** `.inline-db`와 `.listbox`가 같은 규칙을 쓴다.
+    띠는 코드 라벨·목차·표 머리와 함께 이 디자인의 시그니처라 정의가 갈라지면 안 된다.
+  - **제목은 `<h2 class="section-title">`을 그대로 둔다.** `preferences.js`가 그
+    **글자로** 번역 키를 찾으므로(`sectionKeys`) 요소나 글을 바꾸면 조용히
+    한국어로 남는다. 띠 모양은 `listbox-title`이 덧입힌다.
+  - `.section-title`이 들고 오는 h2 여백과 꼬리 괘선은 띠 안에서 끈다 — 괘선은
+    상자 테두리가 이미 하고 있다.
 - **아카이브 바깥으로 나가는 링크는 `internal/web/links.go`에 둔다.** 지금은
   `소개` 화면의 개인 페이지(`https://inryeolchoi.github.io`) 하나다. 자기소개를
   읽은 사람이 다음으로 갈 곳은 이 아카이브의 다른 분류가 아니다.
@@ -2599,6 +2619,16 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
     카테고리 절의 `groupDrops`·`allScheduledToLeave` 항목 참고.
   - categorize → regroup 두 바퀴에 수렴하고, 세 번째 바퀴는 지문이 같다.
     분류 83개 전부 200, `/career`와 지운 글 전부 404.
+
+- **`알고리즘: 이론`의 빈 글 15편을 지웠다.** 전부 본문이 0바이트인데
+  **`시간복잡도` 한 편만 draft가 아니라 unlisted라 공개 화면에 빈 페이지로
+  나가고 있었다.** `기초 (1)` 7편과 `(2)` 2편은 그 분류의 글 전부라, 분류
+  둘도 함께 뺐다(`DropCategories`) — 덤프가 만든 마디라 0으로 남으면 막다른
+  길이다. 표지 본문의 두 링크도 `BodyEdits`로 걷었다. 글 1,287 → **1,272편**,
+  분류 89 → **87개.**
+  - 이 과정에서 **categorize와 regroup이 `sort_order`를 두고 싸우는 것**을
+    찾아 고쳤다 — 위 "카테고리" 절 참고. **제 변경 이전부터 있던 것**이고,
+    옛 코드에서 순서를 바꿔 돌려 재현했다.
 
 - **백준을 알고리즘별로 다시 짰다.** 노션에서 온 `백준 단계별로 풀기 1~9 /
   10~25 / 알고리즘 강의 / 기타 백준 문제`는 **푼 순서지 무엇을 배웠나가 아니라서**,

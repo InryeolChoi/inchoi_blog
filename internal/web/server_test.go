@@ -598,7 +598,11 @@ func TestMachineLearningCategoryIsListOnly(t *testing.T) {
 	}
 	body := mainOf(t, get(t, srv.Handler(), "/data-math/머신러닝").Body.String())
 	for _, want := range []string{
-		`class="section-title">하위 분류</h2>`,
+		// **클래스 이름이 아니라 제목 글자를 본다.** 이 테스트가 지키는 것은
+		// "머신러닝은 표지를 펴지 않고 목록형 첫 화면을 보여준다"이지 그 목록의
+		// 생김새가 아니다. 상자 모양을 바꿨을 때 여기가 애먼 자리에서 깨졌다.
+		`section-title`,
+		`>하위 분류</h2>`,
 		`href="/data-math/` + url.PathEscape("머신러닝") + `/` + url.PathEscape("머신러닝-기초이론") + `"`,
 		`href="/data-math/` + url.PathEscape("머신러닝") + `/` + url.PathEscape("자연어처리") + `"`,
 	} {

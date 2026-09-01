@@ -39,15 +39,24 @@
 {{end}}
 
 {{if and .Categories (not .Deck)}}
-<h2 class="section-title">하위 분류</h2>
-<ul class="list">
-  {{range .Categories}}
-  <li>
-    <a href="{{$.BasePath}}/{{.Slug}}">{{.Name}}</a>
-    <span class="count" data-i18n="postCount" data-count="{{.PostCount}}">글 {{.PostCount}}건</span>
-  </li>
-  {{end}}
-</ul>
+{{/* 머리띠를 두른 상자로 그린다. 인라인 데이터베이스를 펼친 목록과 **같은
+     모양**이다 — 둘 다 "여기 이런 목록이 있다"를 말하는 자리라, 한 화면에서
+     생김새가 갈리면 무엇이 다른지 읽는 사람이 알 수 없다.
+
+     제목은 `<h2 class="section-title">`을 그대로 둔다. preferences.js가 그
+     **글자로** 번역 키를 찾으므로(sectionKeys) 요소나 글을 바꾸면 조용히
+     한국어로 남는다. 띠 모양은 listbox-title이 덧입힌다. */}}
+<section class="listbox">
+  <h2 class="section-title listbox-title">하위 분류</h2>
+  <ul class="list">
+    {{range .Categories}}
+    <li>
+      <a href="{{$.BasePath}}/{{.Slug}}">{{.Name}}</a>
+      <span class="count" data-i18n="postCount" data-count="{{.PostCount}}">글 {{.PostCount}}건</span>
+    </li>
+    {{end}}
+  </ul>
+</section>
 {{end}}
 
 {{/* 목록이 한 층으로 쏟아지는 분류는 노션 경로에 남아 있던 층으로 다시 묶어
