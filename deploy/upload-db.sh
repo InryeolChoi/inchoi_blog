@@ -76,6 +76,9 @@ gcloud compute scp deploy/upload-guard.sql "$INSTANCE:/tmp/upload-guard.sql" \
   --zone="$ZONE" --project="$PROJECT" --tunnel-through-iap
 gcloud compute scp "$ALLOW_SQL" "$INSTANCE:/tmp/upload-intentional-drops.sql" \
   --zone="$ZONE" --project="$PROJECT" --tunnel-through-iap
+# mktemp가 만든 파일은 0600으로 전송된다. 가드는 root가 아니라 blog 사용자로
+# SQLite를 열므로, 사람에게 공개된 curation ID 목록만 읽을 수 있게 한다.
+ssh_ 'chmod 0644 /tmp/upload-intentional-drops.sql'
 
 echo
 echo "== 덮으면 사라지거나 되살아나는 것이 있는지 본다 =="
