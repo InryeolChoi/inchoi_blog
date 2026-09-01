@@ -36,6 +36,15 @@
 {{.Body}}
 </article>
 
+{{/* 본문이 한 번도 안 가리키는 아래 갈래. 인라인 데이터베이스를 펼친 상자와
+     **같은 모양**을 쓴다 — 둘 다 "이 글 아래에 이런 목록이 있다"를 말하는
+     자리라, 생김새가 다르면 무엇이 다른지 읽는 사람이 알 수 없다. */}}
+{{range .Branches}}
+<div class="inline-db"><p class="inline-db-title">{{.Name}}</p><ul class="list">
+  {{- range .Posts}}<li><a href="/p/{{.Slug}}">{{.Title}}</a>{{with .Date}}<span class="date">{{.}}</span>{{end}}</li>{{end -}}
+</ul></div>
+{{end}}
+
 {{with .Post.Children}}
 <h2 class="section-title">하위 글</h2>
 {{template "posttree" .}}

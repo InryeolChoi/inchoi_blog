@@ -154,6 +154,9 @@ type pageData struct {
 	AfterPosts template.HTML
 	// Outline은 본문에서 뽑은 목차다. 짧은 글에는 안 붙인다.
 	Outline []markdown.Heading
+	// Branches는 이 글 아래에 남아 있는데 본문이 안 가리키는 갈래다
+	// (store.SubBranches). 비어 있으면 아무것도 안 그린다.
+	Branches []PostBranch
 	// Nav는 사이드바에 그릴 카테고리 트리다. render가 채운다.
 	Nav []NavCategory
 	// openCats는 사이드바에서 펼쳐둘 카테고리다(지금 보고 있는 곳의 조상).
@@ -569,7 +572,17 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// 본문이 이미 가리키고 있는 글은 "하위 글"에서 뺀다. 안 그러면 한 화면에
 	// 같은 목록이 두 번 나온다.
-	post.Children = dropLinkedChildren(post.Children, rendered.HTML)
+	linked := linkedSlugs(rendered.HTML)
+	post.Children = dropLinkedChildren(post.Children, linked)
+
+	// 본문이 한 번도 안 가리키는 아래 갈래는 상자로 편다. 노션에서 온 표지 글은
+	// 나중에 다른 출처로 들어온 글을 알 리가 없어서, 그대로 두면 닿을 길이
+	// 없다 — `Java` 아래 `모던 자바` 16편이 실제로 그랬다(store.SubBranches).
+	branches, err := s.store.SubBranches(post, linked)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 
 	// 글을 열면 사이드바에서 그 글이 속한 분류가 펼쳐져 있어야 한다.
 	open, active := openTrail(post.Trail)
@@ -579,6 +592,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		Post:      post,
 		Body:      rendered.HTML,
 		Outline:   rendered.Outline,
+		Branches:  branches,
 		openCats:  open,
 		activeCat: active,
 	})
@@ -586,6 +600,23 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 
 // postHref는 본문 HTML에서 글로 가는 링크를 잡는다.
 var postHref = regexp.MustCompile(`href="/p/([^"#]+)`)
+
+// linkedSlugs는 본문 HTML이 실제로 가리키는 글의 slug를 모은다.
+//
+// **렌더링 결과를 본다.** 원문 마크다운이 아닌 이유는 펼친 인라인 데이터베이스처럼
+// 렌더링 단계에서 생기는 링크까지 세야 하기 때문이다(inline.go). "본문이 이미
+// 안내했나"를 묻는 곳이 둘이라(하위 글, 하위 갈래) 판정을 여기 하나로 둔다.
+func linkedSlugs(body template.HTML) map[string]bool {
+	linked := map[string]bool{}
+	for _, m := range postHref.FindAllStringSubmatch(string(body), -1) {
+		slug, err := url.PathUnescape(m[1])
+		if err != nil {
+			slug = m[1]
+		}
+		linked[slug] = true
+	}
+	return linked
+}
 
 // dropLinkedChildren은 본문이 이미 링크로 가리키고 있는 하위 글을 "하위 글"
 // 목록에서 뺀다.
@@ -604,19 +635,8 @@ var postHref = regexp.MustCompile(`href="/p/([^"#]+)`)
 // 빼도 길이 사라지지 않고, 본문이 안 가리키는 형제는 그대로 남는다. 지금은
 // 하위 글이 있는 6편 모두 자식 전부가 본문에 링크돼 있어 섹션이 통째로
 // 사라지지만, parent_id를 다른 카테고리로 넓히면 일부만 빠지는 경우가 생긴다.
-func dropLinkedChildren(children []PostSummary, body template.HTML) []PostSummary {
-	if len(children) == 0 {
-		return children
-	}
-	linked := map[string]bool{}
-	for _, m := range postHref.FindAllStringSubmatch(string(body), -1) {
-		slug, err := url.PathUnescape(m[1])
-		if err != nil {
-			slug = m[1]
-		}
-		linked[slug] = true
-	}
-	if len(linked) == 0 {
+func dropLinkedChildren(children []PostSummary, linked map[string]bool) []PostSummary {
+	if len(children) == 0 || len(linked) == 0 {
 		return children
 	}
 	out := make([]PostSummary, 0, len(children))

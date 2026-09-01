@@ -949,3 +949,121 @@ func (s *store) CoverPostSlugOf(catSlug string) (string, error) {
 	}
 	return slug.String, nil
 }
+
+// PostBranch는 한 글의 경로 **아래에** 남아 있는 갈래 하나다.
+//
+// 카테고리가 3단계에서 끝나므로 그보다 깊었던 노션 층은 어느 화면에도 안
+// 나온다. `PathBranches`가 카테고리 화면에서 그 첫 칸을 되살리는데, 그보다
+// 더 깊은 칸은 그 갈래의 표지 글까지 와야 보인다 — 여기가 그 자리다.
+type PostBranch struct {
+	Name  string
+	Posts []PostSummary
+}
+
+// SubBranches는 이 글의 경로 아래에 남아 있는데 **본문이 한 번도 안 가리키는**
+// 갈래를 준다.
+//
+// # 왜 필요한가
+//
+// `Java` 표지 글은 목차 여덟 절로 기초 문법을 전부 안내하는데, 그 아래
+// `Java > 모던 자바 > …` 16편은 어디에도 안 나온다. 노션에서 온 본문이라
+// 나중에 GitHub에서 들어온 글을 알 리가 없다. `프로그래밍 언어` 화면은
+// 카드만 보여주므로(카드가 있는 분류는 카드만) **그 16편에 닿는 길이 주소를
+// 직접 치는 것 말고 없었다.**
+//
+// # 무엇을 뺐나 — 본문이 이미 가리키는 갈래
+//
+// 판정은 `dropLinkedChildren`과 같다. 한 편이라도 본문에 링크돼 있으면 그
+// 갈래는 본문이 이미 안내한 것이라 여기서 다시 그리지 않는다. `문자열 다루기`나
+// `자바 : 자료구조`가 그렇게 빠진다 — 안 그러면 같은 목록이 한 화면에 두 번 난다.
+//
+// # 왜 두 편부터인가
+//
+// 갈래가 아니라 **직속 자식 한 편**인 경우가 대부분인데, 그건 층이 아니라 글
+// 하나다. 이름표를 씌워 상자로 세우면 알려주는 것보다 늘어나는 것이 많다.
+// 하나뿐인 갈래를 잃는 대신 없는 층을 지어내지 않는다.
+func (s *store) SubBranches(p *Post, linked map[string]bool) ([]PostBranch, error) {
+	if !p.OriginalPath.Valid || p.OriginalPath.String == "" || len(p.Trail) == 0 {
+		return nil, nil
+	}
+	categoryID := p.Trail[len(p.Trail)-1].ID
+	prefix := strings.Split(p.OriginalPath.String, " > ")
+	rows, err := s.db.Query(`
+		SELECT `+postColumns+`
+		FROM posts p
+		WHERE p.category_id = ? AND p.id <> ? AND `+s.notHidden("p")+`
+		  AND p.original_path LIKE ? ESCAPE '\'`,
+		categoryID, p.ID, likePrefix(p.OriginalPath.String)+" > %")
+	if err != nil {
+		return nil, fmt.Errorf("하위 갈래 조회: %w", err)
+	}
+	kids, err := scanPostSummaries(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	groups := map[string][]PostSummary{}
+	var order []string
+	drop := map[string]bool{}
+	for _, k := range kids {
+		parts := strings.Split(k.OriginalPath.String, " > ")
+		if len(parts) <= len(prefix) || !slices.Equal(parts[:len(prefix)], prefix) {
+			continue
+		}
+		name := parts[len(prefix)]
+		if _, seen := groups[name]; !seen {
+			order = append(order, name)
+		}
+		groups[name] = append(groups[name], k)
+		// 본문이 가리키는 글이 하나라도 있으면 그 갈래는 본문 몫이다.
+		if linked[k.Slug] {
+			drop[name] = true
+		}
+	}
+
+	out := make([]PostBranch, 0, len(order))
+	for _, name := range order {
+		if drop[name] || hiddenBranch(name) || len(groups[name]) < 2 {
+			continue
+		}
+		posts := groups[name]
+		sortPosts(posts)
+		out = append(out, PostBranch{Name: name, Posts: posts})
+	}
+	slices.SortFunc(out, func(a, b PostBranch) int { return strings.Compare(a.Name, b.Name) })
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
+}
+
+// hiddenBranch는 상자로 세우지 않을 갈래 이름이다.
+//
+// **`(제목 없음)`은 이름이 아니다.** 노션의 이름 없는 인라인 데이터베이스가
+// 경로에 그렇게 남는데, 그걸 상자 제목으로 쓰면 무엇을 담았는지 알려주는
+// 대신 자리만 차지한다. 이름 없는 갈래는 카드로도 안 세운다(deck.go).
+//
+// **`수업 : 통수 & 선계`는 사람이 이미 없앤 묶음이다.** 그 링크를 표지 본문에서
+// `curation.BodyEdits`로 덜어낸 이유가 있다 — 선형대수 11편을 다른 분류로
+// 옮긴 뒤에도 그 상자가 최적화이론 화면에 목록을 한 벌 더 세웠기 때문이다.
+// 남은 다섯 편은 최적화이론의 평범한 글로 이미 목록에 선다. 여기서 다시
+// 그리면 사람이 지운 것을 코드가 되살리는 셈이다.
+//
+// **그래서 이 표는 웹의 화면 장치다** — `internal/curation`이 아니라 여기 있는
+// 이유는 갈래 카드·외부 링크와 같다. 본문(DB)에 적으면 다음 `import -db`가
+// 덮어쓰고, curation에 적으면 웹이 그 패키지를 읽게 되어 "DB가 정본"이 깨진다.
+func hiddenBranch(name string) bool {
+	switch name {
+	case "(제목 없음)", "수업 : 통수 & 선계":
+		return true
+	}
+	return false
+}
+
+// likePrefix는 LIKE의 와일드카드를 막는다. original_path는 노션이 준 제목을
+// 그대로 이어붙인 것이라 `%`나 `_`가 들어 있을 수 있고, 그대로 두면 남의
+// 갈래까지 딸려온다.
+func likePrefix(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
+}
