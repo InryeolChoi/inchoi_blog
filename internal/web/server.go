@@ -474,6 +474,11 @@ func linkCoveredChildCategories(body template.HTML, children []Category, basePat
 // `수리/통계: 이론`처럼 하위 분류 목록만 남는다.
 var listOnlyCategories = map[string]bool{
 	"머신러닝": true,
+	// école 42의 표지 글은 Piscine·inner circle·서클별로 스무 개 넘는 과제를
+	// 한 화면에 쭉 늘어놓는다. 그 과제들이 이미 하위 분류로 서 있어서, 펼치면
+	// 같은 목록이 본문과 분류 목록에 두 벌로 나온다 — 누르면 그 분류로
+	// 넘어가기만 하면 되는 자리다.
+	"école-42": true,
 }
 
 func listOnlyCategory(slug string) bool {
