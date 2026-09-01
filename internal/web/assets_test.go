@@ -37,6 +37,10 @@ func TestNeedsForCodeMatchesHighlightInit(t *testing.T) {
 		{"언어 없는 코드", `<pre><code>그냥</code></pre>`, false},
 		{"text와 python이 같이", `<pre><code class="language-text">a</code></pre><pre><code class="language-python">b</code></pre>`, true},
 		{"코드 없음", `<p>글만 있다</p>`, false},
+		// mermaid는 hljs에 아예 없는 언어다. 예전에는 그 30건 때문에
+		// highlight.js를 받아놓고 정작 칠할 것이 없었다.
+		{"mermaid만", `<pre><code class="language-mermaid">graph LR</code></pre>`, false},
+		{"mermaid와 python이 같이", `<pre><code class="language-mermaid">graph LR</code></pre><pre><code class="language-python">b</code></pre>`, true},
 	} {
 		if got := needsFor(template.HTML(tc.body)).Code; got != tc.want {
 			t.Errorf("%s: Code=%v, want %v", tc.name, got, tc.want)
@@ -83,5 +87,36 @@ func TestNeedsForExtraLanguages(t *testing.T) {
 	}
 	if n.Lang("powershell") {
 		t.Error("없는 언어를 잡았다")
+	}
+}
+
+// TestNeedsForMermaid는 3.5MB짜리 mermaid를 **그릴 것이 있는 페이지에서만**
+// 받는지 본다. KaTeX·highlight.js를 페이지별로 가른 것과 같은 이유이고,
+// 여기서는 그 무게 차이가 훨씬 크다.
+func TestNeedsForMermaid(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"mermaid 코드 블록", `<pre><code class="language-mermaid">graph LR</code></pre>`, true},
+		{"다른 언어", `<pre><code class="language-python">x = 1</code></pre>`, false},
+		{"코드 없음", `<p>글만 있다</p>`, false},
+		{"본문에 적힌 mermaid 글자", `<p>mermaid를 배웠다</p>`, false},
+	} {
+		if got := needsFor(template.HTML(tc.body)).Mermaid; got != tc.want {
+			t.Errorf("%s: Mermaid=%v, want %v", tc.name, got, tc.want)
+		}
+	}
+
+	// mermaid만 있는 글은 다이어그램은 그리지만 색칠할 것은 없다 —
+	// 두 판정이 갈리는 자리다.
+	n := needsFor(template.HTML(`<pre><code class="language-mermaid">graph LR</code></pre>`))
+	if !n.Mermaid || n.Code {
+		t.Errorf("mermaid만 있는 글: Mermaid=%v Code=%v, want true/false", n.Mermaid, n.Code)
+	}
+	// 복사는 한다. 그릴 수 없더라도 원문은 코드다.
+	if !n.Copy {
+		t.Error("mermaid 블록에 복사 버튼이 안 붙는다")
 	}
 }

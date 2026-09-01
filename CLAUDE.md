@@ -1582,6 +1582,58 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
   바뀜, 라이트·다크 모두 읽힘. **검사기가 진짜로 잡는지 먼저 봤다** — 900px
   조각을 끼우면 901px이 나온다.
 
+### mermaid는 다이어그램으로 그린다 (2026-09-02)
+
+```` ```mermaid ```` 코드 블록 **32개(글 22편)**가 그림이 된다
+(`internal/web/static/mermaid.js`). 그전까지는 색도 안 칠해진 소스가 그대로
+보였다 — hljs에 없는 언어라 "모르는 언어라 그대로 둔다"에 걸려 있었다.
+
+- **원문 `<pre>`를 지우지 않고 감춘다.** 그린 SVG를 그 옆에 끼우고 CSS가
+  (`.codeblock.has-diagram pre`) 원문을 감춘다. 그래야 **복사 버튼이 그대로
+  소스를 집어가고**(copy.js는 `<code>`의 textContent를 읽는다) 못 그렸을 때
+  되돌릴 것이 남는다. KaTeX가 **성공했을 때만** 원문을 대신하는 것과 같다.
+- **못 그리면 소스가 그대로 남는다.** 반쯤 그린 것을 남기지 않는다. 실제로
+  망가진 도형을 끼워 넣어 `<pre>`가 `display:block`으로 남는 것을 확인했다.
+- **`startOnLoad`를 끈다.** 그건 `.mermaid` 요소를 제 마음대로 찾아 그리는데,
+  우리 마크업은 코드 블록이고 무엇을 그릴지는 우리가 고른다 — `highlightAll()`을
+  안 쓰는 것과 같은 이유다.
+- **색은 지면에서 가져온다** (`theme: "base"` + `themeVariables`). mermaid의
+  기본 팔레트는 연보라 도형에 노란 묶음 상자라, 잉크 괘선과 포인트 하나로
+  버티는 이 사이트에서 **그 상자만 남의 것으로 보인다.** `--ink`·`--bg`·
+  `--surface`·`--line`·`--mono`를 읽어 넘기므로 라이트·다크가 저절로 따라오고
+  팔레트를 또 갈아엎어도 여기를 고칠 일이 없다. **`default`/`dark` 테마로는
+  안 된다** — 그 둘은 `themeVariables`를 무시하고 제 팔레트를 고집한다.
+- **테마를 바꾸면 다시 그린다.** `MutationObserver`가 `<html data-theme>`만
+  본다 — preferences.js와 mermaid.js가 서로를 알 필요가 없다.
+- **3.5MB짜리다.** 그래서 `Assets.Mermaid`가 참인 22편에서만 받는다. 같은
+  이유로 **mermaid는 `skipLangs`에 있다** — 예전에는 그 30건 때문에
+  highlight.js를 받아놓고 정작 칠할 것이 없었다. `static/highlight-init.js`의
+  같은 목록과 맞춰야 하고, `TestNeedsForCodeMatchesHighlightInit`이 지킨다.
+- **`Mermaid`는 `Code`와 다른 판정이다.** `Copy`가 `Code`와 다른 것과 같은
+  자리다 — mermaid만 있는 글은 색칠할 것은 없지만 그릴 것과 복사할 것은 있다.
+- admin 미리보기도 같은 스크립트를 쓴다(`window.blogRenderMermaid`). admin은
+  무엇을 쓸지 미리 알 수 없어서 늘 받는다 — `PreviewAssetTags`가 `mermaid-cdn`을
+  함께 뽑아간다.
+
+**`Mermaid` 설명 글은 본문이 깨져 있었다.** 글쓴이가 노션에서 **인라인 코드
+하나에 여러 줄을 넣고** 그 안에 `<div class="mermaid">`를 적어뒀다 — 그 시절
+블로그의 렌더러가 그 div를 찾아 그렸던 것이라 원본에서는 뜻이 있었다. 여기서는
+CommonMark의 코드 스팬이 그 모양으로 짝이 안 맞아 **백틱 하나가 글자로 남고
+도형 소스가 문단으로 흘러나왔다.**
+
+- **`curation.BodyEdits`로 여는 줄과 닫는 줄만 갈아끼운다.** 사이의 소스는
+  손대지 않아도 되고, 줄 단위로만 고친다는 원칙에 그대로 맞는다. DB의 body를
+  손으로 고치면 다음 `import -db`가 되살린다.
+- **같은 줄이 두 번 나와서 항목도 두 벌이다.** `replaceLine`은 첫 번째 것만
+  바꾸므로, 두 번 적으면 앞엣것이 바뀐 뒤 뒤엣것이 걸린다.
+- 이 한 편만 다시 이관하고 `relink -apply`를 돌렸다.
+
+확인한 것: 헤드리스로 22페이지를 훑어 **코드 블록 32개 전부 SVG가 됐고**,
+375px에서 문서폭이 375를 넘는 곳 0개, 본문에 새어 나온 `<div class="mermaid"`
+0개, 다크로 바꾸면 같은 그림이 다시 그려지고, 망가진 도형에서는 소스가 남는다.
+돌연변이 셋(mermaid를 skipLangs에서 뺌 / `Mermaid`를 안 채움 / 늘 참으로)을
+넣어 테스트가 실제로 실패하는 것을 확인했다.
+
 ### 본문 안의 바깥 링크는 카드가 된다
 
 `internal/markdown/extlink.go`. **문단 하나가 통째로 링크일 때만** 카드다.
@@ -1633,6 +1685,8 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
 | `static/math.js` | 바이너리 | 위 둘을 우리 마크업에 맞게 부른다 |
 | `static/highlight-init.js` | 바이너리 | 〃 |
 | `static/copy.js` | 〃 | 코드 블록 오른쪽 위의 복사 버튼 |
+| mermaid 11.17.2 | CDN | ```mermaid 코드 블록을 다이어그램으로 그린다 |
+| `static/mermaid.js` | 바이너리 | 위를 우리 마크업·팔레트에 맞게 부른다 |
 | `static/anim.js` | 〃 | 이름 붙인 애니메이션(`:::anim`)을 그린다 |
 | `static/palette.js` | 〃 | `/` 조각 팔레트. admin과 공개 편집기가 같이 쓴다 |
 | `static/inline-edit.js` | 〃 | 글 화면에서 바로 고치기. **로그인 확인된 요청에만** |
@@ -1648,6 +1702,7 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
   |---|---:|---:|
   | KaTeX | 215 | 1502 |
   | highlight.js | 598 | 1502 |
+  | mermaid | 22 | 1502 |
   | latex / dockerfile / powershell 묶음 | 5 / 4 / 1 | 1502 |
 
   - **`skipLangs`는 `static/highlight-init.js`의 같은 목록과 맞춰야 한다.**
@@ -1666,7 +1721,8 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
   추측을 돌린다. 여기서는 `text` 265건이 "색칠하지 말라"는 뜻이고 `mermaid`
   30건은 hljs에 없는 언어라, 추측을 돌리면 엉뚱한 색이 칠해진다. 등록된 언어가
   붙은 블록만 고른다. 현재 색칠 2282건 · 의도적으로 건너뜀 265건 ·
-  모르는 언어라 그대로 둠 31건(mermaid 30, nix 1).
+  모르는 언어라 그대로 둠 1건(nix). **mermaid 32건은 이제 다이어그램이다** —
+  바로 아래 절 참고.
 - common 묶음이 40여 개 언어를 담아 python·c·r·bash·java·sql 등 큰 것을 덮는다.
   거기 없는 것만 따로 붙였다(latex 16, dockerfile 4, powershell 2).
 

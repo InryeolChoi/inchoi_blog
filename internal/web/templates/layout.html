@@ -53,6 +53,14 @@
 {{end}}
 <script defer src="/static/highlight-init.js"></script>
 {{end}}
+{{if .Assets.Mermaid}}
+{{/* ```mermaid 코드 블록을 다이어그램으로 그린다. **3.5MB짜리라** 나오는
+     페이지(현재 21편)에서만 받는다 — KaTeX·highlight.js를 페이지별로 가른
+     것과 같은 이유이고, 여기서는 그 무게 차이가 훨씬 크다.
+     CDN이 막히면 예전처럼 색 없는 코드가 그대로 보인다. */}}
+{{template "mermaid-cdn" .}}
+<script defer src="/static/mermaid.js"></script>
+{{end}}
 {{if .Assets.YouTube}}
 {{/* 눌렀을 때 그 자리에서 유튜브 플레이어를 켠다. 못 떠도 원래대로 유튜브로
      가는 링크라 빈 자리가 되지 않는다. */}}
@@ -880,6 +888,18 @@
      그만큼 왼쪽으로 밀고 높이를 맞춘다 — copy.js가 data-copy="on"을 남긴다.
      둘이 붙어 한 줄짜리 띠로 보이므로 아랫변이 어긋나면 눈에 띈다. */
   .codeblock[data-copy="on"] .lang { padding-right: 2.6rem; }
+  /* 그린 다이어그램. **원문 `<pre>`는 지우지 않고 감춘다** — 복사 버튼이
+     그대로 코드를 집어가고(copy.js는 code의 textContent를 읽는다), 못 그렸을
+     때 되돌릴 것이 남는다. 그래서 `.has-diagram`이 붙은 껍데기에서만 감춘다. */
+  .codeblock.has-diagram pre { display: none; }
+  .mermaid-figure {
+    border: 1px solid var(--line); border-top: 0; background: var(--surface);
+    padding: 1rem .75rem;
+    /* 좁은 화면에서 페이지를 밀지 않는다. 넘치는 것은 제 안에서만 스크롤한다 —
+       pre·table·수식과 같은 규칙이다. */
+    overflow-x: auto;
+  }
+  .mermaid-figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
   article code { font-family: var(--mono); font-size: .875em; }
   /* highlight.js 테마가 자기 배경·여백·가로 스크롤을 code에 건다. 바깥 pre가
      이미 다 갖고 있으므로 안쪽 것은 지운다. 스크롤을 양쪽에 두면 좁은 화면에서
@@ -1221,6 +1241,10 @@
       crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
         integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+        crossorigin="anonymous"></script>{{end}}
+
+{{define "mermaid-cdn"}}<script defer src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
+        integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2"
         crossorigin="anonymous"></script>{{end}}
 
 {{define "hljs-cdn"}}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/styles/github.min.css"

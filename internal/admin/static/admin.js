@@ -537,6 +537,7 @@
         // 복사 버튼도 같은 함수로 단다. innerHTML을 갈아치웠으니 버튼이 통째로
         // 사라졌다 — 다시 부르지 않으면 미리보기에만 버튼이 없다.
         if (window.blogCopyButtons) window.blogCopyButtons();
+        if (window.blogRenderMermaid) window.blogRenderMermaid();
         // 애니메이션도 다시 붙인다. innerHTML을 갈아치웠으니 통째로 사라졌다.
         if (window.blogMountAnims) window.blogMountAnims();
 

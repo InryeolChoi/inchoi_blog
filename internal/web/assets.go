@@ -27,6 +27,9 @@ type assetNeeds struct {
 	// 코드는 그대로 있다. 껍데기 없는 <pre>(들여쓰기 코드 블록)도 마찬가지라
 	// 언어 클래스가 아니라 <pre> 자체를 센다.
 	Copy bool
+	// Mermaid는 그릴 다이어그램이 있는지다. mermaid는 3.5MB짜리라 나오는
+	// 페이지에서만 받는다 — 지금 21편이다.
+	Mermaid bool
 	// Anim은 이름 붙인 애니메이션 자리가 있는지다. 있을 때만 static/anim.js를 받는다.
 	Anim bool
 	// YouTube는 유튜브 재생 자리가 있는지다. 있을 때만 static/youtube.js를 받는다.
@@ -46,7 +49,11 @@ var langClass = regexp.MustCompile(`class="language-([\w+#-]+)"`)
 // skipLangs는 언어 이름이 붙어 있어도 색칠하지 않는 값이다.
 // **static/highlight-init.js의 같은 목록과 맞춰야 한다.** 한쪽만 고치면
 // 스크립트를 안 받았는데 칠할 것이 있거나, 받았는데 칠할 것이 없다.
-var skipLangs = map[string]bool{"text": true, "plaintext": true, "plain": true, "none": true}
+//
+// **mermaid가 여기 있는 이유는 다르다.** 앞의 넷은 "칠하지 말라"는 뜻이지만
+// mermaid는 hljs에 아예 없는 언어다. 예전에는 그 30건 때문에 highlight.js를
+// 받아놓고 정작 칠할 것이 없었다 — 이제 그 블록은 다이어그램으로 그려진다.
+var skipLangs = map[string]bool{"text": true, "plaintext": true, "plain": true, "none": true, "mermaid": true}
 
 // needsFor는 본문 HTML을 보고 받아야 할 것을 정한다.
 func needsFor(body template.HTML) assetNeeds {
@@ -65,6 +72,9 @@ func needsFor(body template.HTML) assetNeeds {
 	for _, m := range langClass.FindAllStringSubmatch(s, -1) {
 		lang := strings.ToLower(m[1])
 		n.Langs[lang] = true
+		if lang == "mermaid" {
+			n.Mermaid = true
+		}
 		if !skipLangs[lang] {
 			n.Code = true
 		}

@@ -29,6 +29,10 @@
       var lang = m[1].toLowerCase();
       // text/plaintext는 "칠하지 말라"는 뜻이라 등록돼 있어도 건너뛴다.
       if (lang === "text" || lang === "plaintext" || lang === "plain") continue;
+      // mermaid는 다이어그램으로 그려진다(static/mermaid.js). assets.go의
+      // skipLangs와 이 목록이 어긋나면, 스크립트를 안 받았는데 칠할 것이
+      // 있거나 받았는데 칠할 것이 없다.
+      if (lang === "mermaid") continue;
       // 모르는 언어는 그대로 둔다. hljs에 넘기면 콘솔에 경고만 쌓인다.
       if (!hljs.getLanguage(lang)) continue;
 

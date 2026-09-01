@@ -38,8 +38,8 @@ var (
 	siteCSSErr  error
 )
 
-// PreviewAssetTags는 KaTeX와 highlight.js를 받아오는 <link>/<script> 태그다.
-// layout.html의 `katex-cdn`, `hljs-cdn`에서 그대로 뽑아온다.
+// PreviewAssetTags는 KaTeX·highlight.js·mermaid를 받아오는 <link>/<script> 태그다.
+// layout.html의 `katex-cdn`, `hljs-cdn`, `mermaid-cdn`에서 그대로 뽑아온다.
 //
 // **admin 미리보기가 쓰라고 열어둔 것이다.** 공개 페이지는 본문에 수식이나 코드가
 // 있을 때만 받지만(assets.go), admin은 작업 도구라 무엇을 칠지 미리 알 수 없어서
@@ -55,7 +55,7 @@ func PreviewAssetTags() (template.HTML, error) {
 			return
 		}
 		var b strings.Builder
-		for _, name := range []string{"katex-cdn", "hljs-cdn"} {
+		for _, name := range []string{"katex-cdn", "hljs-cdn", "mermaid-cdn"} {
 			if err := t.ExecuteTemplate(&b, name, nil); err != nil {
 				previewTagsErr = fmt.Errorf("%s 실행: %w", name, err)
 				return

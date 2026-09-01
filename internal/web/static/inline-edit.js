@@ -145,6 +145,7 @@
         if (window.blogRenderMath) window.blogRenderMath();
         if (window.blogHighlight) window.blogHighlight();
         if (window.blogCopyButtons) window.blogCopyButtons();
+        if (window.blogRenderMermaid) window.blogRenderMermaid();
         if (window.blogMountAnims) window.blogMountAnims();
       });
     }

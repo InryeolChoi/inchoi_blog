@@ -1162,6 +1162,48 @@ var BodyEdits = []BodyEdit{
 			"posts에 없는 slug가 되어 눌러도 404이고, 렌더러가 그걸 노션 인라인 " +
 			"데이터베이스로 알아봐 엉뚱한 목록을 펼 수 있다",
 	},
+
+	// Mermaid 설명 글의 예제 넷. 글쓴이가 노션에서 **인라인 코드 하나에 여러
+	// 줄을 넣고** 그 안에 `<div class="mermaid">`를 적어뒀다. 그 시절 블로그의
+	// mermaid 렌더러가 그 div를 찾아 그렸던 것이라 원본에서는 뜻이 있었지만,
+	// 여기서는 그냥 깨진다 — CommonMark의 코드 스팬은 이 모양으로 짝이 안 맞고,
+	// 결국 백틱 하나가 글자로 남고 도형 소스가 문단으로 흘러나온다. 화면에서
+	// 실제로 그렇게 보였다.
+	//
+	// **울타리 코드 블록으로 바꾼다.** 여는 줄과 닫는 줄만 갈아끼우면 사이의
+	// 소스는 손대지 않아도 되고, ```mermaid는 이 사이트가 다이어그램으로
+	// 그리는 형태다(static/mermaid.js). 줄 단위로만 고친다는 원칙에 그대로 맞는다.
+	//
+	// **같은 줄이 두 번 나와서 항목도 두 벌이다.** replaceLine은 첫 번째 것만
+	// 바꾸므로, 두 번 적으면 앞엣것이 바뀐 뒤 뒤엣것이 걸린다.
+	{
+		NotionPageID: "8f4d7fa8-c2ee-41f8-910c-63df6c33b5ec",
+		Remove:       "`<div class=\"mermaid\">",
+		Replace:      "```mermaid",
+		Title:        "Mermaid",
+		Why:          "인라인 코드에 담긴 예제라 백틱이 글자로 새어 나왔다. 울타리 코드 블록이라야 다이어그램으로 그려진다",
+	},
+	{
+		NotionPageID: "8f4d7fa8-c2ee-41f8-910c-63df6c33b5ec",
+		Remove:       "</div>`",
+		Replace:      "```",
+		Title:        "Mermaid",
+		Why:          "위 예제를 닫는 줄",
+	},
+	{
+		NotionPageID: "8f4d7fa8-c2ee-41f8-910c-63df6c33b5ec",
+		Remove:       "`<div class=\"mermaid\">",
+		Replace:      "```mermaid",
+		Title:        "Mermaid",
+		Why:          "둘째 예제. 같은 줄이 두 번 나오므로 항목도 두 벌이다",
+	},
+	{
+		NotionPageID: "8f4d7fa8-c2ee-41f8-910c-63df6c33b5ec",
+		Remove:       "</div>`",
+		Replace:      "```",
+		Title:        "Mermaid",
+		Why:          "둘째 예제를 닫는 줄",
+	},
 }
 
 // ApplyBodyEdits는 한 페이지의 변환 결과에 BodyEdits와 BodyAppends를 적용한다.
