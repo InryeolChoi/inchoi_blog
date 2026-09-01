@@ -9,13 +9,13 @@
 .mode list
 .headers off
 
--- ① 웹에서 쓴 글이 통째로 사라진다.
---    notion_page_id가 NULL이면 이관이 아니라 사람이 여기서 쓴 글이다
---    (import는 언제나 노션 page id를 넣는다).
-select 'LOST  ' || slug || '  (' || status || ', ' || updated_at || ')'
+-- ① 서버에만 있는 글이 통째로 사라진다.
+--    source가 무엇이든 묻는다. 웹에서 쓴 글(native)이면 되찾을 길이 아예
+--    없고, 이관해서 들어온 글이면 "그 이관을 여기서 안 돌렸다"는 뜻이다 —
+--    둘 다 이 파일로 덮기 전에 사람이 봐야 한다.
+select 'LOST  ' || slug || '  (' || source || ', ' || status || ', ' || updated_at || ')'
 from main.posts
-where notion_page_id is null
-  and slug not in (select slug from newdb.posts);
+where slug not in (select slug from newdb.posts);
 
 -- ② 웹에서 고친 내용이 되돌아간다.
 --    서버 쪽이 더 최근에 바뀌었다는 뜻이다. 로컬은 재이관할 때마다
@@ -37,15 +37,21 @@ where sha256 not in (select sha256 from newdb.images);
 --    "덮으면 돌아오는 것"이다. admin에 지우기가 생기면서 열린 자리다
 --    (2026-08-31).
 --
---    **notion_page_id가 NULL인 글만 본다.** import는 native 글을 절대
---    만들지 않으므로(언제나 노션 page id를 넣는다), 올릴 파일에만 있는
---    native 글은 **서버에서 지웠다는 뜻밖에 없다.** 그래서 오탐이 없다.
+--    **source가 native인 글만 본다.** 이관은 native 글을 절대 만들지
+--    않으므로, 올릴 파일에만 있는 native 글은 **서버에서 지웠다는 뜻밖에
+--    없다.** 그래서 오탐이 없다.
 --
---    노션에서 온 글은 여기서 안 본다. 그건 재이관이 되살리는 것이 이미
+--    이관해서 들어온 글은 여기서 안 본다. 재이관이 되살리는 것이 이미
 --    정해진 계약이고(지우기 화면도 그렇게 경고한다), 진짜로 빼려면
 --    internal/curation의 DropPosts에 적어야 한다. 여기서 같이 막으면
 --    멀쩡한 재이관마다 걸려서, 확인이 습관이 되고 습관은 곧 안 읽는 것이다.
+--
+--    **예전에는 이 자리가 `notion_page_id is null`이었다.** 그때는 출처가
+--    노션과 웹 둘뿐이라 그 NULL이 곧 native였는데, GitHub 이관이 붙으면서
+--    (2026-09-01) 그 글 16편이 전부 "서버에서 지운 글"로 잡혔다.
+--    **출처가 하나 늘 때 이런 자리가 또 있는지 보라** — cmd/categorize도
+--    같은 이유로 깨졌다.
 select 'BACK  ' || slug || '  (' || status || ', 웹에서 쓴 글)'
 from newdb.posts
-where notion_page_id is null
+where source = 'native'
   and slug not in (select slug from main.posts);
