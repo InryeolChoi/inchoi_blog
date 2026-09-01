@@ -183,6 +183,134 @@ var PostMoves = []PostMove{
 	{NotionPageID: "1ab1ecd4-d96b-4f1c-8c67-3e68cadca1c6", ToSlug: "수리통계-응용", Title: "데이터분석 기초 : 파이썬"},
 	{NotionPageID: "226b7998-bd88-4892-88aa-1227dc89b5f0", ToSlug: "머신러닝-기초이론", Title: "핸즈온 머신러닝 2"},
 	{NotionPageID: "86071a86-939b-49f0-8b73-b8a96a04afc1", ToSlug: "머신러닝", Title: "머신러닝 & 딥러닝"},
+	// 백준·solved.ac 문제 104편을 알고리즘 갈래로 옮긴다. 노션에서 온
+	// `단계별로 풀기 1~9 / 10~25 / 알고리즘 강의 / 기타`는 **푼 순서지 무엇을
+	// 배웠나가 아니라서**, 어떤 문제를 어디서 찾을지에 아무 도움이 안 됐다.
+	// 갈래는 regroup의 topics가 만든다(cmd/regroup/main.go).
+
+	// 수학 & 정수론 21편
+	{NotionPageID: "343073eb-2ca0-435b-aeef-07d31cbcc2a4", ToSlug: "bj-수학", Title: "1065번: 한수"},
+	{NotionPageID: "34c60be2-c29f-4e07-8aed-6766d05434e1", ToSlug: "bj-수학", Title: "1193번: 분수찾기"},
+	{NotionPageID: "273e48e2-4106-4fb7-b443-7085108942e7", ToSlug: "bj-수학", Title: "1712번: 손익분기점"},
+	{NotionPageID: "f5cd548b-af18-4bd1-b0eb-6f34ee762ec8", ToSlug: "bj-수학", Title: "1929번: 소수 구하기 ★"},
+	{NotionPageID: "080ad60a-4f5d-4cb2-9d2c-162472b347e0", ToSlug: "bj-수학", Title: "1978번: 소수 찾기"},
+	{NotionPageID: "047f4d60-417e-4450-848d-3f265ab46cfa", ToSlug: "bj-수학", Title: "2004번: 조합 0의 갯수"},
+	{NotionPageID: "2b123c28-4395-4e49-a4ac-c703f046e2f8", ToSlug: "bj-수학", Title: "2292번: 벌집"},
+	{NotionPageID: "07d9b945-daa4-4427-b176-96caa72c816d", ToSlug: "bj-수학", Title: "2581번: 소수"},
+	{NotionPageID: "5ad8d8a7-f18c-46a3-972f-e5dbac292962", ToSlug: "bj-수학", Title: "2740번: 행렬 곱셈"},
+	{NotionPageID: "1d25094b-f5b5-44dc-ada2-769398a57c73", ToSlug: "bj-수학", Title: "2839번: 설탕 배달"},
+	{NotionPageID: "7f894944-5007-4dbb-9748-ceeabbc87682", ToSlug: "bj-수학", Title: "2869번: 달팽이는 올라가고 싶다"},
+	{NotionPageID: "bfb7e154-1cf6-4f7d-b031-311457f015e0", ToSlug: "bj-수학", Title: "2981번 : 검문"},
+	{NotionPageID: "55ae66db-2997-446f-b482-cec559b70d2c", ToSlug: "bj-수학", Title: "4673번: 셀프 넘버"},
+	{NotionPageID: "dcd20ac8-1eba-4b80-9cf7-bf812db74b04", ToSlug: "bj-수학", Title: "4948번: 베르트랑 공준 ★"},
+	{NotionPageID: "2886bb21-7bd3-4a3e-961c-cc43f9d03719", ToSlug: "bj-수학", Title: "9020번: 골드바흐의 추측 ★"},
+	{NotionPageID: "1aa7fba0-1c32-45ab-b4ee-e5a540f9859e", ToSlug: "bj-수학", Title: "10250번: ACM 호텔"},
+	{NotionPageID: "9a9f1169-ad03-41b9-b668-956ce41a7994", ToSlug: "bj-수학", Title: "11005번: 진법 변환"},
+	{NotionPageID: "cd5f5ca4-42c4-4615-98b2-8d2598820b4c", ToSlug: "bj-수학", Title: "11051 - 이항계수2"},
+	{NotionPageID: "638d1bbe-9f56-41a2-a1e3-f7f2cdc8a611", ToSlug: "bj-수학", Title: "11401번: 이항계수 3"},
+	{NotionPageID: "6dc7d75f-dba8-4eb7-bf94-ab2fa34bb74a", ToSlug: "bj-수학", Title: "11653번: 소인수분해"},
+	{NotionPageID: "7e30eac9-c9d4-45b2-8ed5-b86664eb7149", ToSlug: "bj-수학", Title: "15596번: 정수 n개의 합"},
+
+	// 문자열 14편
+	{NotionPageID: "740cbe64-f7d8-418a-804a-ff4ca6c037ed", ToSlug: "bj-문자열", Title: "1152번: 단어의 갯수"},
+	{NotionPageID: "1b4eb3c3-df26-425e-bd0d-5151e6bf7b52", ToSlug: "bj-문자열", Title: "1157번: 단어공부"},
+	{NotionPageID: "493c974b-8231-491a-a8a7-5ed7cdbc279f", ToSlug: "bj-문자열", Title: "1316번: 그룹 단어 체커"},
+	{NotionPageID: "b5f07590-ab28-4397-8efa-7cd7017a8efd", ToSlug: "bj-문자열", Title: "2675번: 문자열 반복"},
+	{NotionPageID: "12fe3e6d-888c-43bf-b37d-32dcb85e6da3", ToSlug: "bj-문자열", Title: "2908번: 상수"},
+	{NotionPageID: "479e4b93-2aa7-43ae-837f-2d18ccf3af88", ToSlug: "bj-문자열", Title: "2941번: 크로아티아 알파벳"},
+	{NotionPageID: "ae616e5d-ceb5-4c39-8a89-03965eec8971", ToSlug: "bj-문자열", Title: "5525. IOIOI"},
+	{NotionPageID: "0a5f5c14-9879-48de-a000-e5ec528913b1", ToSlug: "bj-문자열", Title: "5622번: 다이얼"},
+	{NotionPageID: "e919d5c9-98ef-4e96-982f-a0e6a45976e0", ToSlug: "bj-문자열", Title: "9093번: 단어 뒤집기"},
+	{NotionPageID: "474a15a2-01f3-47ef-8aa4-6acc85639b35", ToSlug: "bj-문자열", Title: "10718번: We love Kriii"},
+	{NotionPageID: "35cf9470-87c0-4b8a-81d2-11bd8ad93170", ToSlug: "bj-문자열", Title: "10809번: 알파벳 찾기"},
+	{NotionPageID: "126cc69b-4f17-48f0-a092-17a842c82980", ToSlug: "bj-문자열", Title: "11654번: 아스키코드"},
+	{NotionPageID: "e3a60743-5ac3-4a5b-829f-eae0bcf6f02f", ToSlug: "bj-문자열", Title: "11720: 숫자의 합"},
+	{NotionPageID: "fdfa9155-d46a-40cb-b332-f22d62b2a7ca", ToSlug: "bj-문자열", Title: "16139: 인간-컴퓨터 상호작용"},
+
+	// 자료구조 12편
+	{NotionPageID: "d4715eb0-33e1-4a13-a4c8-3807fa2bbf7f", ToSlug: "bj-자료구조", Title: "1620번: 나는야 포켓몬 마스터 이다솜"},
+	{NotionPageID: "5dd861fc-8ee4-4403-8eb9-382a03506a2c", ToSlug: "bj-자료구조", Title: "1927번: 최소 힙"},
+	{NotionPageID: "cf83f154-e4b7-4911-85b6-fcc91b935ef1", ToSlug: "bj-자료구조", Title: "7662. 이중 우선순위 큐"},
+	{NotionPageID: "91eab84f-98d9-4053-84a1-bf2b03a53cb6", ToSlug: "bj-자료구조", Title: "9012번: 괄호"},
+	{NotionPageID: "ca098252-f3c4-47b1-880b-a8dcdc9ef51b", ToSlug: "bj-자료구조", Title: "10828번: 스택"},
+	{NotionPageID: "d6bef331-d3d5-472e-95a6-50ecc57a6a84", ToSlug: "bj-자료구조", Title: "10866번: 덱"},
+	{NotionPageID: "4db62a58-7ff1-4b9c-a0ad-a253cd79fe55", ToSlug: "bj-자료구조", Title: "11279번: 최대 힙"},
+	{NotionPageID: "dea3c9be-751a-4148-b48a-fb5b61a8d0df", ToSlug: "bj-자료구조", Title: "11286번: 절댓값 힙"},
+	{NotionPageID: "18c0f92c-a431-4834-b2b7-fd08f298cd00", ToSlug: "bj-자료구조", Title: "11723 : 집합"},
+	{NotionPageID: "4ecf99eb-34cb-49f2-bce5-0453aa27895c", ToSlug: "bj-자료구조", Title: "14425번: 문자열 집합"},
+	{NotionPageID: "88e30ad2-732b-4280-97de-2d37e2a52145", ToSlug: "bj-자료구조", Title: "17219: 비밀번호 찾기"},
+	{NotionPageID: "8b559be0-5d3b-4ff1-8fe3-99ebbed84415", ToSlug: "bj-자료구조", Title: "17298번: 오큰수"},
+
+	// 그래프 탐색 13편
+	{NotionPageID: "3b9f4b44-0cd1-449e-b7a5-df30c15c15d8", ToSlug: "bj-그래프-탐색", Title: "1012번 : 유기농 배추"},
+	{NotionPageID: "5c416732-28d4-4700-a563-f6dc650f930a", ToSlug: "bj-그래프-탐색", Title: "1260번: DFS와 BFS"},
+	{NotionPageID: "db7c7294-c748-4d05-af79-ef3ee94aecd2", ToSlug: "bj-그래프-탐색", Title: "1697번: 숨바꼭질"},
+	{NotionPageID: "301eb8ed-7659-46d3-9735-9598400a3d04", ToSlug: "bj-그래프-탐색", Title: "2178번 : 미로 탐색"},
+	{NotionPageID: "39eb82b7-9eff-44f1-9b89-7501412a3396", ToSlug: "bj-그래프-탐색", Title: "2606번: 바이러스 (1)"},
+	{NotionPageID: "fe589456-79c9-47af-9a6f-ccf178f69e81", ToSlug: "bj-그래프-탐색", Title: "2667번 : 단지번호붙이기"},
+	{NotionPageID: "5ec69f4e-c6d5-45d2-96c8-7c0787f7135d", ToSlug: "bj-그래프-탐색", Title: "7576번: 토마토"},
+	{NotionPageID: "5a5fd66e-1ba4-47ea-9eba-bc28df675a94", ToSlug: "bj-그래프-탐색", Title: "11724번: 연결 요소의 갯수"},
+	{NotionPageID: "576f7762-0339-4da2-af1d-ed9084ca1dd8", ToSlug: "bj-그래프-탐색", Title: "13023번: ABCDE"},
+	{NotionPageID: "14432cf4-7afc-4497-9ecb-f3d4d131f1f7", ToSlug: "bj-그래프-탐색", Title: "24444번: 알고리즘 수업 - 너비 우선 탐색 1 (1)"},
+	{NotionPageID: "9c61e683-0406-49b9-8331-5cf6262828da", ToSlug: "bj-그래프-탐색", Title: "24445번: 알고리즘 수업 - 너비 우선 탐색 2 (1)"},
+	{NotionPageID: "56507c0c-756a-4ca8-ac0c-0bd88189f99b", ToSlug: "bj-그래프-탐색", Title: "24479번: 알고리즘 수업 - 깊이 우선 탐색 1 (1)"},
+	{NotionPageID: "b727a1a0-4584-4bc3-8e11-8ef1c5207f8f", ToSlug: "bj-그래프-탐색", Title: "24480번: 알고리즘 수업 - 깊이 우선 탐색 2 (1)"},
+
+	// 동적 계획법 10편
+	{NotionPageID: "324d9a42-4414-4347-8ed9-25bea4d59baa", ToSlug: "bj-동적-계획법", Title: "1149번: RGB거리"},
+	{NotionPageID: "d58da33b-6e40-444e-a819-18cd7bf70156", ToSlug: "bj-동적-계획법", Title: "1463번: 1로 만들기"},
+	{NotionPageID: "579a5f7d-9ed0-4a1f-a3b2-308e26e525c7", ToSlug: "bj-동적-계획법", Title: "1912번: 연속합"},
+	{NotionPageID: "c556894d-1b67-443d-95a4-b911a508cf9f", ToSlug: "bj-동적-계획법", Title: "2156번: 포도주 시식"},
+	{NotionPageID: "7f5dd5f6-7aa7-460a-b7bf-ab8b7621fda3", ToSlug: "bj-동적-계획법", Title: "2579번: 계단 오르기"},
+	{NotionPageID: "037847da-9b64-460c-87e6-7c00486846f7", ToSlug: "bj-동적-계획법", Title: "2775번: 부녀회장이 될테야"},
+	{NotionPageID: "2e88f497-9a8a-4062-a4f2-dd1e60e22211", ToSlug: "bj-동적-계획법", Title: "9095번: 1,2,3 더하기"},
+	{NotionPageID: "dfc1452d-ac45-47cd-8128-35daae8ea763", ToSlug: "bj-동적-계획법", Title: "10844번: 쉬운 계단 수"},
+	{NotionPageID: "e29d13f6-0e49-40fe-a5ad-b34b2b705815", ToSlug: "bj-동적-계획법", Title: "11726번: 2 x N 타일링"},
+	{NotionPageID: "2b124b70-ed68-44af-8162-ab8ed346ade5", ToSlug: "bj-동적-계획법", Title: "15988번: 1,2,3 더하기 3"},
+
+	// 브루트포스 & 백트래킹 10편
+	{NotionPageID: "deb4d179-1290-4ec5-847f-572729b90f91", ToSlug: "bj-브루트포스", Title: "1107번: 리모콘"},
+	{NotionPageID: "888e14e6-6ed1-4187-979b-0b93d42e6164", ToSlug: "bj-브루트포스", Title: "1182번: 부분수열의 합"},
+	{NotionPageID: "15ba8179-3c55-485f-b3eb-632e84e12d4e", ToSlug: "bj-브루트포스", Title: "2231번: 분해합"},
+	{NotionPageID: "ba1d4e2c-b520-4e4e-a6c2-ee339b508f6c", ToSlug: "bj-브루트포스", Title: "2798번: 블랙잭"},
+	{NotionPageID: "b3581380-9343-41dc-b1ea-fc2ab0350320", ToSlug: "bj-브루트포스", Title: "7568번: 덩치"},
+	{NotionPageID: "1c4be9f9-c3fd-4466-a3ee-2d0bad47a369", ToSlug: "bj-브루트포스", Title: "14888번: 연산자 끼워넣기"},
+	{NotionPageID: "7d7f4858-16c1-4281-9895-e1a48b6abab3", ToSlug: "bj-브루트포스", Title: "15649번: N과 M(1)"},
+	{NotionPageID: "50ec9545-543b-43d2-8147-7f4180b74dd1", ToSlug: "bj-브루트포스", Title: "15650번: N과 M(2)"},
+	{NotionPageID: "f970ea8d-acdb-41bd-9ebc-6d6d3f412a4c", ToSlug: "bj-브루트포스", Title: "15651번: N과 M(3)"},
+	{NotionPageID: "8327f5f2-11ac-4591-9e0e-54ec5c3ceded", ToSlug: "bj-브루트포스", Title: "15652번: N과 M(4)"},
+
+	// 분할정복 & 재귀 12편
+	{NotionPageID: "317cf497-b5f4-4535-89e2-08bb66071639", ToSlug: "bj-분할정복", Title: "1074번: Z"},
+	{NotionPageID: "5a871d87-b6fb-4a24-928e-3b4912e44b6b", ToSlug: "bj-분할정복", Title: "1629번: 곱셈"},
+	{NotionPageID: "7768b638-9a23-4e8a-862b-d208713b3584", ToSlug: "bj-분할정복", Title: "2447번: 별 찍기-10 ☆"},
+	{NotionPageID: "afb0bd53-9aff-4012-8437-4bba95d189a2", ToSlug: "bj-분할정복", Title: "2630번 : 색종이 만들기"},
+	{NotionPageID: "025a7f59-6a34-44e9-84d3-9a4d2382ff99", ToSlug: "bj-분할정복", Title: "10815번: 숫자 카드"},
+	{NotionPageID: "0f92490e-0920-4cc4-9a24-3342c4d96c86", ToSlug: "bj-분할정복", Title: "10816번: 숫자카드 2"},
+	{NotionPageID: "71e1f074-bd20-4895-aa83-e75cfd8b580c", ToSlug: "bj-분할정복", Title: "10830번: 행렬 제곱"},
+	{NotionPageID: "cb331f79-dec8-43db-a347-8ce1f80953fb", ToSlug: "bj-분할정복", Title: "10870번: 피보나치 수열 5"},
+	{NotionPageID: "1f4a720f-c97a-4283-b164-1fff1be0c0d3", ToSlug: "bj-분할정복", Title: "10872번: 팩토리얼"},
+	{NotionPageID: "b342e6f4-b38b-4941-bc5a-f3cda5610514", ToSlug: "bj-분할정복", Title: "11444번: 피보나치 수 3"},
+	{NotionPageID: "f242c2da-d406-46af-a35f-8cb497b860fa", ToSlug: "bj-분할정복", Title: "11729번: 하노이 탑 이동순서 ☆"},
+	{NotionPageID: "0f7ff5ad-b56b-4122-acec-0aa71d704fb6", ToSlug: "bj-분할정복", Title: "17478번: 재귀함수가 뭔가요?"},
+
+	// 정렬 6편
+	{NotionPageID: "bdef66d0-2c61-4fe7-93ec-5af618891732", ToSlug: "bj-정렬", Title: "1427번: 소트인사이드"},
+	{NotionPageID: "b16d9dab-9bec-405d-85f2-170d4cd66288", ToSlug: "bj-정렬", Title: "2108번: 통계학"},
+	{NotionPageID: "df46638d-1349-4df4-aac3-38f9ba0dc8bc", ToSlug: "bj-정렬", Title: "2750번: 수 정렬하기"},
+	{NotionPageID: "496f1a6e-ea42-418e-bbaf-87b23c1edbe7", ToSlug: "bj-정렬", Title: "2751번: 수 정렬하기 2"},
+	{NotionPageID: "26137cc2-935a-4e4a-a9b0-1716700be2f8", ToSlug: "bj-정렬", Title: "10989번: 수 정렬하기 3"},
+	{NotionPageID: "ce719417-48c7-4447-a23b-1208a4abbcd0", ToSlug: "bj-정렬", Title: "11650번: 좌표 정렬하기"},
+
+	// 누적 합 3편
+	{NotionPageID: "eac878bf-79c2-4687-9950-ea8e81d5a463", ToSlug: "bj-누적-합", Title: "2559: 수열"},
+	{NotionPageID: "707adbe8-2cb3-4149-9957-d939f423397e", ToSlug: "bj-누적-합", Title: "10986번: 나머지 합"},
+	{NotionPageID: "749f971e-cc0b-4b70-a358-ce44ea6cfc64", ToSlug: "bj-누적-합", Title: "11659: 구간 합 구하기"},
+
+	// 기하 3편
+	{NotionPageID: "9cd6dead-7590-45d5-848a-941447d4abba", ToSlug: "bj-기하", Title: "어린왕자 : 1004번"},
+	{NotionPageID: "d8ac33a0-5a03-4589-9903-725c6c180c23", ToSlug: "bj-기하", Title: "하키 : 1358번"},
+	{NotionPageID: "4f646fbf-d572-4ead-8a9a-275589e7b309", ToSlug: "bj-기하", Title: "참외밭 : 2477번"},
 }
 
 // PostMetadataEdit는 노션 원본과 다르게 공개 아카이브에서 쓸 제목·작성일·순서다.
@@ -452,6 +580,25 @@ var DropCategories = []DropCategory{
 	{
 		SourceName: "취업박람회",
 		Why:        "커리어 분류를 통째로 없앤다. 글은 DropPosts로 뺐다",
+	},
+	// 옛 백준 묶음 넷(2026-09-02). `단계별로 풀기 1~9 / 10~25 / 알고리즘 강의 /
+	// 기타 백준 문제`는 **푼 순서지 무엇을 배웠나가 아니다.** 문제 104편은
+	// PostMoves가 알고리즘 갈래로 옮겼고, 그 갈래는 regroup의 topics가 만든다.
+	{
+		SourceName: "백준 단계별로 풀기: 1번 ~ 9번",
+		Why:        "푼 순서로 묶인 분류다. 문제는 알고리즘 갈래로 옮겼다",
+	},
+	{
+		SourceName: "백준 단계별로 풀기: 10번 ~ 25번",
+		Why:        "푼 순서로 묶인 분류다. 문제는 알고리즘 갈래로 옮겼다",
+	},
+	{
+		SourceName: "알고리즘 강의",
+		Why:        "강의 진도로 묶인 분류다. 문제는 알고리즘 갈래로 옮겼다",
+	},
+	{
+		SourceName: "기타 백준 문제",
+		Why:        "\"기타\"는 분류가 아니다. 다섯 편 전부 알고리즘 갈래로 옮겼다",
 	},
 }
 
@@ -1006,6 +1153,55 @@ var DropPosts = []DropPost{
 		Title:        "AWS 특강",
 		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
 	},
+
+	// 백준 정리(2026-09-02). 아래 35편은 알고리즘: 실전에서 뺀다.
+	// **본문이 없거나, 같은 글이 두 벌이거나, 묶음 노릇만 하던 글이다.**
+	// 갈래를 알고리즘별로 다시 짜면서 그 묶음이 할 일이 없어졌다.
+
+	// 본문이 0바이트인 draft 스물셋. 제목만 있고 풀이가 없다.
+	{NotionPageID: "db81f269-933b-43a5-b1bd-4d5440106f91", Title: "9935. 문자열 폭발", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "15b18403-8539-4577-845d-23cb1d79105d", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "1bd823eb-c0b5-4a91-9efd-57c1a3828c32", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "4153cfc0-7c51-4e23-9997-d672d85656b4", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "6cca921c-ce7d-4ac2-9a72-7c4704e32b0e", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "a10e69e8-1b50-49b5-9080-39f7eae502ee", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "ba73c27b-5c93-474e-bf66-1fa689e4915b", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "c273549f-1f3e-4371-8374-5ee5ae9fbb17", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "c493f81c-f4a9-4307-9385-14704a39dfc8", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "9ad798cd-0a6a-49bf-94f3-c87614f803ab", Title: "1018번: 체스판 다시 칠하기", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "6b9454c9-bad6-4ce1-af21-a081ae0c6ba4", Title: "10814번: 나이순 정렬", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "3bf57c9d-afb7-49b7-8717-0b0a397a28c0", Title: "11050 - 이항계수1", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "69014fa0-4d5c-4075-83e0-3a63ecedfac5", Title: "11651번: 좌표 정렬하기 2", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "e9bc1539-bc13-4134-ac99-2abc39240ae5", Title: "1181번: 단어 정렬", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "21911996-0e15-4428-a03f-89c6275de9dc", Title: "1436번: 영화감독 숌 ", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "b0ffce4c-b691-4688-b12a-29314ee4ef8f", Title: "18870번: 좌표 압축", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "90173894-bc1e-466b-a6bf-20ebeaf2510c", Title: "배수와 약수", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "e5aac369-f0b2-495e-9ae6-0c2e04694a93", Title: "(제목 없음)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "5318856d-79d4-4544-8121-a3aab5cd889e", Title: "11650번: 좌표 정렬하기", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "40f50707-1ecb-40be-92e2-1ffd7f4d4cab", Title: "11651번: 좌표 정렬하기 2", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "1debd88e-c96d-4041-96a9-968ae3dfa18b", Title: "15562번: N과 M (4)", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "92ee2a08-4247-400a-a0d9-f9aa434c5102", Title: "2343번: 기타 레슨", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+	{NotionPageID: "e979044e-4285-4a1f-bb07-2373e9387305", Title: "6603번 : 로또", Why: "본문이 0바이트다. 제목만 있고 풀이가 없다"},
+
+	// 사실상 빈 글 셋.
+	{NotionPageID: "8a6417c8-53bd-4748-b0a7-c2f7ef05c026", Title: "2156번", Why: "본문이 16자뿐이다. 같은 문제 `2156번: 포도주 시식`이 따로 있다"},
+	{NotionPageID: "8197ef99-9e8e-4093-b515-b49b849efa45", Title: "10869번: 사칙연산", Why: "본문이 26자뿐이라 풀이가 없다"},
+	{NotionPageID: "d817e9c5-214b-4e33-9bec-b272ada5ad99", Title: "1676번: 팩토리얼 0의 갯수", Why: "본문이 97자뿐이라 풀이가 없다"},
+
+	// 묶음 노릇만 하던 글 넷. 본문이 링크 목록뿐인데, 그 묶음을 없애는 것이
+	// 이번 정리다. 문제 글은 전부 갈래로 옮겨 갔다(PostMoves).
+	{NotionPageID: "280175b6-b807-492e-8f07-df2d1d473d9e", Title: "백준 단계별로 풀기: 1번 ~ 9번", Why: "본문이 링크 목록뿐인 묶음 글이다. 문제를 알고리즘 갈래로 다시 나누면서 이 묶음이 할 일이 없어졌다"},
+	{NotionPageID: "e1e64d65-4583-49e2-822e-558ea7065e78", Title: "백준 단계별로 풀기: 10번 ~ 25번", Why: "본문이 링크 목록뿐인 묶음 글이다. 문제를 알고리즘 갈래로 다시 나누면서 이 묶음이 할 일이 없어졌다"},
+	{NotionPageID: "12f9d271-71f2-428a-a14e-70d272b92746", Title: "알고리즘 강의", Why: "본문이 링크 목록뿐인 묶음 글이다. 문제를 알고리즘 갈래로 다시 나누면서 이 묶음이 할 일이 없어졌다"},
+	{NotionPageID: "9f46eca0-ca27-4695-a501-e5db127ed8b6", Title: "기타 백준 문제", Why: "본문이 링크 목록뿐인 묶음 글이다. 문제를 알고리즘 갈래로 다시 나누면서 이 묶음이 할 일이 없어졌다"},
+
+	// 같은 문제가 두 벌인 것 다섯. 강의판과 단계별판이 따로 있었다.
+	// **긴 쪽을 남긴다** — 짧은 쪽은 대개 코드만 있고 풀이가 없다.
+	{NotionPageID: "915d1768-fedd-4a57-b60a-42a13ce391dd", Title: "15988번: 1,2,3 더하기 3 (1)", Why: "15988번: 1,2,3 더하기 3 — 본문이 글자까지 같은 두 벌 중 한쪽"},
+	{NotionPageID: "0d8c3f5e-a291-44da-b8b1-09bba3a1895e", Title: "10815번: 숫자카드", Why: "10815번: 숫자카드 — 같은 문제 두 벌 중 짧은 쪽(663자 < 1390자)"},
+	{NotionPageID: "864b56a3-3651-45c4-aa8f-49b8699d8ccf", Title: "10844번: 쉬운 계단수", Why: "10844번: 쉬운 계단수 — 같은 문제 두 벌 중 짧은 쪽(391자 < 1102자)"},
+	{NotionPageID: "2ccbb826-9a4e-4340-a553-ffbb283073c1", Title: "2447번: 별 찍기 - 10", Why: "2447번: 별 찍기 - 10 — 같은 문제 두 벌 중 짧은 쪽(903자 < 1733자)"},
+	{NotionPageID: "324f3e0b-3e8b-4685-9ccf-5cb82bcc68cd", Title: "2667번: 단지번호붙이기", Why: "2667번: 단지번호붙이기 — 같은 문제 두 벌 중 짧은 쪽(1063자 < 2161자)"},
 }
 
 // Dropped는 이 글을 이관에서 빼야 하는지다.
@@ -1204,6 +1400,30 @@ var BodyEdits = []BodyEdit{
 		Title:        "Mermaid",
 		Why:          "둘째 예제를 닫는 줄",
 	},
+
+	// `알고리즘: 실전` 표지. 본문이 없어지는 묶음 글 넷과 solved_ac 세 편으로
+	// 가는 링크 목록뿐이었다. 그 묶음을 없애는 것이 이번 정리라, 남겨두면 대상이
+	// posts에 없는 slug가 되어 눌러도 404이고 렌더러가 노션 인라인 데이터베이스로
+	// 알아봐 엉뚱한 목록을 펼 수 있다. 문제로 가는 길은 이제 갈래 열이 맡는다.
+	{
+		NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e",
+		Remove:       "# 백준 문제 도전기",
+		Replace:      "백준과 solved.ac에서 푼 문제를 알고리즘 갈래로 나눠 모았다.",
+		Title:        "알고리즘: 실전",
+		Why:          "제목이 분류 이름과 같은 말을 두 번 한다. 그 자리에 이 분류가 무엇인지 적는다",
+	},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "### 백준 - 단계별로 풀기", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "[백준 단계별로 풀기: 1번 ~ 9번](/p/280175b6-b807-492e-8f07-df2d1d473d9e)", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "[백준 단계별로 풀기: 10번 ~ 25번](/p/e1e64d65-4583-49e2-822e-558ea7065e78)", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "### 백준 - 알고리즘 강의", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "[알고리즘 강의](/p/12f9d271-71f2-428a-a14e-70d272b92746)", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "### 백준 - 기타 문제", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "[기타 백준 문제](/p/9f46eca0-ca27-4695-a501-e5db127ed8b6)", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "## solved_ac 도전기", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "### 3단계 뚫어보기", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "[7662. 이중 우선순위 큐](/p/cf83f154-e4b7-4911-85b6-fcc91b935ef1)", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "[9935. 문자열 폭발](/p/db81f269-933b-43a5-b1bd-4d5440106f91)", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
+	{NotionPageID: "949b2561-a17f-443a-a586-ed6cb429260e", Remove: "[5525. IOIOI](/p/ae616e5d-ceb5-4c39-8a89-03965eec8971)", Title: "알고리즘: 실전", Why: "없어지는 묶음 글로 가는 링크이거나 그 묶음의 제목이다"},
 }
 
 // ApplyBodyEdits는 한 페이지의 변환 결과에 BodyEdits와 BodyAppends를 적용한다.

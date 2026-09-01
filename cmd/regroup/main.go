@@ -102,6 +102,46 @@ var groups = []group{
 	{slug: "life", name: "라이프", members: nil},
 }
 
+// topic은 사람이 **기존 분류 아래에** 새로 두는 갈래다.
+//
+// # 왜 subs로 안 되나
+//
+// `subs`는 최상위(group) 밑에만 층을 놓는다. 여기서 필요한 것은 그보다 한 칸
+// 아래다 — `알고리즘 > 알고리즘: 실전 > 동적 계획법`. 3단계가 끝이므로 부모가
+// 2단계일 때만 쓸 수 있고, `mustBeDepth`가 그것을 확인한다.
+//
+// # 왜 categorize가 못 만드나
+//
+// categorize는 `original_path`가 알려주는 것만 안다. 백준 문제의 경로는
+// `알고리즘: 실전 > 백준 단계별로 풀기: 1번 ~ 9번 > 1978번: 소수 찾기`라
+// **푼 순서**만 적혀 있고 무엇을 배웠나는 어디에도 없다. 사람이 정하는 층이라
+// 여기 있는 것이 맞다 — `groups`·`subs`와 같은 성질이다.
+type topic struct {
+	// parentSlug는 이 갈래를 매달 기존 분류다. 반드시 2단계여야 한다.
+	parentSlug string
+	slug       string
+	name       string
+}
+
+// topics는 사람이 정한 3단계 갈래다. 같은 부모 안에서는 적은 순서가 sort_order다.
+//
+// **백준 문제 104편을 알고리즘별로 다시 나눈 것이다**(2026-09-02). 노션에서 온
+// `백준 단계별로 풀기 1~9 / 10~25 / 알고리즘 강의 / 기타 백준 문제`는 푼 순서라,
+// "이분 탐색 문제를 어디서 봤더라"에 아무 답도 못 했다. 어느 문제가 어느 갈래인지는
+// `curation.PostMoves`가 한 줄씩 적어둔다.
+var topics = []topic{
+	{parentSlug: "알고리즘-실전", slug: "bj-수학", name: "수학 & 정수론"},
+	{parentSlug: "알고리즘-실전", slug: "bj-문자열", name: "문자열"},
+	{parentSlug: "알고리즘-실전", slug: "bj-정렬", name: "정렬"},
+	{parentSlug: "알고리즘-실전", slug: "bj-자료구조", name: "자료구조"},
+	{parentSlug: "알고리즘-실전", slug: "bj-브루트포스", name: "브루트포스 & 백트래킹"},
+	{parentSlug: "알고리즘-실전", slug: "bj-분할정복", name: "분할정복 & 재귀"},
+	{parentSlug: "알고리즘-실전", slug: "bj-동적-계획법", name: "동적 계획법"},
+	{parentSlug: "알고리즘-실전", slug: "bj-그래프-탐색", name: "그래프 탐색"},
+	{parentSlug: "알고리즘-실전", slug: "bj-누적-합", name: "누적 합"},
+	{parentSlug: "알고리즘-실전", slug: "bj-기하", name: "기하"},
+}
+
 // groupDrops는 **사람이 만든 최상위 분류를 없애는 것**이다.
 //
 // `curation.DropCategories`는 멱등 키가 source_name이라 노션에서 온 분류만
@@ -136,6 +176,26 @@ var renames = []rename{
 //
 // 글은 PostMoves가, 하위 분류는 Moves가 데려간다. 하나라도 표에 없으면 false다 —
 // 그건 갈 곳이 정해지지 않은 것이고, 지우면 조용히 잃는다.
+// topicOrder는 같은 부모 안에서 이 갈래가 설 자리다. 표에 적은 순서를 그대로 쓴다 —
+// 갈래 이름은 사람이 지은 것이라 가나다순도 알파벳순도 여기서 뜻이 없다.
+//
+// **노션에서 온 형제가 남아 있어도 그 뒤로 밀지 않는다.** 지금은 그 형제(옛 백준
+// 묶음 넷)가 전부 DropCategories에 있어 이번 실행에서 사라지고, 남겨야 할 형제가
+// 생기면 subs가 members 다음부터 세는 것처럼 여기도 그때 고칠 자리다.
+func topicOrder(t topic) int {
+	n := 0
+	for _, o := range topics {
+		if o.parentSlug != t.parentSlug {
+			continue
+		}
+		if o.slug == t.slug {
+			return n
+		}
+		n++
+	}
+	return n
+}
+
 func allScheduledToLeave(tx *sql.Tx, id int64) (bool, error) {
 	moving := map[string]bool{}
 	for _, mp := range curation.PostMoves {
@@ -585,6 +645,38 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 				return fmt.Errorf("중간 분류 id 조회(%s): %w", sub.slug, err)
 			}
 			subID[sub.slug] = id
+		}
+	}
+
+	// 1b2) 사람이 기존 분류 아래에 두는 갈래(topics)를 넣는다.
+	//
+	// **부모의 깊이를 여기서 확인한다.** 3단계가 끝이라 부모가 2단계여야 하는데,
+	// 넘으면 002의 트리거가 막아준다 — 다만 그때 나오는 말은 "트리거가 거부했다"라
+	// 무엇이 잘못됐는지 알려주지 않는다. 여기서 먼저 보고 이름으로 말한다.
+	for _, t := range topics {
+		var parentID int64
+		var grandParent sql.NullInt64
+		err := tx.QueryRow(
+			`SELECT id, parent_id FROM categories WHERE slug = ?`, t.parentSlug).Scan(&parentID, &grandParent)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("갈래 %q의 부모 %q가 없다", t.slug, t.parentSlug)
+		}
+		if err != nil {
+			return fmt.Errorf("갈래 부모 조회(%s): %w", t.parentSlug, err)
+		}
+		if !grandParent.Valid {
+			return fmt.Errorf("갈래 %q의 부모 %q가 최상위다. 그 아래는 2단계라 갈래를 두면 3단계를 넘지 않지만, "+
+				"이 표는 3단계 갈래를 위한 것이라 부모가 2단계여야 한다", t.slug, t.parentSlug)
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO categories (parent_id, name, slug, sort_order)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT (slug) DO UPDATE SET
+				name       = excluded.name,
+				parent_id  = excluded.parent_id,
+				sort_order = excluded.sort_order`,
+			parentID, t.name, t.slug, topicOrder(t)); err != nil {
+			return fmt.Errorf("갈래 %q: %w", t.slug, err)
 		}
 	}
 
