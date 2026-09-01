@@ -38,10 +38,14 @@ type deckSource interface {
 // deckSources는 카드로 펼칠 분류의 slug다. **아무 데나 쓰지 않는다** —
 // 갈래가 몇 개 안 되고 성격이 뚜렷한 자리에서만 목록보다 카드가 낫다.
 var deckSources = map[string]deckSource{
-	"data-math":  childDeck{},
-	"algorithm":  childDeck{},
-	"cs-theory":  childDeck{},
-	"dev":        childDeck{},
+	"data-math": childDeck{},
+	"algorithm": childDeck{},
+	"cs-theory": childDeck{},
+	"dev":       childDeck{},
+	// Language는 하위 분류 둘을 그대로 편다. 그 두 장이 각자 제 갈래 카드로
+	// 이어지므로 카드가 세 층으로 이어지고, 어느 층에서도 같은 것이 두 벌로
+	// 나오지 않는다.
+	"language":   childDeck{},
 	languageSlug: languageDeck{},
 	markupSlug:   markupDeck{},
 	projectSlug:  projectDeck{},
@@ -161,7 +165,7 @@ var cardArtBySlug = map[string]cardArt{
 		</svg>`),
 	},
 	"프로그래밍-언어": {
-		Blurb: "R, Python, Java, C, C++, TypeScript, Swift. 언어마다의 문법과 버릇.",
+		Blurb: "C, C++, Java, Python, R, TypeScript. 언어마다의 문법과 버릇.",
 		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
 			<path d="M17 14L7 24l10 10M31 14l10 10-10 10M27 10l-6 28"/>
 		</svg>`),

@@ -113,6 +113,7 @@ func TestChildDeckSlugsHaveArt(t *testing.T) {
 	// 자식 slug를 여기 적어두고 그림이 있는지만 확인한다.
 	want := map[string][]string{
 		"dev":       {"language", "리눅스-쉘", "tooling", "서버-api", "클라이언트-ui"},
+		"language":  {"프로그래밍-언어", "마크업-스타일링-표현식"},
 		"data-math": {"수리통계-이론", "수리통계-응용", "머신러닝"},
 		"algorithm": {"알고리즘-이론", "알고리즘-실전"},
 		"cs-theory": {"운영체제", "네트워크", "데이터베이스", "가상화기술"},
