@@ -23,6 +23,13 @@ cd "$(dirname "$0")/.."
 [[ -f $DB ]] || { echo "$DB가 없다." >&2; exit 1; }
 command -v sqlite3 >/dev/null || { echo "로컬에 sqlite3이 없다: brew install sqlite" >&2; exit 1; }
 
+# DropPosts/DropImages는 재이관해도 다시 나타나지 않게 사람이 명시한 예외다.
+# 업로드 가드도 이 목록만은 "서버에서만 있는 유실"이 아니라 의도한 삭제로 안다.
+# 목록을 여기 복사하지 않고 curation에서 매번 생성해야 표와 가드가 갈라지지 않는다.
+ALLOW_SQL=$(mktemp "${TMPDIR:-/tmp}/blog-upload-allow.XXXXXX.sql")
+trap 'rm -f "$ALLOW_SQL"' EXIT
+go run ./cmd/curationmanifest > "$ALLOW_SQL"
+
 ssh_() {
   gcloud compute ssh "$INSTANCE" --zone="$ZONE" --project="$PROJECT" \
     --tunnel-through-iap --command="$1" | tr -d '\r'
@@ -67,12 +74,16 @@ gcloud compute scp "$DB" "$INSTANCE:/tmp/blog-upload.db" \
   --zone="$ZONE" --project="$PROJECT" --tunnel-through-iap
 gcloud compute scp deploy/upload-guard.sql "$INSTANCE:/tmp/upload-guard.sql" \
   --zone="$ZONE" --project="$PROJECT" --tunnel-through-iap
+gcloud compute scp "$ALLOW_SQL" "$INSTANCE:/tmp/upload-intentional-drops.sql" \
+  --zone="$ZONE" --project="$PROJECT" --tunnel-through-iap
 
 echo
 echo "== 덮으면 사라지거나 되살아나는 것이 있는지 본다 =="
 # blog 사용자로 읽는다. root로 열면 SQLite가 만드는 -shm의 소유가 어긋난다.
 GUARD=$(ssh_ "sudo runuser -u blog -- sqlite3 /var/lib/blog/blog.db \
-  \"attach 'file:/tmp/blog-upload.db?mode=ro' as newdb\" '.read /tmp/upload-guard.sql'")
+  \".read /tmp/upload-intentional-drops.sql\" \
+  \"attach 'file:/tmp/blog-upload.db?mode=ro' as newdb\" \
+  '.read /tmp/upload-guard.sql'")
 
 if [[ -n ${GUARD//[[:space:]]/} ]]; then
   echo
@@ -82,7 +93,7 @@ if [[ -n ${GUARD//[[:space:]]/} ]]; then
   echo "  LOST/STALE/LOSTIMG — 서버에만 있는 것을 이 파일이 안 들고 있다." >&2
   echo "  BACK              — 서버에서 지운 글을 이 파일이 되살린다." >&2
   echo "서버가 정본이다. 먼저 ./deploy/fetch-db.sh로 내려받아 합친 뒤에 올려라." >&2
-  ssh_ 'rm -f /tmp/blog-upload.db /tmp/upload-guard.sql' >/dev/null
+  ssh_ 'rm -f /tmp/blog-upload.db /tmp/upload-guard.sql /tmp/upload-intentional-drops.sql' >/dev/null
   exit 1
 fi
 echo "  잃을 것 없음."
@@ -97,7 +108,7 @@ ssh_ 'set -eux
   sudo systemctl stop blog
   sudo rm -f /var/lib/blog/blog.db-wal /var/lib/blog/blog.db-shm
   sudo install -o blog -g blog -m 0644 /tmp/blog-upload.db /var/lib/blog/blog.db
-  rm -f /tmp/blog-upload.db /tmp/upload-guard.sql
+  rm -f /tmp/blog-upload.db /tmp/upload-guard.sql /tmp/upload-intentional-drops.sql
   sudo systemctl start blog'
 
 # ------------------------------------------------- 5. 정말 그것인지 본다

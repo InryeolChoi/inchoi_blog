@@ -15,7 +15,12 @@
 --    둘 다 이 파일로 덮기 전에 사람이 봐야 한다.
 select 'LOST  ' || slug || '  (' || source || ', ' || status || ', ' || updated_at || ')'
 from main.posts
-where slug not in (select slug from newdb.posts);
+where slug not in (select slug from newdb.posts)
+  -- curation.DropPosts에 있는 글만 의도한 삭제로 허용한다. native 글은
+  -- notion_page_id가 NULL이라 이 예외를 통과할 수 없다.
+  and (notion_page_id is null or notion_page_id not in (
+    select notion_page_id from intentional_dropped_posts
+  ));
 
 -- ② 웹에서 고친 내용이 되돌아간다.
 --    서버 쪽이 더 최근에 바뀌었다는 뜻이다. 로컬은 재이관할 때마다
@@ -29,7 +34,8 @@ where m.updated_at > n.updated_at;
 -- ③ 웹에서 올린 이미지가 사라진다.
 select 'LOSTIMG ' || substr(sha256, 1, 12)
 from main.images
-where sha256 not in (select sha256 from newdb.images);
+where sha256 not in (select sha256 from newdb.images)
+  and sha256 not in (select sha256 from intentional_dropped_images);
 
 -- ④ 웹에서 지운 글이 **되살아난다.**
 --
