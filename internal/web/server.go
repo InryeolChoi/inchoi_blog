@@ -416,7 +416,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	open, active := openTrail(trail)
-	deck, err := s.deckFor(current.Slug, basePath, children)
+	deck, err := s.deckFor(current, basePath, children)
 	if err != nil {
 		s.fail(w, r, err)
 		return

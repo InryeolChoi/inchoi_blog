@@ -79,7 +79,11 @@ type cardArt struct {
 }
 
 // languageOrder는 카드가 설 순서다. 배운 순서에 가깝게 사람이 정했다.
-var languageOrder = []string{"C", "C++", "Java", "Python", "R", "TypeScript", "Swift"}
+//
+// **`Swift`가 없다.** 그 갈래는 표지 글의 본문이 비어 있어 PathBranches가
+// 이미 빼고 온다. 순서표에만 적어두면 조용히 카드가 되지 않는 이름이
+// 하나 남는데, 글이 생기는 날 순서와 글자를 함께 적는 편이 낫다.
+var languageOrder = []string{"C", "C++", "Java", "Python", "R", "TypeScript"}
 
 // 언어 카드는 그림을 함께 쓴다. 일곱 장이 저마다 다른 그림을 들면 무엇이
 // 다른지가 아니라 그림이 먼저 읽힌다 — 여기서 가르는 것은 이름이다.
@@ -310,7 +314,10 @@ type DeckCard struct {
 // 더해주면 된다.
 type childDeck struct{}
 
-func (childDeck) cards(_ *Server, basePath string, children []Category) ([]DeckCard, error) {
+func (childDeck) cards(_ *Server, _ Category, basePath string, children []Category) ([]DeckCard, error) {
+	if len(children) == 0 {
+		return nil, nil
+	}
 	cards := make([]DeckCard, 0, len(children))
 	for _, c := range children {
 		art, ok := cardArtBySlug[c.Slug]
@@ -350,6 +357,27 @@ func (languageDeck) cards(s *Server, cat Category, _ string, _ []Category) ([]De
 // 먼저고, 글자를 다루는 규칙(정규식·형식 지정자·아스키코드)이 뒤다.
 var markupOrder = []string{"HTML", "CSS", "LaTex", "Mermaid", "정규 표현식", "형식 지정자", "아스키코드"}
 
+var markupIcon = template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
+	<path d="M8 12h32v24H8zM8 19h32"/>
+	<path d="M14 27l4 3-4 3M23 33h10"/>
+</svg>`)
+
+// 언어 카드와 같은 이유로 그림은 한 벌을 나눠 쓴다 — 일곱 장을 가르는 것은
+// 이름이지 그림이 아니다.
+//
+// **`Markdown`이 표에 없다.** 그 갈래는 본문이 빈 draft 한 편뿐이라
+// PathBranches가 이미 빼고 온다. 표에 적어두면 언젠가 본문이 생겼을 때
+// 조용히 카드가 하나 늘어나는데, 그건 여기서 정할 일이 아니다.
+var markupArt = map[string]cardArt{
+	"HTML":    {Blurb: "문서의 뼈대를 적는 태그와 그 의미.", Icon: markupIcon},
+	"CSS":     {Blurb: "배치와 색, 반응형까지 화면의 모양을 정하는 규칙.", Icon: markupIcon},
+	"LaTex":   {Blurb: "텍스트·숫자와 연산·미분과 적분·선형대수, 수식을 적는 문법.", Icon: markupIcon},
+	"Mermaid": {Blurb: "글로 적어 그리는 순서도와 다이어그램.", Icon: markupIcon},
+	"정규 표현식":  {Blurb: "글자의 패턴을 적어 찾고 바꾸는 법.", Icon: markupIcon},
+	"형식 지정자":  {Blurb: "printf 계열이 값을 글자로 펴는 규칙.", Icon: markupIcon},
+	"아스키코드":   {Blurb: "글자와 번호가 맞물리는 표, 그리고 그 경계.", Icon: markupIcon},
+}
+
 // markupDeck은 `마크업 / 스타일링 / 표현식` 11편을 갈래로 세운다.
 //
 // 여기는 언어 갈래와 달리 **한 갈래가 대개 글 한 편**이라, 카드가 하는 일이
@@ -369,7 +397,7 @@ func (markupDeck) cards(s *Server, cat Category, _ string, _ []Category) ([]Deck
 // 성립한다. 그 분류나 표지 글이 없으면 카드를 만들지 않는다.
 type projectDeck struct{}
 
-func (projectDeck) cards(s *Server, basePath string, children []Category) ([]DeckCard, error) {
+func (projectDeck) cards(s *Server, _ Category, basePath string, children []Category) ([]DeckCard, error) {
 	child, ok := childBySlug(children, "projects")
 	if !ok || child.CoverPostSlug == "" {
 		return nil, nil

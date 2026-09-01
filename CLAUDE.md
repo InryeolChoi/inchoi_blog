@@ -475,7 +475,7 @@ GITHUB_TOKEN=$(gh auth token) go run ./cmd/importgh -db blog.db -apply   # 반�
   해서, 표에 적은 분류가 DB에 없으면 실패한다.
 - **`original_path`에 `Language > 프로그래밍 언어 > Java > 모던 자바`를 적는다.**
   노션 경로 자리를 쓰는 이유는 웹이 그 값의 **세 번째 칸으로 언어 갈래를
-  나누기** 때문이다(`web.LanguageBranches`). 그래야 기존 Java 글과 한 갈래에 선다.
+  나누기** 때문이다(`web.PathBranches`). 그래야 기존 Java 글과 한 갈래에 선다.
 - **제목을 표에 사람이 적는다.** 파일 안의 첫 제목은 `3. 람다식 써보기!`처럼
   파일 사정이 그대로 나오고, 파일 이름은 `chapter3`이다. 둘 다 읽는 사람을
   위한 이름이 아니다. 순서(`sort_order`)도 여기서 정하므로
@@ -1088,7 +1088,7 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
 | 무엇 | 규모 | 처리 |
 |---|---:|---|
 | 글 상세 | 366편 | `PostBySlug`가 걸러 404 |
-| 목록·트리 | — | `PostsInCategory`·`ChildPosts`·`PostAncestors`·`InlineDBGroups`·`CategorySubtreePostSlugs`·`LanguageBranches` |
+| 목록·트리 | — | `PostsInCategory`·`ChildPosts`·`PostAncestors`·`InlineDBGroups`·`CategorySubtreePostSlugs`·`PathBranches` |
 | 사이드바 글 수 | 1,356 → **990** | `subtreePostCount` |
 | 표지가 draft인 분류 | 3개 | `coverSlug`가 빈 값을 줘서 표지 없는 분류로 다룬다 |
 | draft를 가리키는 본문 링크 | 129개 / 32편 | **링크만 벗기고 글자는 남긴다** (`unlinkHidden`) |
@@ -1280,13 +1280,14 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
     들여쓰기 코드 블록에는 껍데기가 없다. 실제로 여기서 한 번 깨졌다(472px).
 - **갈래가 몇 개 안 되는 분류는 목록 대신 아이콘 카드로 편다** (`internal/web/deck.go`).
   목록 한 줄짜리 링크로는 그 갈래가 무엇을 담는지 알 수 없다. **아무 데나 쓰지
-  않는다** — 지금은 `데이터 & 수리`, 알고리즘, CS 이론, 개발, Language, 프로젝트다.
+  않는다** — 지금은 `데이터 & 수리`, 알고리즘, CS 이론, 개발, 프로그래밍 언어,
+  마크업 / 스타일링 / 표현식, 프로젝트다.
   - **글 내용이 아니라 화면 장치라 코드에 둔다.** 표지 글 본문(DB)에 넣으면
     `import -db`가 덮어써서 사라진다.
   - **카드를 만드는 방법은 분류마다 하나씩이고 slug로 찾는다** (`deckSources`).
-    대부분은 하위 분류만 있으면 되지만(`childDeck`) Language는 원본 경로에서 다시
-    묶은 언어 갈래가(`languageDeck`), 프로젝트는 표지 글 본문이(`projectDeck`)
-    더 있어야 한다. 그 차이를 핸들러의 if 문으로 늘어놓지 않는다 — 카드 묶음을
+    대부분은 하위 분류만 있으면 되지만(`childDeck`) 언어와 마크업은 원본 경로에서
+    다시 묶은 갈래가(`languageDeck`·`markupDeck`), 프로젝트는 표지 글 본문이
+    (`projectDeck`) 더 있어야 한다. 그 차이를 핸들러의 if 문으로 늘어놓지 않는다 — 카드 묶음을
     더할 때 손대는 곳은 이 표 한 줄과 새 `deckSource` 하나다.
     **만들 수 없으면 error가 아니라 nil이다.** 그러면 화면이 평소 목록으로
     돌아간다. error는 DB 조회가 실패했을 때만이다.
@@ -1304,10 +1305,30 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
     하위 분류로, where42와 심심조각은 `Projects` 표지 글의 해당 제목 앵커로 보낸다.
     두 서비스의 글 수는 그 DB 본문 절에 있는 `/p/` 링크를 세므로 코드에 박지 않는다.
     셋 중 하나라도 없으면 평소 목록으로 돌아간다.
-  - **Language 카드는 JS 포인터 기울기를 쓰지 않는다.** `original_path`의 세 번째
-    칸으로 C/C++/Java/Python/R/TypeScript를 다시 묶어 실제 언어 표지 글로 보낸다.
-    본문 없는 Swift는 뺀다. 마크업 분류까지 합쳐 현재 7장이고, CSS hover/focus만
+  - **경로에서 다시 묶은 갈래 카드는 제 분류에 선다** (2026-09-01에 내렸다).
+    `프로그래밍 언어` 6장(C·C++·Java·Python·R·TypeScript)과
+    `마크업 / 스타일링 / 표현식` 7장(HTML·CSS·LaTex·Mermaid·정규 표현식·
+    형식 지정자·아스키코드)이다. **예전에는 둘 다 한 층 위 `Language`에
+    있었다** — 그러면 그 화면이 두 층을 섞어 보여준다: 언어 카드는
+    `프로그래밍 언어` 안의 것이고 마크업 카드는 그 형제 분류다. 카드가 제
+    분류에 있어야 사이드바에서 누른 곳과 화면에 나오는 것이 같아진다.
+    지금 `Language`는 하위 분류 둘을 그냥 목록으로 보여준다.
+  - **재료는 `store.PathBranches(categoryID, prefix)`다.** 카테고리 트리는
+    3단계가 끝이라 이 갈래가 `categories`에는 없지만 `original_path`에는
+    그대로 남아 있다. **본문 없는 표지 글만 있는 갈래는 안 돌려준다** —
+    눌렀는데 빈 화면으로 가는 `Swift`와 `Markdown`이 그 경우다.
+  - **순서와 글자는 사람이 정한 표가 준다**(`languageOrder`/`languageArt`,
+    `markupOrder`/`markupArt`). 갈래 이름은 경로에서 온 것이라 가나다순도
+    알파벳순도 여기서 뜻이 없다. **표에 없는 갈래는 카드가 되지 않는다** —
+    설명 없는 카드는 이름만 큼직한 목록 한 줄이라 세울 값이 없다.
+    그래서 순서표에만 있고 그림표에 없는 이름은 **조용히** 사라지는데,
+    `TestBranchOrdersHaveArt`가 그 어긋남을 잡는다. 실제로 `Swift`가
+    그렇게 남아 있었다.
+  - **갈래 카드는 JS 포인터 기울기를 쓰지 않는다.** CSS hover/focus만
     쓴다(`data-native`).
+  - **`deckFor`는 "자식이 있어야 한다"를 보지 않는다.** 그건 하위 분류를
+    그대로 카드로 바꾸는 `childDeck`에만 해당하는 조건이라 그쪽이 제 눈으로
+    본다 — 이 둘은 자식이 없는 말단 분류다.
 - **아카이브 바깥으로 나가는 링크는 `internal/web/links.go`에 둔다.** 지금은
   `소개` 화면의 개인 페이지(`https://inryeolchoi.github.io`) 하나다. 자기소개를
   읽은 사람이 다음으로 갈 곳은 이 아카이브의 다른 분류가 아니다.
@@ -2444,6 +2465,18 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
   - **`cmd/categorize`가 깨져 있었다.** `notion_page_id`를 문자열로 스캔하는데
     GitHub 글은 NULL이다. 출처가 하나 늘면서 드러난 자리다.
 
+- **갈래 카드를 제 분류로 내렸다.** 언어 카드 6장이 `Language`가 아니라
+  `프로그래밍 언어`에 서고, `마크업 / 스타일링 / 표현식`도 제 갈래 7장을
+  얻었다. 예전에는 한 화면이 두 층을 섞어 보여줬다 — 언어 카드는 아래 층의
+  것이고 마크업 카드는 그 형제였다. 위 "레이아웃과 색" 앞 절의 갈래 카드 항목 참고.
+  - `LanguageBranches`가 `PathBranches(categoryID, prefix)`가 됐다. 경로의
+    세 번째 칸으로 고정돼 있던 것을 prefix로 받아, 같은 방법을 다른 평평한
+    분류에도 쓴다.
+  - **순서표와 그림표가 갈라지는 것을 테스트가 잡는다**(`TestBranchOrdersHaveArt`).
+    실제로 `Swift`가 순서표에만 남아 조용히 카드가 되지 않고 있었다.
+  - 13장의 링크가 전부 200인 것과 `Language`가 평소 목록으로 돌아간 것을
+    확인했다.
+
 - **평평하게 쏟아지던 카테고리 목록을 경로로 다시 묶었다.**
   `프로그래밍 언어`를 누르면 191편이 한 층에 늘어서 있었다. `pathtree.go`가
   `original_path`에 남은 잃어버린 층으로 C / C++ / Java / … 로 다시 세운다
@@ -2715,7 +2748,8 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
       그리는 것**이다. 탐색적 자료분석은 목차 14 / 문제 7 / R언어 팁 1로 정확히 갈린다.
     - 확률과정론은 과제를 묶는 마디가 아예 없다(과제1~6이 각각 직속).
 12. **갈래 카드를 더 넓힐지 안 정했다.** 지금은 최상위 4개(`data-math`, `algorithm`,
-    `cs-theory`, `dev`)와 `Language`·`프로젝트`에 있다. `커리어`는 아직 목록이고,
+    `cs-theory`, `dev`)와 `프로그래밍 언어`·`마크업 / 스타일링 / 표현식`·`프로젝트`에
+    있다. `커리어`는 아직 목록이고,
     새로 생긴 `서버 & API`·`클라이언트 & UI` 밑도 목록이다.
     넓히려면 `internal/web/deck.go`의 `cardArtBySlug`에 그림을 채워야 한다 —
     **하나라도 비면 그 분류는 카드를 통째로 포기하고 목록으로 돌아간다.**
