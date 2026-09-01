@@ -22,6 +22,13 @@ type Category struct {
 	// CoverPostSlug는 이 카테고리의 표지 글이다. 없으면 빈 문자열이다.
 	// 카테고리를 열면 이 글의 본문을 목록 위에 그대로 펼쳐 보여준다.
 	CoverPostSlug string
+	// SourceName은 이 분류가 노션 경로에서 어떤 이름이었나다(003에서 추가한
+	// 안정적인 키). 사람이 만든 분류는 NULL이라 빈 문자열이다.
+	//
+	// 화면에서는 **글의 `original_path` 안에서 이 분류가 어디인지 찾는 닻**으로
+	// 쓴다 — 그 뒤에 남은 칸이 categorize가 평평하게 만든 잃어버린 층이다
+	// (pathtree.go).
+	SourceName string
 }
 
 // PostSummary는 목록에 보여줄 글 한 줄이다.
@@ -41,6 +48,10 @@ type PostSummary struct {
 	// 그 재정렬은 created_time에서 나온 못 믿을 값을 위한 것이지, 사람이
 	// 직접 적어둔 순서까지 뒤집으라는 뜻이 아니다.
 	ManualOrder bool
+	// OriginalPath는 노션에서 이 글이 있던 경로다(`A > B > 제목`).
+	// **categorize가 평평하게 만든 층이 여기 남아 있다** — 카테고리 화면이
+	// 그걸로 목록을 다시 묶는다(pathtree.go).
+	OriginalPath sql.NullString
 	// Children은 이 글에 달린 하위 글이다. nestPosts가 채운다.
 	Children []PostSummary
 	// Hidden은 이 글이 남에게 안 보이는 글(draft)이라는 표시다.
@@ -155,11 +166,12 @@ func (s *store) scanCategories(rows *sql.Rows) ([]Category, error) {
 	var out []Category
 	for rows.Next() {
 		var c Category
-		var cover sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Slug, &c.ParentID, &c.PostCount, &cover); err != nil {
+		var cover, source sql.NullString
+		if err := rows.Scan(&c.ID, &c.Name, &c.Slug, &c.ParentID, &c.PostCount, &cover, &source); err != nil {
 			return nil, fmt.Errorf("카테고리 스캔: %w", err)
 		}
 		c.CoverPostSlug = cover.String
+		c.SourceName = source.String
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -168,7 +180,7 @@ func (s *store) scanCategories(rows *sql.Rows) ([]Category, error) {
 // TopCategories는 최상위 카테고리를 sort_order 순으로 돌려준다.
 func (s *store) TopCategories() ([]Category, error) {
 	rows, err := s.db.Query(`
-		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `, c.source_name
 		FROM categories c
 		WHERE c.parent_id IS NULL AND ` + s.visibleCategory() + `
 		ORDER BY c.sort_order, c.name`)
@@ -181,7 +193,7 @@ func (s *store) TopCategories() ([]Category, error) {
 // ChildCategories는 주어진 카테고리의 바로 아래 자식들을 돌려준다.
 func (s *store) ChildCategories(parentID int64) ([]Category, error) {
 	rows, err := s.db.Query(`
-		SELECT c.id, c.name, c.slug, c.parent_id, `+s.subtreePostCount()+`, `+s.coverSlug()+`
+		SELECT c.id, c.name, c.slug, c.parent_id, `+s.subtreePostCount()+`, `+s.coverSlug()+`, c.source_name
 		FROM categories c
 		WHERE c.parent_id = ? AND `+s.visibleCategory()+`
 		ORDER BY c.sort_order, c.name`, parentID)
@@ -195,13 +207,13 @@ func (s *store) ChildCategories(parentID int64) ([]Category, error) {
 // /a/b 경로의 b가 정말 a의 자식일 때만 찾히게 한다.
 func (s *store) CategoryBySlug(slug string, parentID sql.NullInt64) (*Category, error) {
 	q := `
-		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `, c.source_name
 		FROM categories c
 		WHERE c.slug = ? AND c.parent_id IS NULL`
 	args := []any{slug}
 	if parentID.Valid {
 		q = `
-		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `
+		SELECT c.id, c.name, c.slug, c.parent_id, ` + s.subtreePostCount() + `, ` + s.coverSlug() + `, c.source_name
 		FROM categories c
 		WHERE c.slug = ? AND c.parent_id = ?`
 		args = append(args, parentID.Int64)
@@ -223,7 +235,7 @@ func (s *store) CategoryBySlug(slug string, parentID sql.NullInt64) (*Category, 
 
 // postColumns는 목록 한 줄에 필요한 컬럼이다.
 const postColumns = `p.id, p.parent_id, p.slug, p.title, p.status, p.sort_order,
-	       p.original_created_at, p.sort_order_manual`
+	       p.original_created_at, p.sort_order_manual, p.original_path`
 
 func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	defer rows.Close()
@@ -231,7 +243,7 @@ func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	for rows.Next() {
 		var p PostSummary
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.CreatedAt, &p.ManualOrder); err != nil {
+			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &p.OriginalPath); err != nil {
 			return nil, fmt.Errorf("글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -605,7 +617,7 @@ func (s *store) PostAncestors(postID int64) ([]PostSummary, error) {
 		var p PostSummary
 		var depth int
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &depth); err != nil {
+			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &p.OriginalPath, &depth); err != nil {
 			return nil, fmt.Errorf("상위 글 스캔: %w", err)
 		}
 		out = append(out, p)
@@ -740,7 +752,7 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 	// SQLite의 substr/length는 글자 단위다. 경로에 한글이 많아 바이트 길이를
 	// 주면 어긋난다. LIKE를 안 쓰는 이유는 경로에 %와 _가 든 글이 120건이라서다.
 	rows, err := s.db.Query(`
-		SELECT `+postColumns+`, p.original_path
+		SELECT `+postColumns+`
 		FROM posts p
 		LEFT JOIN categories c ON c.id = p.category_id
 		WHERE p.original_path IS NOT NULL AND substr(p.original_path, 1, ?) = ?
@@ -755,12 +767,11 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 	grouped := map[string][]PostSummary{}
 	for rows.Next() {
 		var p PostSummary
-		var path string
 		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
-			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &path); err != nil {
+			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &p.OriginalPath); err != nil {
 			return nil, fmt.Errorf("인라인 데이터베이스 스캔: %w", err)
 		}
-		rest := strings.Split(strings.TrimPrefix(path, prefix), " > ")
+		rest := strings.Split(strings.TrimPrefix(p.OriginalPath.String, prefix), " > ")
 		switch len(rest) {
 		case 1:
 			direct[rest[0]] = true

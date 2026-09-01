@@ -50,9 +50,12 @@
 </ul>
 {{end}}
 
+{{/* 목록이 한 층으로 쏟아지는 분류는 노션 경로에 남아 있던 층으로 다시 묶어
+     그린다(internal/web/pathtree.go). 근거가 없으면 PostTree가 비어 있어서
+     예전 그대로 평평한 목록이다. */}}
 {{if and .Posts (not .Deck)}}
 <h2 class="section-title">글</h2>
-{{template "posttree" .Posts}}
+{{if .PostTree}}{{template "pathtree" .PostTree}}{{else}}{{template "posttree" .Posts}}{{end}}
 {{end}}
 
 {{/* 표지 글의 참고 동영상 절은 글 목록을 먼저 훑은 뒤 보도록 아래에 둔다. */}}

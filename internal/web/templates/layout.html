@@ -242,6 +242,25 @@
 </ul>
 {{end}}
 
+{{/* pathtree는 노션 경로에 남아 있던 층으로 다시 묶은 목록이다
+     (internal/web/pathtree.go). posttree와 한 줄의 모양이 같아야 하지만,
+     **글이 없는 마디**가 섞여 있어서 별도로 둔다 — 그건 posts에 행이 없는
+     노션 인라인 데이터베이스라 링크가 아니라 이름표다. posttree와 같은 이유로
+     layout에 정의한다(모든 템플릿 집합에 들어간다). */}}
+{{define "pathtree"}}
+<ul class="list">
+  {{range .}}
+  <li>
+    {{with .Post}}<a href="/p/{{.Slug}}">{{.Title}}</a>
+    {{if eq .Status "draft"}}<span class="status">{{.Status}}</span>{{end}}
+    {{with .Date}}<span class="date">{{.}}</span>{{end}}{{end}}
+    {{with .Label}}<span class="pathgroup">{{.}}</span>{{end}}
+    {{with .Children}}{{template "pathtree" .}}{{end}}
+  </li>
+  {{end}}
+</ul>
+{{end}}
+
 {{/* sitecss는 이 사이트의 스타일시트 전체다. layout이 <style>에 그대로 붓는다.
 
      **admin 화면도 같은 것을 쓴다** (internal/admin). admin의 미리보기가 실제 글
@@ -615,6 +634,17 @@
     background: var(--badge-bg); color: var(--badge-fg);
     border: 1px solid var(--badge-line);
     padding: .05em .4em; margin-left: .35em; vertical-align: .08em;
+  }
+  /* 경로로 되살린 목록에서 **글이 없는 마디**의 이름표다
+     (internal/web/pathtree.go). 노션에서 인라인 데이터베이스였던 자리라
+     누를 곳이 없다 — 그래서 링크가 아니라 글자이고, 코드 라벨·목차·표 머리와
+     같은 반전 머리띠를 쓴다. "상자 안에 무엇이 들었나"를 말하는 자리는
+     이 사이트에서 언제나 같은 모양이다. */
+  span.pathgroup {
+    display: inline-block;
+    font: 700 .68rem/1 var(--mono); letter-spacing: .08em;
+    background: var(--band-bg); color: var(--band-fg);
+    padding: .38rem .7rem;
   }
 
   /* ── 글 본문 ───────────────────────────────────────────────────── */

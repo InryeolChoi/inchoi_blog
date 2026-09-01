@@ -144,8 +144,11 @@ type pageData struct {
 	BasePath   string
 	Categories []Category
 	Posts      []PostSummary
-	Post       *Post
-	Body       template.HTML
+	// PostTree는 노션 경로에 남아 있던 층으로 다시 묶은 글 목록이다
+	// (pathtree.go). 비어 있으면 Posts를 평소대로 그린다.
+	PostTree []PostNode
+	Post     *Post
+	Body     template.HTML
 	// AfterPosts는 카테고리 표지 글에서 글 목록 뒤로 보낼 참고 절이다.
 	// 상세 글에서는 원래 본문 순서를 그대로 쓰므로 비어 있다.
 	AfterPosts template.HTML
@@ -418,6 +421,8 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// 평평하게 쏟아지는 목록은 노션 경로에 남은 층으로 다시 묶는다. 근거가
+	// 없으면 nil이라 예전 목록 그대로다 — pathtree.go 참고.
 	s.render(w, r, "category.html", pageData{
 		Title:      current.Name,
 		Deck:       deck,
@@ -425,6 +430,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		BasePath:   basePath,
 		Categories: children,
 		Posts:      posts,
+		PostTree:   pathTree(current, posts),
 		Post:       coverPost,
 		Body:       cover.HTML,
 		AfterPosts: cover.AfterPosts,
