@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,9 +95,13 @@ type Image struct {
 	MIME string
 }
 
-// LanguageBranch는 `Language > 프로그래밍 언어` 안의 언어 한 갈래다.
-// URL은 그 언어의 표지 글로 가고 Count는 같은 언어 아래 전체 글 수다.
-type LanguageBranch struct {
+// PathBranch는 평평한 분류 안에서 원본 경로가 알려주는 한 갈래다.
+// Slug는 그 갈래의 표지 글이고 Count는 그 아래 전체 글 수다.
+//
+// 카테고리 트리는 3단계가 끝이라 이런 갈래가 categories에는 없지만, 노션
+// 경로에는 그대로 남아 있다 — `프로그래밍 언어` 안의 C·Java·Python이나
+// `마크업 / 스타일링 / 표현식` 안의 LaTex가 그렇다.
+type PathBranch struct {
 	Name  string
 	Slug  string
 	Count int
@@ -314,13 +319,16 @@ func (s *store) RecentPosts(limit int) ([]PostSummary, error) {
 	return scanPostSummaries(rows)
 }
 
-// LanguageBranches는 평평한 `프로그래밍 언어` 카테고리를 original_path의
-// 세 번째 칸(C, C++, Java …)으로 다시 묶는다. 카테고리 트리는 3단계가 끝이라
-// 언어별 갈래가 categories에는 없지만, 원래 노션 경로에는 그대로 남아 있다.
+// PathBranches는 평평한 분류를 original_path의 다음 칸으로 다시 묶는다.
+// prefix는 그 칸 앞에 있어야 할 경로다(`Language > 프로그래밍 언어`).
 //
-// 내용 없는 표지 글만 있는 언어는 보여주지 않는다. 눌렀는데 빈 화면으로 가는
-// Swift 카드가 실제로 그 경우다.
-func (s *store) LanguageBranches(categoryID int64) ([]LanguageBranch, error) {
+// **내용 없는 표지 글만 있는 갈래는 돌려주지 않는다.** 눌렀는데 빈 화면으로
+// 가는 Swift 카드가 실제로 그 경우였다. 표지 글이 아예 없는 갈래도 뺀다 —
+// 카드가 갈 곳이 없다.
+//
+// 돌려주는 순서는 정하지 않는다. 카드로 세울 순서는 사람이 정하는 것이라
+// 부르는 쪽이 이름으로 골라 세운다.
+func (s *store) PathBranches(categoryID int64, prefix []string) ([]PathBranch, error) {
 	rows, err := s.db.Query(`
 		SELECT p.slug, p.body, p.original_path
 		FROM posts p
@@ -344,17 +352,20 @@ func (s *store) LanguageBranches(categoryID int64) ([]LanguageBranch, error) {
 			return nil, fmt.Errorf("언어별 글 스캔: %w", err)
 		}
 		parts := strings.Split(path.String, " > ")
-		if len(parts) < 3 || parts[0] != "Language" || parts[1] != "프로그래밍 언어" {
+		if len(parts) < len(prefix)+1 {
 			continue
 		}
-		name := parts[2]
+		if !slices.Equal(parts[:len(prefix)], prefix) {
+			continue
+		}
+		name := parts[len(prefix)]
 		state := branches[name]
 		if state == nil {
 			state = &branchState{}
 			branches[name] = state
 		}
 		state.count++
-		if len(parts) == 3 {
+		if len(parts) == len(prefix)+1 {
 			state.rootSlug = slug
 			state.rootBody = body
 		}
@@ -363,15 +374,14 @@ func (s *store) LanguageBranches(categoryID int64) ([]LanguageBranch, error) {
 		return nil, err
 	}
 
-	order := []string{"C", "C++", "Java", "Python", "R", "TypeScript", "Swift"}
-	out := make([]LanguageBranch, 0, len(order))
-	for _, name := range order {
-		state := branches[name]
-		if state == nil || state.rootSlug == "" || strings.TrimSpace(state.rootBody) == "" {
+	out := make([]PathBranch, 0, len(branches))
+	for name, state := range branches {
+		if state.rootSlug == "" || strings.TrimSpace(state.rootBody) == "" {
 			continue
 		}
-		out = append(out, LanguageBranch{Name: name, Slug: state.rootSlug, Count: state.count})
+		out = append(out, PathBranch{Name: name, Slug: state.rootSlug, Count: state.count})
 	}
+	slices.SortFunc(out, func(a, b PathBranch) int { return strings.Compare(a.Name, b.Name) })
 	return out, nil
 }
 

@@ -17,7 +17,8 @@ import (
 
 const (
 	projectSlug  = "project"
-	languageSlug = "language"
+	languageSlug = "프로그래밍-언어"
+	markupSlug   = "마크업-스타일링-표현식"
 )
 
 // deckSource는 한 분류의 카드 묶음을 만드는 방법이다.
@@ -31,7 +32,7 @@ const (
 // 목록으로 돌아간다 — 반쪽짜리 카드 묶음보다 그쪽이 길을 잃지 않는다.
 // error는 DB 조회가 실패했을 때만이다.
 type deckSource interface {
-	cards(s *Server, basePath string, children []Category) ([]DeckCard, error)
+	cards(s *Server, cat Category, basePath string, children []Category) ([]DeckCard, error)
 }
 
 // deckSources는 카드로 펼칠 분류의 slug다. **아무 데나 쓰지 않는다** —
@@ -42,16 +43,22 @@ var deckSources = map[string]deckSource{
 	"cs-theory":  childDeck{},
 	"dev":        childDeck{},
 	languageSlug: languageDeck{},
+	markupSlug:   markupDeck{},
 	projectSlug:  projectDeck{},
 }
 
 // deckFor는 카드로 펼칠 분류면 카드 목록을, 아니면 nil을 돌려준다.
-func (s *Server) deckFor(slug, basePath string, children []Category) ([]DeckCard, error) {
-	source, ok := deckSources[slug]
-	if !ok || len(children) == 0 {
+//
+// **"자식이 있어야 한다"는 조건은 여기 없다.** 하위 분류를 그대로 카드로
+// 바꾸는 childDeck에만 해당하는 조건이라 그쪽이 자기 눈으로 본다 —
+// `프로그래밍 언어`와 `마크업 / 스타일링 / 표현식`은 자식이 없는 말단
+// 분류이고, 카드의 재료는 자기 글의 원본 경로다.
+func (s *Server) deckFor(cat Category, basePath string, children []Category) ([]DeckCard, error) {
+	source, ok := deckSources[cat.Slug]
+	if !ok {
 		return nil, nil
 	}
-	return source.cards(s, basePath, children)
+	return source.cards(s, cat, basePath, children)
 }
 
 // childBySlug는 하위 분류 하나를 slug로 찾는다. 카드 묶음마다 "이 분류가
@@ -71,43 +78,55 @@ type cardArt struct {
 	Icon  template.HTML
 }
 
-var languageBlurbs = map[string]string{
-	"C":          "메모리와 포인터를 직접 다루며 프로그램의 바닥을 익힌 기록.",
-	"C++":        "객체와 템플릿, 표준 라이브러리로 C 위에 구조를 세운 기록.",
-	"Java":       "객체지향 문법부터 컬렉션과 JVM 생태계까지.",
-	"Python":     "간결한 문법과 데이터 처리, 자동화에 쓴 파이썬 기록.",
-	"R":          "통계 계산과 데이터 분석을 중심으로 정리한 R 기록.",
-	"TypeScript": "자바스크립트에 타입을 더해 웹 코드를 단단하게 만든 기록.",
+// languageOrder는 카드가 설 순서다. 배운 순서에 가깝게 사람이 정했다.
+var languageOrder = []string{"C", "C++", "Java", "Python", "R", "TypeScript", "Swift"}
+
+// 언어 카드는 그림을 함께 쓴다. 일곱 장이 저마다 다른 그림을 들면 무엇이
+// 다른지가 아니라 그림이 먼저 읽힌다 — 여기서 가르는 것은 이름이다.
+var languageArt = map[string]cardArt{
+	"C":          {Blurb: "메모리와 포인터를 직접 다루며 프로그램의 바닥을 익힌 기록.", Icon: languageIcon},
+	"C++":        {Blurb: "객체와 템플릿, 표준 라이브러리로 C 위에 구조를 세운 기록.", Icon: languageIcon},
+	"Java":       {Blurb: "객체지향 문법부터 컬렉션과 JVM 생태계까지.", Icon: languageIcon},
+	"Python":     {Blurb: "간결한 문법과 데이터 처리, 자동화에 쓴 파이썬 기록.", Icon: languageIcon},
+	"R":          {Blurb: "통계 계산과 데이터 분석을 중심으로 정리한 R 기록.", Icon: languageIcon},
+	"TypeScript": {Blurb: "자바스크립트에 타입을 더해 웹 코드를 단단하게 만든 기록.", Icon: languageIcon},
 }
 
 var languageIcon = template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
 	<path d="M17 14L7 24l10 10M31 14l10 10-10 10M27 10l-6 28"/>
 </svg>`)
 
-// languageDeckFor는 `프로그래밍 언어` 한 장짜리 카드를 원본 경로에 남은
-// C·Java·Python 같은 실제 언어 갈래로 바꾼다. 마크업 분류는 별도 카드로
-// 남겨 Language 안의 다른 콘텐츠로 가는 길도 잃지 않는다.
-func languageDeckFor(basePath string, children []Category, branches []LanguageBranch) []DeckCard {
-	if len(branches) == 0 {
-		return nil
+// branchDeck은 원본 경로에서 다시 묶은 갈래를 카드로 세운다.
+//
+// **순서와 글자는 사람이 정한 order·art가 준다.** 갈래 이름은 노션 경로에서
+// 온 것이라 알파벳순도 가나다순도 이 분류에서 뜻이 없다 — C 다음에 C++가
+// 오는 것은 사람이 정한 순서다.
+//
+// **표에 없는 갈래는 카드가 되지 않는다.** 설명 없는 카드는 이름만 큼직하게
+// 적힌 목록 한 줄이라 카드로 세울 값이 없고, 조용히 빈 카드가 서는 것보다
+// 목록에 남는 편이 낫다.
+func branchDeck(branches []PathBranch, order []string, art map[string]cardArt) []DeckCard {
+	byName := make(map[string]PathBranch, len(branches))
+	for _, b := range branches {
+		byName[b.Name] = b
 	}
-	cards := make([]DeckCard, 0, len(branches)+1)
-	for _, branch := range branches {
-		blurb, ok := languageBlurbs[branch.Name]
+	cards := make([]DeckCard, 0, len(order))
+	for _, name := range order {
+		branch, ok := byName[name]
+		if !ok {
+			continue
+		}
+		a, ok := art[name]
 		if !ok {
 			continue
 		}
 		cards = append(cards, DeckCard{
-			Name: branch.Name, URL: "/p/" + url.PathEscape(branch.Slug), Count: branch.Count,
-			Blurb: blurb, Icon: languageIcon, Native: true,
+			Name: name, URL: "/p/" + url.PathEscape(branch.Slug), Count: branch.Count,
+			Blurb: a.Blurb, Icon: a.Icon, Native: true,
 		})
 	}
-	if child, ok := childBySlug(children, "마크업-스타일링-표현식"); ok {
-		art := cardArtBySlug[child.Slug]
-		cards = append(cards, DeckCard{
-			Name: child.Name, URL: basePath + "/" + url.PathEscape(child.Slug), Count: child.PostCount,
-			Blurb: art.Blurb, Icon: art.Icon, Native: true,
-		})
+	if len(cards) == 0 {
+		return nil
 	}
 	return cards
 }
@@ -310,20 +329,40 @@ func (childDeck) cards(_ *Server, basePath string, children []Category) ([]DeckC
 	return cards, nil
 }
 
-// languageDeck은 평평한 `프로그래밍 언어` 한 장을 실제 언어 갈래로 바꾼다.
-// 그 하위 분류가 없으면 카드를 만들지 않는다.
+// languageDeck은 `프로그래밍 언어` 127편을 C·Java·Python 같은 실제 언어
+// 갈래로 세운다.
+//
+// **예전에는 이 카드가 한 층 위(Language)에 있었다.** 그러면 Language 화면이
+// 두 층을 섞어 보여준다 — 언어 카드 여섯 장은 `프로그래밍 언어` 안의 것이고
+// 마크업 카드 한 장은 그 형제 분류다. 카드가 제 분류에 있어야 사이드바에서
+// 누른 곳과 화면에 나오는 것이 같아진다.
 type languageDeck struct{}
 
-func (languageDeck) cards(s *Server, basePath string, children []Category) ([]DeckCard, error) {
-	child, ok := childBySlug(children, "프로그래밍-언어")
-	if !ok {
-		return nil, nil
-	}
-	branches, err := s.store.LanguageBranches(child.ID)
+func (languageDeck) cards(s *Server, cat Category, _ string, _ []Category) ([]DeckCard, error) {
+	branches, err := s.store.PathBranches(cat.ID, []string{"Language", "프로그래밍 언어"})
 	if err != nil {
 		return nil, err
 	}
-	return languageDeckFor(basePath, children, branches), nil
+	return branchDeck(branches, languageOrder, languageArt), nil
+}
+
+// markupOrder는 카드가 설 순서다. 문서를 적는 것(HTML·CSS·LaTex·Mermaid)이
+// 먼저고, 글자를 다루는 규칙(정규식·형식 지정자·아스키코드)이 뒤다.
+var markupOrder = []string{"HTML", "CSS", "LaTex", "Mermaid", "정규 표현식", "형식 지정자", "아스키코드"}
+
+// markupDeck은 `마크업 / 스타일링 / 표현식` 11편을 갈래로 세운다.
+//
+// 여기는 언어 갈래와 달리 **한 갈래가 대개 글 한 편**이라, 카드가 하는 일이
+// 묶는 것보다 이름만으로는 안 보이는 것을 적어주는 쪽이다. LaTex만 아래에
+// 네 편(텍스트·숫자와 연산·미분과 적분·선형대수)을 거느려 실제로 묶인다.
+type markupDeck struct{}
+
+func (markupDeck) cards(s *Server, cat Category, _ string, _ []Category) ([]DeckCard, error) {
+	branches, err := s.store.PathBranches(cat.ID, []string{"Language", "마크업 / 스타일링 / 표현식"})
+	if err != nil {
+		return nil, err
+	}
+	return branchDeck(branches, markupOrder, markupArt), nil
 }
 
 // projectDeck은 `Projects` 표지 글 본문에서 where42·심심조각 두 절을 읽어야
