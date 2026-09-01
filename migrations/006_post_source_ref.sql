@@ -1,0 +1,24 @@
+-- 006_post_source_ref.sql — 노션이 아닌 출처에서 온 글의 멱등 키를 만든다.
+--
+-- # 왜 필요한가
+--
+-- 재이관의 멱등 키는 지금 `notion_page_id` 하나뿐이다. 이름 그대로 노션
+-- 전용이라, GitHub 저장소에서 옮겨오는 글에는 쓸 자리가 없다.
+--
+-- **slug를 키로 쓰면 안 된다.** slug는 사람이 admin에서 바꿀 수 있는 값이고
+-- (실제로 그러라고 만들었다), 바꾸는 순간 다음 이관이 같은 글을 못 찾아
+-- 새로 하나 더 만든다. `notion_page_id`를 따로 둔 이유가 정확히 이것이다.
+--
+-- # 무엇을 담나
+--
+-- 출처를 사람이 읽을 수 있게 적는다: `github:InryeolChoi/Java_Modern@src/main/theory/chapter3.md`
+-- 접두사를 붙이는 이유는 나중에 다른 출처(obsidian 등)가 생겨도 같은 칸에
+-- 섞여 들어갈 수 있게 하려는 것이다. `posts.source`가 종류를 말하고 여기는
+-- 그 안에서의 자리를 말한다.
+--
+-- # UNIQUE지만 NULL은 여럿이다
+--
+-- SQLite는 NULL을 UNIQUE 중복으로 치지 않는다. 노션에서 온 1,356편과 웹에서
+-- 쓴 글은 이 칸이 NULL로 남고, 그건 `notion_page_id`가 이미 하는 것과 같다.
+ALTER TABLE posts ADD COLUMN source_ref TEXT;
+CREATE UNIQUE INDEX idx_posts_source_ref ON posts(source_ref);

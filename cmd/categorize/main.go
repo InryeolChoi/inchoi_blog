@@ -110,7 +110,12 @@ func main() {
 }
 
 func buildPlan(sqlDB *sql.DB) (*plan, error) {
-	rows, err := sqlDB.Query(`SELECT notion_page_id, title, original_path FROM posts`)
+	// **노션에서 온 글만 본다.** 이 도구가 하는 일은 노션 `original_path`에서
+	// 분류를 뽑는 것이라, 다른 출처의 글에는 할 말이 없다. GitHub에서 옮겨온
+	// 글은 `notion_page_id`가 NULL이라 여기서 스캔 오류가 났었다 —
+	// 조건을 안 걸면 출처가 하나 늘 때마다 이 도구가 깨진다.
+	rows, err := sqlDB.Query(
+		`SELECT notion_page_id, title, original_path FROM posts WHERE notion_page_id IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("posts 조회: %w", err)
 	}
