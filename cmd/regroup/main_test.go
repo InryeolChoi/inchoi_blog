@@ -9,16 +9,12 @@ import (
 
 func TestCuratedCategoryOrdersAndCareerMove(t *testing.T) {
 	wantApplied := []string{"탐색적 자료분석", "회귀분석", "다변량분석"}
-	wantCareer := []string{"취업 준비", "빅데이터 분석기사"}
 	wantDev := []string{"Language", "리눅스 & 쉘", "소프트스킬"}
 	wantServer := []string{"Django", "Spring", "Node.js"}
 	wantClient := []string{"Javascript", "React", "모바일 프로그래밍"}
 
-	var gotApplied, gotCareer, gotDev, gotServer, gotClient []string
+	var gotApplied, gotDev, gotServer, gotClient []string
 	for _, group := range groups {
-		if group.slug == "career" {
-			gotCareer = group.members
-		}
 		if group.slug == "dev" {
 			gotDev = group.members
 		}
@@ -36,9 +32,6 @@ func TestCuratedCategoryOrdersAndCareerMove(t *testing.T) {
 	if !reflect.DeepEqual(gotApplied, wantApplied) {
 		t.Fatalf("수리/통계: 응용 순서 = %v, 원한 값 %v", gotApplied, wantApplied)
 	}
-	if !reflect.DeepEqual(gotCareer, wantCareer) {
-		t.Fatalf("커리어 순서 = %v, 원한 값 %v", gotCareer, wantCareer)
-	}
 	if !reflect.DeepEqual(gotDev, wantDev) {
 		t.Fatalf("개발 순서 = %v, 원한 값 %v", gotDev, wantDev)
 	}
@@ -51,15 +44,18 @@ func TestCuratedCategoryOrdersAndCareerMove(t *testing.T) {
 		t.Fatalf("클라이언트 & UI 순서 = %v, 원한 값 %v", gotClient, wantClient)
 	}
 
-	for _, move := range curation.Moves {
-		if move.SourceName == "빅데이터 분석기사" {
-			if move.ToSlug != "career" {
-				t.Fatalf("빅데이터 분석기사 이동 대상 = %q, 원한 값 career", move.ToSlug)
-			}
-			return
+	// 커리어는 통째로 없앴다. 배정표에도 이동 규칙에도 남아 있으면 안 된다 —
+	// 남으면 regroup이 지운 분류를 다음 실행이 되살린다.
+	for _, group := range groups {
+		if group.slug == "career" {
+			t.Fatal("없앤 커리어 묶음이 배정표에 남아 있다")
 		}
 	}
-	t.Fatal("빅데이터 분석기사 이동 규칙이 없다")
+	for _, move := range curation.Moves {
+		if move.ToSlug == "career" {
+			t.Fatalf("없앤 커리어로 보내는 이동 규칙이 남아 있다: %q", move.SourceName)
+		}
+	}
 }
 
 // 소개 분류에는 하위 분류를 두지 않는다.

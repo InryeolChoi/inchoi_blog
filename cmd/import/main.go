@@ -575,14 +575,59 @@ func runImport(dbPath, statusCSV, dumpDir string, converted []convertedPage) (*i
 
 	// DropPosts는 변환을 건너뛰는 것만으로는 이미 DB에 들어간 행을 없애지 못한다.
 	// 같은 트랜잭션 안에서 먼저 지워서, 새 DB뿐 아니라 기존 DB도 curation 표와
-	// 같은 상태가 되게 한다. 자식이 남은 글이면 FK가 막아 전체를 롤백한다.
-	for _, dropped := range curation.DropPosts {
-		result, err := tx.Exec(`DELETE FROM posts WHERE notion_page_id = ?`, dropped.NotionPageID)
-		if err != nil {
-			return nil, fmt.Errorf("제외 글 삭제(%s %q): %w", dropped.NotionPageID, dropped.Title, err)
-		}
-		if n, err := result.RowsAffected(); err == nil {
+	// 같은 상태가 되게 한다.
+	//
+	// **잎부터 지운다.** `posts.parent_id`가 ON DELETE RESTRICT라 부모를 먼저
+	// 만나면 FK가 막는데, 자식까지 전부 표에 있는 경우에는 그게 고아가 생기는
+	// 것이 아니라 **순서 문제**다. 커리어 42편처럼 한 갈래를 통째로 뺄 때 실제로
+	// 걸렸다. 그래서 한 바퀴에 지울 수 있는 것만 지우고, 더 못 지울 때까지 돈다.
+	//
+	// **그러고도 남으면 에러다.** 그건 표에 없는 자식이 매달려 있다는 뜻이고,
+	// 조용히 넘기면 부모를 잃은 글이 남는다 — 그 FK가 막으려는 바로 그 일이다.
+	remaining := make([]curation.DropPost, 0, len(curation.DropPosts))
+	remaining = append(remaining, curation.DropPosts...)
+	for len(remaining) > 0 {
+		stuck := remaining[:0:0]
+		progressed := false
+		for _, dropped := range remaining {
+			result, err := tx.Exec(`
+				DELETE FROM posts
+				WHERE notion_page_id = ?
+				  AND NOT EXISTS (SELECT 1 FROM posts c WHERE c.parent_id = posts.id)`,
+				dropped.NotionPageID)
+			if err != nil {
+				return nil, fmt.Errorf("제외 글 삭제(%s %q): %w", dropped.NotionPageID, dropped.Title, err)
+			}
+			n, err := result.RowsAffected()
+			if err != nil {
+				return nil, fmt.Errorf("제외 글 삭제(%s %q): %w", dropped.NotionPageID, dropped.Title, err)
+			}
+			if n == 0 {
+				// 원래 DB에 없었거나(대개 이쪽이다) 아직 자식이 남았다.
+				// 다음 바퀴에 다시 본다.
+				stuck = append(stuck, dropped)
+				continue
+			}
 			res.dropped += int(n)
+			progressed = true
+		}
+		if !progressed {
+			break
+		}
+		remaining = stuck
+	}
+	for _, dropped := range remaining {
+		var kids int
+		err := tx.QueryRow(`
+			SELECT count(*) FROM posts c
+			JOIN posts p ON c.parent_id = p.id
+			WHERE p.notion_page_id = ?`, dropped.NotionPageID).Scan(&kids)
+		if err != nil {
+			return nil, fmt.Errorf("제외 글 자식 확인(%s %q): %w", dropped.NotionPageID, dropped.Title, err)
+		}
+		if kids > 0 {
+			return nil, fmt.Errorf("제외 글 삭제(%s %q): 표에 없는 자식 %d편이 매달려 있다",
+				dropped.NotionPageID, dropped.Title, kids)
 		}
 	}
 	for _, dropped := range curation.DropImages {

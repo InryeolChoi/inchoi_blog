@@ -99,8 +99,19 @@ var groups = []group{
 	{slug: "project", name: "프로젝트", members: []string{
 		"école 42", "Projects",
 	}},
-	{slug: "career", name: "커리어", members: []string{"취업 준비", "빅데이터 분석기사"}},
 	{slug: "life", name: "라이프", members: nil},
+}
+
+// groupDrops는 **사람이 만든 최상위 분류를 없애는 것**이다.
+//
+// `curation.DropCategories`는 멱등 키가 source_name이라 노션에서 온 분류만
+// 지울 수 있다 — groups가 만든 분류는 그 칸이 NULL이다. 그래서 배정표에서
+// 줄만 지우면 그 분류가 "최상위인데 배정표에 없다"로 남아 계획 검사에 걸린다.
+//
+// **DropCategories와 같은 안전장치를 쓴다**: 글도 자식도 없을 때만 지우고,
+// 남은 것이 전부 떠나기로 예정돼 있으면 다음 바퀴로 미룬다.
+var groupDrops = []struct{ slug, name, why string }{
+	{slug: "career", name: "커리어", why: "취업 준비와 빅데이터 분석기사를 통째로 빼면서 빈 껍데기가 됐다"},
 }
 
 // groupRenames는 **최상위 분류 자체의 slug를 바꾼 것**이다.
@@ -148,9 +159,16 @@ func allScheduledToLeave(tx *sql.Tx, id int64) (bool, error) {
 		return false, err
 	}
 
+	// **지워질 자식도 떠나는 것이다.** 예전에는 옮겨지는 것(Moves)만 셌는데,
+	// 그러면 자식이 전부 DropCategories에 있는 부모가 "예정에 없는 것이 남았다"로
+	// 걸린다. 커리어를 통째로 뺄 때 `취업 준비`가 실제로 그랬다 — 자식 둘이
+	// 같은 표에 적혀 있는데도 멈췄다.
 	movingCat := map[string]bool{}
 	for _, mv := range curation.Moves {
 		movingCat[mv.SourceName] = true
+	}
+	for _, dc := range curation.DropCategories {
+		movingCat[dc.SourceName] = true
 	}
 	kids, err := tx.Query(`SELECT source_name FROM categories WHERE parent_id = ?`, id)
 	if err != nil {
@@ -278,6 +296,10 @@ func loadCategories(sqlDB *sql.DB) (*catalog, error) {
 	// 아직 옮기기 전이면 옛 slug로 남아 있다. 그것도 "우리가 만든 분류"다.
 	for _, r := range groupRenames {
 		newSlugs[r.fromSlug] = true
+	}
+	// 없애기로 한 최상위는 "배정표에 없다"고 나무랄 것이 아니라 지울 것이다.
+	for _, d := range groupDrops {
+		newSlugs[d.slug] = true
 	}
 
 	cat := &catalog{
@@ -613,6 +635,46 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 		}
 		if _, err := tx.Exec(`DELETE FROM categories WHERE id = ?`, id); err != nil {
 			return fmt.Errorf("카테고리 삭제(%s): %w", dc.SourceName, err)
+		}
+		dropped++
+	}
+
+	// 1d) 사람이 만든 최상위 중 없애기로 한 것을 지운다. 그 자식(취업 준비 등)은
+	//     바로 위 1c가 이미 지웠으므로 이 시점에는 비어 있다.
+	for _, gd := range groupDrops {
+		var id int64
+		switch err := tx.QueryRow(
+			`SELECT id FROM categories WHERE slug = ?`, gd.slug).Scan(&id); err {
+		case nil:
+		case sql.ErrNoRows:
+			continue // 이미 지워졌다
+		default:
+			return fmt.Errorf("지울 최상위 조회(%s): %w", gd.slug, err)
+		}
+
+		var posts, kids int
+		if err := tx.QueryRow(
+			`SELECT (SELECT count(*) FROM posts p WHERE p.category_id = c.id),
+			        (SELECT count(*) FROM categories k WHERE k.parent_id = c.id)
+			 FROM categories c WHERE c.id = ?`, id).Scan(&posts, &kids); err != nil {
+			return fmt.Errorf("딸린 것 조회(%s): %w", gd.slug, err)
+		}
+		if posts > 0 || kids > 0 {
+			leaving, err := allScheduledToLeave(tx, id)
+			if err != nil {
+				return err
+			}
+			if !leaving {
+				return fmt.Errorf(
+					"최상위 %q를 지우려는데 글 %d건, 하위 분류 %d개가 남아 있다. "+
+						"먼저 curation으로 옮기거나 빼라", gd.name, posts, kids)
+			}
+			fmt.Printf("최상위 %q 삭제를 미뤘다 (글 %d건, 하위 분류 %d개가 아직 있다)\n",
+				gd.name, posts, kids)
+			continue
+		}
+		if _, err := tx.Exec(`DELETE FROM categories WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("최상위 삭제(%s): %w", gd.slug, err)
 		}
 		dropped++
 	}

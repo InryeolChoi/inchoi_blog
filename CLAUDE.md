@@ -114,8 +114,8 @@ go run ./cmd/import -db blog.db                # 변환 + DB 이관 (몇 번 돌
 
 ## DB 이관 현황
 
-덤프 1408개 중 사람이 빼기로 정한 `DropPosts` 52개를 제외한 **1356개**가 들어가
-있다. `-db`를 줄 때만 DB를 건드린다.
+덤프 1408개 중 사람이 빼기로 정한 `DropPosts` 102개를 제외한 **1306개**가 들어가
+있다(GitHub에서 온 16편을 더해 posts는 1322편이다). `-db`를 줄 때만 DB를 건드린다.
 
 - **글은 `notion_page_id`, 이미지는 `sha256`이 멱등 키다.** 다시 돌리면 갱신만 되고
   행이 늘지 않는다. `created_at`은 처음 넣을 때 값을 유지하고 `updated_at`만 바뀐다.
@@ -307,6 +307,15 @@ tooling은 노션 최상위가 그대로 한 갈래인데, `웹 프로그래밍`
 - **regroup은 이름을 바꾸기 전에 먼저 지운다.** 없앨 분류가 쓰던 slug를 다른
   분류가 물려받는 경우가 있어서(`핸즈온 머신러닝 2` → `머신러닝: 기초이론`),
   나중에 지우면 UNIQUE에 걸린다.
+- **사람이 만든 최상위 분류를 없앨 때는 `groupDrops`를 쓴다.**
+  `curation.DropCategories`는 멱등 키가 `source_name`이라 노션에서 온 분류만
+  지운다 — `groups`가 만든 분류는 그 칸이 NULL이다. 배정표에서 줄만 지우면 그
+  분류가 "최상위인데 배정표에 없다"로 계획 검사에 걸린 채 남는다.
+  안전장치는 `DropCategories`와 같다: 글도 자식도 없을 때만 지운다.
+- **`allScheduledToLeave`는 지워질 자식도 떠나는 것으로 센다.** 예전에는
+  옮겨지는 것(`Moves`)만 셌는데, 그러면 자식이 전부 `DropCategories`에 있는
+  부모가 "예정에 없는 것이 남았다"로 멈춘다. 커리어를 뺄 때 `취업 준비`가
+  실제로 그랬다.
 - **최상위 분류의 slug를 바꿀 때는 `groupRenames`를 쓴다.** `groups`는 slug가
   멱등 키라 배정표에서 slug만 바꾸면 새 행이 하나 더 생기고 옛 행이 자식을 안은
   채 남는다.
@@ -372,14 +381,14 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 
 | 표 | 뜻 | 멱등 키 | 보는 쪽 | 현재 |
 |---|---|---|---|---|
-| `Moves` | 카테고리를 사람이 정한 다른 분류 밑으로 | `source_name` | categorize·regroup | 18건 (`빅데이터 분석기사` → `/career`, 웹 5갈래 + 모바일 → 개발 두 갈래) |
+| `Moves` | 카테고리를 사람이 정한 다른 분류 밑으로 | `source_name` | categorize·regroup | 17건 (웹 5갈래 + 모바일 → 개발 두 갈래) |
 | `Covers` | 사람이 정한 분류에 표지 글 붙이기 | `notion_page_id` | 〃 | 36건 (기존 14 + école 42 하위 분류 17 + 웹 입구 글 5) |
 | `PostMoves` | 글 하나를 경로와 다른 카테고리에 붙임 | `notion_page_id` | 〃 | 67건 (기존 55 + 웹 프로그래밍 직속 12) |
 | `PostMetadataEdits` | 글 제목·원작성일·순서를 사람이 지정 | `notion_page_id` | import·sortorder | 23건 (선형대수 11 + 다변량분석 12) |
 | `PostTitleEdits` | 작성일·순서는 유지하고 글 제목만 지정 | `notion_page_id` | import | 수리통계2 참고자료 4건의 `(1)` 제거 |
-| `StatusEdits` | **글의 status를 사람이 지정** | `notion_page_id` | **import** | 2건 (빅데이터 분석기사의 묶는 마디) |
-| `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | 11건 (`컴퓨터 시스템` 계열, `최인렬 (Inryeol Choi)`, `웹 프로그래밍` 포함) |
-| `DropPosts` | **글을 이관에서 뺌** | `notion_page_id` | **import** | 52건 |
+| `StatusEdits` | **글의 status를 사람이 지정** | `notion_page_id` | **import** | 0건 (빅데이터 분석기사의 마디 둘은 커리어와 함께 뺐다) |
+| `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | 15건 (`컴퓨터 시스템` 계열, `최인렬 (Inryeol Choi)`, `웹 프로그래밍`, 커리어 4갈래 포함) |
+| `DropPosts` | **글을 이관에서 뺌** | `notion_page_id` | **import** | 102건 (커리어 50 포함) |
 | `DropImages` | **이미지를 DB에서 뺌** | `sha256` | **import** | 1건 (증명사진) |
 | `BodyEdits` | **본문에서 줄 삭제·교체** | `notion_page_id` | **import** | 삭제 8줄 + 교체 5줄 |
 | `BodyAppends` | **본문 끝에 지속적으로 덧붙임** | `notion_page_id` | **import** | 확률과정론 시험 해답 1건 |
@@ -402,7 +411,13 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 지우지 않고 status로 가린다. 그래서 표에 이유를 함께 적는다. **DB에서 행만 지우면
 안 된다** — 덤프에 있는 한 다음 `import -db`가 다시 넣는다. 여기 적어두면 변환·이미지
 이관에서 건너뛰고, `runImport`가 기존 DB 행도 같은 트랜잭션에서 지우므로 몇 번을
-다시 이관해도 안 돌아온다. 현재 글 52건, 이미지 1건이다.
+다시 이관해도 안 돌아온다. 현재 글 102건, 이미지 1건이다.
+
+- **잎부터 지운다.** `posts.parent_id`가 `ON DELETE RESTRICT`라 부모를 먼저 만나면
+  FK가 막는데, 자식까지 전부 표에 있으면 그건 고아가 생기는 것이 아니라 **순서
+  문제**다. 커리어 42편을 통째로 뺄 때 실제로 걸렸다. `runImport`가 한 바퀴에
+  지울 수 있는 것만 지우고 더 못 지울 때까지 돈다. **그러고도 남으면 에러다** —
+  표에 없는 자식이 매달려 있다는 뜻이고, 그건 그 FK가 막으려는 바로 그 일이다.
 
 **`BodyEdits`만 보는 쪽이 다르다** — 분류가 아니라 **본문**을 고치기 때문에
 `cmd/import`가 변환 직후에 적용한다.
@@ -2471,6 +2486,21 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
     (`<특징>`)는 우연히 안전해서 건드리지 않는다.
   - **`cmd/categorize`가 깨져 있었다.** `notion_page_id`를 문자열로 스캔하는데
     GitHub 글은 NULL이다. 출처가 하나 늘면서 드러난 자리다.
+
+- **커리어를 통째로 없앴다.** 취업 준비 1 + 빅데이터 분석기사 42 +
+  기술면접 : 예상 6 + 취업박람회 1 = **50편**과 분류 다섯을 뺐다.
+  글 1,372 → **1,322편**, 분류 88 → **83개.**
+  - `DropPosts`·`DropCategories`에 적었으므로 **재이관해도 안 돌아온다.**
+    되돌리려면 그 묶음을 지우면 된다 — 덤프는 그대로 있다.
+  - 얽혀 있던 것을 함께 걷었다: `Moves`의 `빅데이터 분석기사 → career`,
+    같은 글의 `Covers`와 `PostMoves`, `StatusEdits` 두 건, 그리고 `수학 & 통계`
+    본문에서 들어오던 링크 한 줄(`BodyEdits`). **그 링크를 두면 대상이
+    posts에 없는 slug가 되어, 렌더러가 노션 인라인 데이터베이스로 알아보고
+    엉뚱한 목록을 편다.**
+  - 이 과정에서 도구 두 곳이 고쳐졌다 — 위 `DropPosts`의 "잎부터 지운다"와
+    카테고리 절의 `groupDrops`·`allScheduledToLeave` 항목 참고.
+  - categorize → regroup 두 바퀴에 수렴하고, 세 번째 바퀴는 지문이 같다.
+    분류 83개 전부 200, `/career`와 지운 글 전부 404.
 
 - **갈래 카드를 제 분류로 내렸다.** 언어 카드 6장이 `Language`가 아니라
   `프로그래밍 언어`에 서고, `마크업 / 스타일링 / 표현식`도 제 갈래 7장을

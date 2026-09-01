@@ -43,7 +43,6 @@ var Moves = []Move{
 	{SourceName: "탐색적 자료분석", ToSlug: "수리통계-응용", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 	{SourceName: "회귀분석", ToSlug: "수리통계-응용", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 	{SourceName: "다변량분석", ToSlug: "수리통계-응용", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
-	{SourceName: "빅데이터 분석기사", ToSlug: "career", Why: "자격증 학습 기록이라 수리/통계보다 커리어에 두기로 했다"},
 	{SourceName: "핸즈온 머신러닝 2", ToSlug: "머신러닝", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 	{SourceName: "자연어처리 (1) : BERT와 GPT", ToSlug: "머신러닝", Why: "데이터 & 수리를 세 갈래로 가르면서 옮겼다"},
 
@@ -180,7 +179,6 @@ var PostMoves = []PostMove{
 	{NotionPageID: "ab031d71-5474-4a03-bc3f-124391842de7", ToSlug: "탐색적-자료분석", Title: "탐색적 자료분석"},
 	{NotionPageID: "7bb6bd36-9ad9-4ef8-8b2f-827080fad9f3", ToSlug: "회귀분석", Title: "회귀분석"},
 	{NotionPageID: "cb02b6b8-6f29-479d-a791-25f1cd748b78", ToSlug: "다변량분석", Title: "다변량분석"},
-	{NotionPageID: "a2f4b890-1f50-4390-acfc-871e612dce31", ToSlug: "빅데이터-분석기사", Title: "빅데이터 분석기사"},
 	{NotionPageID: "79157a77-bc76-4b48-9aaa-370c95fc9658", ToSlug: "수리통계-응용", Title: "데이터분석 기초 : R언어"},
 	{NotionPageID: "1ab1ecd4-d96b-4f1c-8c67-3e68cadca1c6", ToSlug: "수리통계-응용", Title: "데이터분석 기초 : 파이썬"},
 	{NotionPageID: "226b7998-bd88-4892-88aa-1227dc89b5f0", ToSlug: "머신러닝-기초이론", Title: "핸즈온 머신러닝 2"},
@@ -361,22 +359,8 @@ type StatusEdit struct {
 }
 
 var StatusEdits = []StatusEdit{
-	// 빅데이터 분석기사의 두 마디. 본문이 48·52바이트뿐이라 덤프 분석이 draft로
-	// 봤지만, 실제로는 42편을 개념정리 23편과 실전문제 8편으로 나누는 층이다
-	// (2026-08-22에 postparent로 parent_id를 복원한 그 층이다). 가리면 표지 본문의
-	// 두 링크가 글자로 풀리고 자식 27편이 묶음을 잃는다.
-	{
-		NotionPageID: "250c89b8-b6c1-4353-ba0a-f68ef44f6e07",
-		Status:       "unlisted",
-		Title:        "개념정리",
-		Why:          "본문은 짧지만 빅데이터 분석기사 23편을 묶는 마디다. 가리면 자식이 평평해진다",
-	},
-	{
-		NotionPageID: "236908fd-251a-4f13-8520-d01eaa04e1f1",
-		Status:       "unlisted",
-		Title:        "실전문제",
-		Why:          "본문은 짧지만 빅데이터 분석기사 8편을 묶는 마디다. 가리면 자식이 평평해진다",
-	},
+	// 지금은 비어 있다. 여기 있던 빅데이터 분석기사의 두 마디(개념정리·실전문제)는
+	// 커리어 분류를 통째로 없애면서 DropPosts로 갔다.
 }
 
 // ApplyStatus는 CSV가 준 status 위에 사람이 정한 값을 얹는다.
@@ -453,6 +437,22 @@ var DropCategories = []DropCategory{
 		SourceName: "전주 데이터분석",
 		Why:        "프로젝트 전체를 블로그에 남기지 않기로 했다. 글은 DropPosts로 뺐다",
 	},
+	{
+		SourceName: "취업 준비",
+		Why:        "커리어 분류를 통째로 없앤다. 글은 DropPosts로 뺐다",
+	},
+	{
+		SourceName: "빅데이터 분석기사",
+		Why:        "커리어 분류를 통째로 없앤다. 글은 DropPosts로 뺐다",
+	},
+	{
+		SourceName: "기술면접 : 예상",
+		Why:        "커리어 분류를 통째로 없앤다. 글은 DropPosts로 뺐다",
+	},
+	{
+		SourceName: "취업박람회",
+		Why:        "커리어 분류를 통째로 없앤다. 글은 DropPosts로 뺐다",
+	},
 }
 
 // Cover는 사람이 만든 분류에 붙인 표지 글이다.
@@ -498,7 +498,6 @@ var Covers = []Cover{
 	{Slug: "탐색적-자료분석", NotionPageID: "ab031d71-5474-4a03-bc3f-124391842de7", Why: "탐색적 자료분석 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
 	{Slug: "회귀분석", NotionPageID: "7bb6bd36-9ad9-4ef8-8b2f-827080fad9f3", Why: "회귀분석 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
 	{Slug: "다변량분석", NotionPageID: "cb02b6b8-6f29-479d-a791-25f1cd748b78", Why: "다변량분석 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
-	{Slug: "빅데이터-분석기사", NotionPageID: "a2f4b890-1f50-4390-acfc-871e612dce31", Why: "빅데이터 분석기사 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
 	{Slug: "머신러닝-기초이론", NotionPageID: "226b7998-bd88-4892-88aa-1227dc89b5f0", Why: "핸즈온 머신러닝 2 분류를 누르면 목록보다 소개가 먼저 보여야 한다"},
 
 	// école 42 표지의 원형별 목차와 같은 이름의 하위 분류가 따로 보여 중복됐다.
@@ -753,6 +752,260 @@ var DropPosts = []DropPost{
 	{NotionPageID: "02718d05-11b3-4c7a-9b29-f874cd586a98", Title: "(제목 없음)", Why: "파이썬 : 데이터 시각화 밑의 빈 페이지다"},
 	{NotionPageID: "540f7a7e-b96b-4713-9bc6-03f755a86583", Title: "(제목 없음)", Why: "파이썬 : 데이터 시각화 밑의 빈 페이지다"},
 	{NotionPageID: "c2c5b971-7a1a-4eee-a026-94a5bda068a2", Title: "(제목 없음)", Why: "파이썬 : 데이터 시각화 밑의 빈 페이지다"},
+
+	// 커리어 50편. 분류를 통째로 없애기로 했다(취업 준비 1, 빅데이터
+	// 분석기사 42, 기술면접 : 예상 6, 취업박람회 1). 노션 덤프에는 그대로
+	// 남아 있으므로 되돌리려면 이 묶음을 지우면 된다.
+	{
+		NotionPageID: "72bccec8-bdd2-4e23-92ad-8d017c7f4ebf",
+		Title:        "기본질문 / 인성질문",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "fcbf7afd-019e-440a-b81a-c412e6aaf127",
+		Title:        "질문 : Docker and Cloud",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "37acc14d-b91b-4da3-a883-09a1f26985cc",
+		Title:        "질문 : FT_IRC & Network",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "558ca531-1859-4a13-82a2-e870fe6e1238",
+		Title:        "질문 : NLP with BERT and GPT",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "1150901b-87f1-8045-ac4d-e3b8245254fa",
+		Title:        "질문 : 심심조각",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "4c1fa3c8-3809-42ce-961d-67128a2d2d46",
+		Title:        "질문 : 필로소퍼 / 미니쉘",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "e26d0dde-3713-4a9d-830f-03bd3ff703d8",
+		Title:        "(제목 없음)",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "e5c22877-d326-4bbb-85f8-e5dd77746338",
+		Title:        "(제목 없음)",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "006faf85-e3c8-4454-b870-1e46183f5685",
+		Title:        "1-1 : 빅데이터의 개념 및 활용",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "d489f2e0-062a-4136-a650-a4ec36bc225e",
+		Title:        "1-1. 데이터 정제",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "5785cbb2-c7bf-4d7b-94c4-c981ad78655f",
+		Title:        "1-1. 분석모형 평가",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "c158c39f-310b-4930-9708-bc1fd27346a1",
+		Title:        "1-1. 분석절차 수립",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "4518ab2e-913e-41be-9266-19c0bf7aed88",
+		Title:        "1-2 : 빅데이터 기술 및 제도",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "2491504a-f8ea-48d0-b695-61675cb79dd9",
+		Title:        "1-2. 분석 변수 처리",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "5b86e6f7-dc71-4459-b221-597a9550933c",
+		Title:        "1-2. 분석모형 개선",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "ab114ab2-c170-43f2-bbae-94728d076829",
+		Title:        "1-2. 분석환경 구축",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "324b5cfc-891f-44a3-a87f-48223d36a3da",
+		Title:        "2-1 : 분석방안 수립  ",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "c14ff59b-3afd-4e2c-aa6a-00882b48ca20",
+		Title:        "2-1. 데이터 탐색의 기초",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "2ef8da5b-adb5-4c2b-afae-00f7d4bcaf11",
+		Title:        "2-1. 분석결과 해석",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "29bf03af-2eb0-4183-8c15-fea550ef7185",
+		Title:        "2-1. 분석기법",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "3df9447a-5fea-484d-9cb5-e105981fa2c4",
+		Title:        "2-2 : 분석작업 계획 수립",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "18c5652d-9a36-4cc1-ba8a-1f639e11b661",
+		Title:        "2-2. 고급 데이터 탐색",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "ac07f8e4-7a39-4e31-bacb-1d811ccf80df",
+		Title:        "2-2. 고급 분석기법",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "6b93ac1e-834d-4b93-88d0-2bf01a791e81",
+		Title:        "2-2. 분석결과 시각화",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "4ef6b461-19d6-4a1e-abaa-feb7a538c198",
+		Title:        "2-3. 분석결과 활용",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "227a751c-d030-4925-b8b2-2047cb459f7a",
+		Title:        "3-1 : 데이터 수집 및 저장",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "e1df6b62-dbeb-412b-8af4-def773643dca",
+		Title:        "3-1. 기술통계",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "fedb6543-b712-49dc-aae9-075b12f130a3",
+		Title:        "3-2 : 데이터 적재 및 저장",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "622704eb-ebe0-4640-b9ef-350fe2017c03",
+		Title:        "3-2. 추론통계",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "e6fdf9a4-1884-49ce-8c0c-cf01721e1bb0",
+		Title:        "[Ch1] 데이터 전처리",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "62f18a53-f71e-4a3f-9586-e66b3aa12300",
+		Title:        "[Ch1] 분석 모형 설계",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "60c2343e-c340-4f56-a22a-c01d3600a11f",
+		Title:        "[Ch1] 빅데이터의 이해",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "6e7f4758-c5c8-4fa9-889f-3da16623b1e0",
+		Title:        "[Ch2] 데이터 분석 계획",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "8a9bc879-bc85-4234-9241-40f2ff943d53",
+		Title:        "[Ch2] 데이터 탐색",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "ece9a902-068c-41eb-a390-21fc53fd78e4",
+		Title:        "[Ch2] 분석기법 적용",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "a31318fb-7ad9-4c8e-a1d2-79c50f97bb6a",
+		Title:        "[Ch3] 데이터 수집 및 저장 계획",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "684ab7ff-6284-468c-9d1b-7d8001ec3256",
+		Title:        "[Ch3] 통계기법 이해",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "250c89b8-b6c1-4353-ba0a-f68ef44f6e07",
+		Title:        "개념정리",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "a2fde93b-dbaf-49b3-8364-d61e84410195",
+		Title:        "기출문제 4회",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "89d46c33-3bc9-44d2-8682-09f4a1d33e1a",
+		Title:        "기출문제 5회",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "1f11f1c3-ae29-4e5b-a352-b9c323e4ba89",
+		Title:        "기출문제 6회",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "613e1e48-8c37-4fb1-9229-18e46168d1e0",
+		Title:        "기출문제 7회",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "a2f4b890-1f50-4390-acfc-871e612dce31",
+		Title:        "빅데이터 분석기사",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "236908fd-251a-4f13-8520-d01eaa04e1f1",
+		Title:        "실전문제",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "742c3a5e-d35c-449f-81f3-e7540de1dd75",
+		Title:        "암기사항 (1과목)",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "d934873b-1bc1-4936-940f-6ee5c8c027d1",
+		Title:        "암기사항 (2과목)",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "08c2ce51-1c61-4928-bc0f-124327a5a59d",
+		Title:        "암기사항 (3과목)",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "792c4300-7446-4b1e-b18b-c1337a0e8225",
+		Title:        "암기사항 (4과목)",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "9f697d2b-c63e-49f2-ac01-658c0af22a5c",
+		Title:        "취업 준비",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
+	{
+		NotionPageID: "00dca451-0f12-4d78-9304-8f7f30d3b7a9",
+		Title:        "AWS 특강",
+		Why:          "커리어 분류를 통째로 없앤다. 더 이상 둘 자리가 아니다",
+	},
 }
 
 // Dropped는 이 글을 이관에서 빼야 하는지다.
@@ -900,6 +1153,14 @@ var BodyEdits = []BodyEdit{
 		Replace:      "[수리통계2 - 시험](/p/1f3d0731-e367-4d0d-8239-94d92d6d02d5)",
 		Title:        "수리통계2",
 		Why:          "참고자료 제목 끝의 불필요한 (1)을 뺀다",
+	},
+	{
+		NotionPageID: "5d2a5e48-0d85-4fc5-94d3-280cbeef87ee",
+		Remove:       "[빅데이터 분석기사](/p/a2f4b890-1f50-4390-acfc-871e612dce31)",
+		Title:        "수학 & 통계",
+		Why: "커리어 분류를 통째로 없애면서 그 표지 글도 뺐다. 남겨두면 대상이 " +
+			"posts에 없는 slug가 되어 눌러도 404이고, 렌더러가 그걸 노션 인라인 " +
+			"데이터베이스로 알아봐 엉뚱한 목록을 펼 수 있다",
 	},
 }
 
