@@ -177,6 +177,9 @@ type pageData struct {
 	// Deck은 갈래를 아이콘 카드로 펼칠 때 그릴 것이다 (deck.go).
 	// 비어 있으면 평소대로 목록을 그린다.
 	Deck []DeckCard
+	// Bundles는 하위 분류와 직속 글을 사람이 정한 이름으로 다시 묶은 것이다
+	// (bundle.go). 있으면 `하위 분류`와 `글` 대신 이걸 그린다.
+	Bundles []Bundle
 	// Links는 이 화면에서 아카이브 바깥으로 나가는 링크다 (links.go).
 	Links []SiteLink
 	// Err은 404·500 화면에만 채워진다 (errorpage.go).
@@ -471,6 +474,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "category.html", pageData{
 		Title:      current.Name,
 		Deck:       deck,
+		Bundles:    bundlesFor(current.Slug, children, posts, basePath),
 		Trail:      crumbList,
 		BasePath:   basePath,
 		Categories: children,
