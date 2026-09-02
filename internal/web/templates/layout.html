@@ -643,6 +643,12 @@
     border: 1px solid var(--badge-line);
     padding: .05em .4em; margin-left: .35em; vertical-align: .08em;
   }
+  /* 비공개는 status가 아니라 다른 축이라 색을 다투지 않는다. 지면 없이
+     끊긴 테두리만 두른다 — draft 뱃지 옆에 나란히 서도 무엇이 다른지 보인다. */
+  span.status.private {
+    background: transparent; color: var(--ink);
+    border: 1px dashed var(--ink); border-radius: 0;
+  }
   /* 경로로 되살린 목록에서 **글이 없는 마디**의 이름표다
      (internal/web/pathtree.go). 노션에서 인라인 데이터베이스였던 자리라
      누를 곳이 없다 — 그래서 링크가 아니라 글자이고, 코드 라벨·목차·표 머리와

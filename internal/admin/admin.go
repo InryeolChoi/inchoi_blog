@@ -190,6 +190,8 @@ type shellData struct {
 	// Statuses는 폼의 status 선택지다. 코드(Statuses)를 그대로 내려보내
 	// 템플릿에 값을 또 적지 않는다.
 	Statuses []string
+	// Visibilities는 폼의 visibility 선택지다. 같은 이유로 코드가 정본이다.
+	Visibilities []string
 	// Login은 지금 들어와 있는 GitHub 계정이다. 인증이 꺼져 있으면 빈 값이고,
 	// 화면이 그 자리에 "인증 없음" 경고를 대신 그린다.
 	Login string
@@ -207,10 +209,11 @@ func (s *Server) handleShell(w http.ResponseWriter, r *http.Request) {
 		login = s.auth.currentLogin(r)
 	}
 	if err := s.shell.ExecuteTemplate(w, "admin", shellData{
-		SiteCSS:   s.css,
-		AssetTags: s.tags,
-		Statuses:  Statuses,
-		Login:     login,
+		SiteCSS:      s.css,
+		AssetTags:    s.tags,
+		Statuses:     Statuses,
+		Visibilities: Visibilities,
+		Login:        login,
 	}); err != nil {
 		log.Printf("admin 껍데기 렌더 실패: %v", err)
 	}

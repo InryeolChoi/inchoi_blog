@@ -108,7 +108,7 @@
 
 {{/* status 선택지를 코드(admin.Statuses)에서 받아 JS에 넘긴다. 템플릿에도
      JS에도 값을 또 적으면 스키마의 CHECK과 세 군데가 갈라진다. */}}
-<script id="ad-config" type="application/json">{"statuses":[{{range $i, $s := .Statuses}}{{if $i}},{{end}}{{$s}}{{end}}]}</script>
+<script id="ad-config" type="application/json">{"statuses":[{{range $i, $s := .Statuses}}{{if $i}},{{end}}{{$s}}{{end}}],"visibilities":[{{range $i, $v := .Visibilities}}{{if $i}},{{end}}{{$v}}{{end}}]}</script>
 
 </body>
 </html>

@@ -31,12 +31,33 @@ var staticFS embed.FS
 // Server는 라우팅과 렌더링을 들고 있다.
 type Server struct {
 	store *store
-	md    *markdown.Renderer
+	// member는 store와 같은 DB를 보되 **비공개 글까지** 보는 눈이다.
+	// 요청마다 둘 중 하나를 고른다(viewFor). store를 요청마다 새로 만들지
+	// 않는 이유는 그 값이 상태 없는 조회 묶음이라 두 벌이면 충분해서다.
+	member *store
+	md     *markdown.Renderer
 	// pages는 페이지 이름 → 그 페이지만 담은 템플릿 집합이다.
 	pages map[string]*template.Template
 	// editorFor는 "지금 누가 들어와 있나"를 묻는다. nil이면 **글 화면에서
 	// 고치는 길이 아예 없다** — 버튼도 스크립트도 나가지 않는다.
 	editorFor func(*http.Request) string
+}
+
+// viewFor는 이 요청이 무엇까지 볼 수 있는지를 고른다.
+//
+// **비공개 글(`visibility = 'private'`)은 허용된 계정에게만 보인다.** 그 판정의
+// 근거는 admin이 이미 들고 있는 허용 목록 하나다 — web은 세션도 목록도 모르고
+// "지금 누가 들어와 있나"라는 질문만 함수로 받는다(WithEditor). 그래서 **이
+// 옵션이 없으면 비공개 글은 아무에게도 안 보인다**: `-admin`이 없는 배포에서
+// 실수로 열리는 방향이 아니라 막히는 방향으로 틀린다.
+//
+// **요청마다 다시 묻는다.** 한 번 확인한 것을 서버가 기억해두면 세션이 풀린
+// 뒤에도 비공개 글이 계속 나간다.
+func (s *Server) viewFor(r *http.Request) *store {
+	if s.editorFor != nil && s.editorFor(r) != "" {
+		return s.member
+	}
+	return s.store
 }
 
 // pageTemplates는 layout과 함께 묶을 페이지 템플릿 목록이다.
@@ -95,6 +116,7 @@ func New(db *sql.DB, opts ...Option) (*Server, error) {
 	}
 	return &Server{
 		store:     &store{db: db, showDrafts: o.showDrafts},
+		member:    &store{db: db, showDrafts: o.showDrafts, showPrivate: true},
 		md:        markdown.New(),
 		pages:     pages,
 		editorFor: o.editorFor,
@@ -250,7 +272,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		s.fail(w, r, fmt.Errorf("템플릿이 없다: %s", name))
 		return
 	}
-	nav, err := s.store.NavTree()
+	nav, err := s.viewFor(r).NavTree()
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -298,8 +320,8 @@ type renderedBody struct {
 //
 // 렌더링 직전에 죽은 링크 두 종류를 손본다 — inline.go 참고. DB의 body는
 // 건드리지 않는다. 목차는 **손본 뒤의 문자열**에서 뽑아야 앵커가 본문과 맞는다.
-func (s *Server) renderPostBody(post *Post) (renderedBody, error) {
-	resolved, fix, err := s.resolveBody(post.Body, post.OriginalPath.String)
+func (s *Server) renderPostBody(st *store, post *Post) (renderedBody, error) {
+	resolved, fix, err := st.resolveBody(post.Body, post.OriginalPath.String)
 	if err != nil {
 		return renderedBody{}, err
 	}
@@ -351,8 +373,8 @@ func splitDeferredSection(pageID, source string) (before, after string) {
 
 // renderCategoryCoverBody는 표지 글을 카테고리 페이지용으로 그린다.
 // `deferredSections`에 적힌 절은 글 목록을 먼저 훑은 뒤 볼 수 있도록 별도로 렌더링한다.
-func (s *Server) renderCategoryCoverBody(post *Post) (renderedBody, error) {
-	resolved, fix, err := s.resolveBody(post.Body, post.OriginalPath.String)
+func (s *Server) renderCategoryCoverBody(st *store, post *Post) (renderedBody, error) {
+	resolved, fix, err := st.resolveBody(post.Body, post.OriginalPath.String)
 	if err != nil {
 		return renderedBody{}, err
 	}
@@ -377,12 +399,13 @@ func (s *Server) renderCategoryCoverBody(post *Post) (renderedBody, error) {
 // "소개"가 이름만 다른 중복 페이지가 된다. 홈은 최상위 분류와 전체 글 수만
 // 받아 HTML 자체의 링크와 details로 시작점을 만든다.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	categories, err := s.store.TopCategories()
+	st := s.viewFor(r)
+	categories, err := st.TopCategories()
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	recent, err := s.store.RecentPosts(recentLimit)
+	recent, err := st.RecentPosts(recentLimit)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -405,10 +428,11 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	st := s.viewFor(r)
 	var trail []Category
 	var parentID sql.NullInt64
 	for _, slug := range slugs {
-		cat, err := s.store.CategoryBySlug(slug, parentID)
+		cat, err := st.CategoryBySlug(slug, parentID)
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -422,12 +446,12 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	current := trail[len(trail)-1]
-	children, err := s.store.ChildCategories(current.ID)
+	children, err := st.ChildCategories(current.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	posts, err := s.store.PostsInCategory(current.ID)
+	posts, err := st.PostsInCategory(current.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -439,13 +463,13 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	var cover renderedBody
 	var coverPost *Post
 	if current.CoverPostSlug != "" && !listOnlyCategory(current.Slug) {
-		coverPost, err = s.store.PostBySlug(current.CoverPostSlug)
+		coverPost, err = st.PostBySlug(current.CoverPostSlug)
 		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
 		if coverPost != nil {
-			if cover, err = s.renderCategoryCoverBody(coverPost); err != nil {
+			if cover, err = s.renderCategoryCoverBody(st, coverPost); err != nil {
 				s.fail(w, r, err)
 				return
 			}
@@ -456,7 +480,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 			// 표지 본문의 목차가 이미 가리키는 글 트리는 아래 "글" 목록에서
 			// 다시 보여주지 않는다. 상단 목차가 그 갈래의 입구다.
 			posts = dropShownPostTrees(posts, cover.fix.Shown)
-			if children, err = s.dropCoveredChildren(children, cover.fix.Shown); err != nil {
+			if children, err = st.dropCoveredChildren(children, cover.fix.Shown); err != nil {
 				s.fail(w, r, err)
 				return
 			}
@@ -464,7 +488,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	open, active := openTrail(trail)
-	deck, err := s.deckFor(current, basePath, children)
+	deck, err := deckFor(st, current, basePath, children)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -616,13 +640,13 @@ func underShown(post PostSummary, prefixes []string) bool {
 //
 // 섹션 자체를 없애지 않는 이유도 같다. `머신러닝 & 딥러닝`처럼 본문이 다루지 않는
 // 분류가 하나 더 있는 경우가 있다.
-func (s *Server) dropCoveredChildren(children []Category, shown map[string]bool) ([]Category, error) {
+func (s *store) dropCoveredChildren(children []Category, shown map[string]bool) ([]Category, error) {
 	if len(shown) == 0 || len(children) == 0 {
 		return children, nil
 	}
 	out := make([]Category, 0, len(children))
 	for _, c := range children {
-		slugs, err := s.store.CategorySubtreePostSlugs(c.ID)
+		slugs, err := s.CategorySubtreePostSlugs(c.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -641,7 +665,8 @@ func (s *Server) dropCoveredChildren(children []Category, shown map[string]bool)
 }
 
 func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
-	post, err := s.store.PostBySlug(r.PathValue("slug"))
+	st := s.viewFor(r)
+	post, err := st.PostBySlug(r.PathValue("slug"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -651,7 +676,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rendered, err := s.renderPostBody(post)
+	rendered, err := s.renderPostBody(st, post)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -676,7 +701,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	// 본문이 한 번도 안 가리키는 아래 갈래는 상자로 편다. 노션에서 온 표지 글은
 	// 나중에 다른 출처로 들어온 글을 알 리가 없어서, 그대로 두면 닿을 길이
 	// 없다 — `Java` 아래 `모던 자바` 16편이 실제로 그랬다(store.SubBranches).
-	branches, err := s.store.SubBranches(post, linked)
+	branches, err := st.SubBranches(post, linked)
 	if err != nil {
 		s.fail(w, r, err)
 		return

@@ -37,6 +37,11 @@ type saveReq struct {
 	Title  string `json:"title"`
 	Body   string `json:"body"`
 	Status string `json:"status"`
+	// Visibility는 `public` 또는 `private`이다. **빈 값은 public으로 읽는다** —
+	// 이 칸을 모르는 옛 클라이언트가 보낸 요청이 글을 조용히 숨기면 안 된다.
+	// 반대로 모르는 값은 거절한다(validVisibility). 오타가 공개로 새는 쪽이
+	// 아니라 저장이 실패하는 쪽으로 틀리게 둔다.
+	Visibility string `json:"visibility"`
 
 	// Rev는 불러올 때 받은 updated_at 글자다. 고칠 때만 쓴다.
 	// **비어 있으면 거절한다** — 검사를 건너뛰는 쪽으로 틀리지 않는다.
@@ -109,6 +114,14 @@ func normalizeSave(req *saveReq) error {
 	}
 	if !ok {
 		return bad("status가 %q다. %s 중 하나여야 한다", req.Status, strings.Join(Statuses, ", "))
+	}
+
+	if req.Visibility == "" {
+		req.Visibility = "public"
+	}
+	if !validVisibility(req.Visibility) {
+		return bad("visibility가 %q다. %s 중 하나여야 한다",
+			req.Visibility, strings.Join(Visibilities, ", "))
 	}
 
 	// slug를 안 적었으면 제목에서 만든다. 카테고리와 같은 규칙이라 한글이 남는다.
@@ -239,11 +252,11 @@ func (s *store) savePost(curSlug string, req saveReq, create bool, now time.Time
 		// 채우면 그 글은 가드에 안 걸리고 다음 upload-db.sh에 조용히 사라진다.
 		var res sql.Result
 		res, err = tx.Exec(`
-			INSERT INTO posts (slug, title, body, status, source, notion_page_id,
+			INSERT INTO posts (slug, title, body, status, visibility, source, notion_page_id,
 			                   category_id, parent_id, sort_order,
 			                   original_created_at, published_at, created_at, updated_at)
-			VALUES (?, ?, ?, ?, 'native', NULL, ?, ?, ?, ?, ?, ?, ?)`,
-			req.Slug, req.Title, req.Body, req.Status,
+			VALUES (?, ?, ?, ?, ?, 'native', NULL, ?, ?, ?, ?, ?, ?, ?)`,
+			req.Slug, req.Title, req.Body, req.Status, req.Visibility,
 			req.CategoryID, parentID, req.SortOrder,
 			origCreated, published, now, now)
 		if err != nil {
@@ -257,11 +270,11 @@ func (s *store) savePost(curSlug string, req saveReq, create bool, now time.Time
 		}
 	} else {
 		_, err = tx.Exec(`
-			UPDATE posts SET slug = ?, title = ?, body = ?, status = ?,
+			UPDATE posts SET slug = ?, title = ?, body = ?, status = ?, visibility = ?,
 			                 category_id = ?, parent_id = ?, sort_order = ?,
 			                 original_created_at = ?, published_at = ?, updated_at = ?
 			WHERE id = ?`,
-			req.Slug, req.Title, req.Body, req.Status,
+			req.Slug, req.Title, req.Body, req.Status, req.Visibility,
 			req.CategoryID, parentID, req.SortOrder,
 			origCreated, published, now, id)
 		if err != nil {

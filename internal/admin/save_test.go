@@ -374,3 +374,77 @@ func TestSaveRollsBackWhatItAlreadyWrote(t *testing.T) {
 		t.Errorf("실패한 저장이 남았다: slug=%q title=%q", slug, title)
 	}
 }
+
+// **공개 범위는 status와 다른 축이라 따로 왕복해야 한다.** 여기가 조용히
+// 무시되면 화면에서 private을 골라도 글이 그대로 공개로 남는다.
+func TestVisibilityRoundTrips(t *testing.T) {
+	sqlDB := testDB(t)
+	s, err := New(sqlDB, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+
+	rec := save(t, h, http.MethodPost, "/api/admin/posts", saveReq{
+		Title: "숨긴 글", Body: "여기만 본다.", Status: "draft", Visibility: "private",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	var got PostDetail
+	decode(t, rec, &got)
+	if got.Visibility != "private" {
+		t.Errorf("응답의 visibility가 %q다", got.Visibility)
+	}
+	var vis string
+	if err := sqlDB.QueryRow(`SELECT visibility FROM posts WHERE slug = ?`, got.Slug).Scan(&vis); err != nil {
+		t.Fatal(err)
+	}
+	if vis != "private" {
+		t.Errorf("DB의 visibility가 %q다. private이어야 한다", vis)
+	}
+
+	// 고칠 때 되돌려 보내면 그대로 남아야 한다. PUT은 통째로 바꾸기라
+	// 이 칸을 빠뜨리면 글이 조용히 공개가 된다.
+	rec = save(t, h, http.MethodPut, "/api/admin/posts/"+got.Slug, saveReq{
+		Slug: got.Slug, Title: got.Title, Body: "고쳤다.", Status: "draft",
+		Visibility: "private", Rev: got.Rev,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("고치기 상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	decode(t, rec, &got)
+	if got.Visibility != "private" {
+		t.Errorf("고친 뒤 visibility가 %q다", got.Visibility)
+	}
+}
+
+// **빈 값은 public이고 모르는 값은 거절이다.** 오타 하나가 통과하면 그 글은
+// 비공개가 아니라 아무 조건에도 안 걸리는 공개 글이 된다.
+func TestVisibilityDefaultsToPublicAndRejectsJunk(t *testing.T) {
+	sqlDB := testDB(t)
+	s, err := New(sqlDB, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+
+	rec := save(t, h, http.MethodPost, "/api/admin/posts", saveReq{
+		Title: "그냥 글", Body: "본문", Status: "draft",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	var got PostDetail
+	decode(t, rec, &got)
+	if got.Visibility != "public" {
+		t.Errorf("안 보냈는데 visibility가 %q다. public이어야 한다", got.Visibility)
+	}
+
+	rec = save(t, h, http.MethodPost, "/api/admin/posts", saveReq{
+		Title: "오타 글", Body: "본문", Status: "draft", Visibility: "prvate",
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("오타를 %d로 받았다. 400이어야 한다: %s", rec.Code, rec.Body.String())
+	}
+}

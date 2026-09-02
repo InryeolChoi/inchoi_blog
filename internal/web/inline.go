@@ -41,14 +41,14 @@ type bodyFix struct {
 }
 
 // resolveBody는 렌더링 직전에 본문을 손본다. 원본 문자열은 건드리지 않는다.
-func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error) {
+func (s *store) resolveBody(body, originalPath string) (string, bodyFix, error) {
 	var fix bodyFix
 
 	targets := linkTargets(body)
 	if len(targets) == 0 {
 		return body, fix, nil
 	}
-	metas, err := s.store.PostSummariesBySlug(targets)
+	metas, err := s.PostSummariesBySlug(targets)
 	if err != nil {
 		return "", fix, err
 	}
@@ -84,7 +84,7 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 		}
 	}
 	if hasDead && originalPath != "" {
-		if groups, err = s.store.InlineDBGroups(originalPath); err != nil {
+		if groups, err = s.InlineDBGroups(originalPath); err != nil {
 			return "", fix, err
 		}
 	}
@@ -149,7 +149,7 @@ func (s *Server) resolveBody(body, originalPath string) (string, bodyFix, error)
 //
 // **`[페이지 링크]` 자리표시자는 진짜 제목으로 바꿔서 남긴다.** 그냥 풀면
 // 본문에 "페이지 링크"라는 말이 글자로 드러난다. 제목은 metas가 들고 있다.
-func (s *Server) unlinkHidden(body string, metas map[string]PostSummary, fix *bodyFix) string {
+func (s *store) unlinkHidden(body string, metas map[string]PostSummary, fix *bodyFix) string {
 	return postLinkPattern.ReplaceAllStringFunc(body, func(match string) string {
 		m := postLinkPattern.FindStringSubmatch(match)
 		if m == nil {

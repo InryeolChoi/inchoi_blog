@@ -31,7 +31,7 @@ const (
 // 목록으로 돌아간다 — 반쪽짜리 카드 묶음보다 그쪽이 길을 잃지 않는다.
 // error는 DB 조회가 실패했을 때만이다.
 type deckSource interface {
-	cards(s *Server, cat Category, basePath string, children []Category) ([]DeckCard, error)
+	cards(st *store, cat Category, basePath string, children []Category) ([]DeckCard, error)
 }
 
 // deckSources는 카드로 펼칠 분류의 slug다. **아무 데나 쓰지 않는다** —
@@ -56,12 +56,12 @@ var deckSources = map[string]deckSource{
 // 바꾸는 childDeck에만 해당하는 조건이라 그쪽이 자기 눈으로 본다 —
 // `프로그래밍 언어`와 `마크업 / 스타일링 / 표현식`은 자식이 없는 말단
 // 분류이고, 카드의 재료는 자기 글의 원본 경로다.
-func (s *Server) deckFor(cat Category, basePath string, children []Category) ([]DeckCard, error) {
+func deckFor(st *store, cat Category, basePath string, children []Category) ([]DeckCard, error) {
 	source, ok := deckSources[cat.Slug]
 	if !ok {
 		return nil, nil
 	}
-	return source.cards(s, cat, basePath, children)
+	return source.cards(st, cat, basePath, children)
 }
 
 // childBySlug는 하위 분류 하나를 slug로 찾는다. 카드 묶음마다 "이 분류가
@@ -317,7 +317,7 @@ type DeckCard struct {
 // 더해주면 된다.
 type childDeck struct{}
 
-func (childDeck) cards(_ *Server, _ Category, basePath string, children []Category) ([]DeckCard, error) {
+func (childDeck) cards(_ *store, _ Category, basePath string, children []Category) ([]DeckCard, error) {
 	if len(children) == 0 {
 		return nil, nil
 	}
@@ -348,8 +348,8 @@ func (childDeck) cards(_ *Server, _ Category, basePath string, children []Catego
 // 누른 곳과 화면에 나오는 것이 같아진다.
 type languageDeck struct{}
 
-func (languageDeck) cards(s *Server, cat Category, _ string, _ []Category) ([]DeckCard, error) {
-	branches, err := s.store.PathBranches(cat.ID, []string{"Language", "프로그래밍 언어"})
+func (languageDeck) cards(st *store, cat Category, _ string, _ []Category) ([]DeckCard, error) {
+	branches, err := st.PathBranches(cat.ID, []string{"Language", "프로그래밍 언어"})
 	if err != nil {
 		return nil, err
 	}
@@ -388,8 +388,8 @@ var markupArt = map[string]cardArt{
 // 네 편(텍스트·숫자와 연산·미분과 적분·선형대수)을 거느려 실제로 묶인다.
 type markupDeck struct{}
 
-func (markupDeck) cards(s *Server, cat Category, _ string, _ []Category) ([]DeckCard, error) {
-	branches, err := s.store.PathBranches(cat.ID, []string{"Language", "마크업 / 스타일링 / 표현식"})
+func (markupDeck) cards(st *store, cat Category, _ string, _ []Category) ([]DeckCard, error) {
+	branches, err := st.PathBranches(cat.ID, []string{"Language", "마크업 / 스타일링 / 표현식"})
 	if err != nil {
 		return nil, err
 	}

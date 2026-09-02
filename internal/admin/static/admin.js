@@ -260,7 +260,11 @@
             text: p.title || "(제목 없음)",
           })]),
           el("td", { class: "ad-dim", text: p.category || "—" }),
-          el("td", {}, [el("span", { class: "ad-chip st-" + p.status, text: p.status })]),
+          el("td", {}, [
+            el("span", { class: "ad-chip st-" + p.status, text: p.status }),
+          ].concat(p.visibility === "private"
+            ? [el("span", { class: "ad-chip ad-chip-private", text: "private" })]
+            : [])),
           // 본문이 비어 있는 글은 목록에서 바로 보여야 한다. 공개 화면에서
           // 제목만 뜨는 글이 지금 아홉 편 있다.
           el("td", {
@@ -531,7 +535,7 @@
     if (slug === null) {
       return loadCategories().then(function (cs) {
         if (stale(mine)) return;
-        renderEditor({ slug: "", title: "", body: "", status: "draft", sortOrder: 0 }, true, cs);
+        renderEditor({ slug: "", title: "", body: "", status: "draft", visibility: "public", sortOrder: 0 }, true, cs);
       });
     }
     Promise.all([
@@ -577,6 +581,18 @@
       config.statuses.map(function (s) {
         var o = el("option", { value: s, text: s });
         if (s === post.status) o.selected = true;
+        return o;
+      }));
+    // 공개 범위는 status와 **다른 축**이다. status는 "어디까지 썼나"고
+    // 이건 "누가 볼 수 있나"라, 한 칸에 밀어 넣으면 "draft이면서 비공개"를
+    // 적을 수 없다. 그래서 선택 상자도 나란히 둘이다.
+    var visSelect = el("select", { class: "ad-input", id: "ad-visibility" },
+      (config.visibilities || ["public", "private"]).map(function (v) {
+        var o = el("option", {
+          value: v,
+          text: v === "private" ? "private (허용된 계정만)" : "public (누구나)",
+        });
+        if (v === (post.visibility || "public")) o.selected = true;
         return o;
       }));
 
@@ -647,6 +663,7 @@
         el("div", { class: "ad-fields" }, [
           el("label", { class: "ad-field wide" }, [el("span", { text: "제목" }), titleInput]),
           el("label", { class: "ad-field" }, [el("span", { text: "상태" }), statusSelect]),
+          el("label", { class: "ad-field" }, [el("span", { text: "공개 범위" }), visSelect]),
           el("label", { class: "ad-field wide" }, [el("span", { text: "slug" }), slugInput]),
         ]),
         el("details", { class: "ad-meta" }, [
@@ -736,6 +753,7 @@
         title: titleInput.value.trim(),
         body: bodyAreaRef.value,
         status: statusSelect.value,
+        visibility: visSelect.value,
         // **rev를 반드시 같이 보낸다.** 이걸 빼면 서버가 거절한다 — 두 탭에서
         // 연 글이 서로를 조용히 지우는 것을 막는 표다.
         rev: post.rev || "",
@@ -760,7 +778,8 @@
         // "그새 바뀌었다"고 거절한다.
         var saved = r.data;
         var msg = "저장했다 · " + dateText(saved.updatedAt) +
-          (saved.status === "draft" ? " (draft라 공개 화면에는 안 보인다)" : "");
+          (saved.status === "draft" ? " (draft라 공개 화면에는 안 보인다)" : "") +
+          (saved.visibility === "private" ? " (비공개라 허용된 계정만 볼 수 있다)" : "");
         status.className = "ad-status ok";
         status.textContent = msg;
         if (isNewPost || saved.slug !== post.slug) {

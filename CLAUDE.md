@@ -1184,6 +1184,43 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
 - 돌연변이 셋(draft를 안 가림 / 한글을 인코딩 안 함 / `X-Forwarded-Proto`
   무시)을 넣어 테스트가 실제로 실패하는 것을 확인했다.
 
+### 허용된 계정만 보는 글 (2026-09-03)
+
+**`posts.visibility = 'private'`인 글은 로그인해야 보인다**(`migrations/007`).
+누구를 허용하느냐는 admin이 이미 들고 있는 `BLOG_ADMIN_LOGINS` 하나가 정한다 —
+web은 세션도 목록도 모르고 "지금 누가 들어와 있나"만 함수로 받는다(`WithEditor`).
+
+- **status와 축이 다르다.** status는 **글이 어디까지 왔나**(안 쓴 자리 /
+  아카이브 본문 / 골라 세운 글)이고 visibility는 **누가 볼 수 있나**다. 한 칸에
+  밀어 넣으면 "draft이면서 비공개"를 적을 수 없다. 그래서 `-drafts`를 켜도
+  비공개 글은 안 열린다 — 로컬 확인용 스위치 하나가 공개 규칙을 바꾸면 안 된다.
+- **`status`에 값을 더하는 길은 애초에 막혀 있다.** 거기에는 CHECK이 걸려 있고
+  SQLite는 CHECK을 ALTER로 못 고친다. 테이블을 새로 만들어 옮기는 것은
+  "삭제하는 마이그레이션은 만들지 않는다"와 정면으로 부딪힌다.
+- **판정은 여전히 `store` 한 곳이다**(`notHidden`·`hides`). 다만 draft와 달리
+  **요청마다 다르다.** 그래서 `Server`가 store를 두 벌 들고(`store`·`member`)
+  요청마다 하나를 고른다(`viewFor`). 핸들러는 맨 앞에서 `st := s.viewFor(r)`를
+  받고 그 뒤로는 예전과 같다.
+- **`WithEditor`가 없으면 아무에게도 안 보인다.** `-admin`이 없는 배포에서
+  실수로 열리는 방향이 아니라 막히는 방향으로 틀린다 — 고치기 버튼의 기본값이
+  "닫힘"인 것과 같은 규칙이다.
+- **사이트맵에는 로그인해도 안 나온다**(`s.store`를 그대로 쓴다). 크롤러에게
+  주소를 알려주는 것이 곧 공개라, 여기서 새면 목록에서 가린 것이 통째로
+  무의미해진다.
+- **본문 링크는 draft와 똑같이 글자로 푼다**(`unlinkHidden`). 줄째 지우면
+  문장이 끊기고, 링크로 두면 눌러야 없는 줄 안다.
+- **보고 있을 때 "비공개"라고 적는다**(`span.status.private`). 로그인해서 보면
+  평소와 똑같아서 다른 단서가 없다. **이 표시가 새는 자리는 아니다** — 로그인이
+  풀린 사람에게는 그 글이 통째로 404다.
+- **이관은 이 칸을 안 건드린다.** `import`도 `importgh`도 컬럼 목록에 없어서
+  재이관해도 그대로 남는다. 사람이 정하는 값이라 맞다 — GitHub 이관이 slug를
+  안 덮는 것과 같은 판단이다.
+- **`/img/{sha256}`는 여전히 어느 글이 그 그림을 쓰는지 보지 않는다.** draft
+  이미지가 해시를 알면 받아지는 것과 똑같은 구멍이고, 비공개 글의 그림도
+  마찬가지다. 여기를 막으려면 이미지마다 쓰는 글을 세야 한다.
+- 돌연변이 셋(`notHidden`이 visibility를 무시 / `viewFor`가 늘 member /
+  `hides`가 visibility를 무시)을 넣어 테스트가 실제로 실패하는 것을 확인했다.
+
 ### 없는 길과 터진 요청 (2026-08-24)
 
 **404와 500도 이 사이트의 화면으로 나간다** (`internal/web/errorpage.go`,
@@ -1253,6 +1290,10 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
 | `draft` | 아직 안 쓴 자리 | 숨긴다 |
 | `unlisted` | 아카이브 본문 | 보인다 |
 | `published` | 골라 앞에 세운 글 | 보인다 + 나중에 홈에 |
+
+**status와 나란히 `visibility`가 있다**(2026-09-03, `migrations/007`). 그건
+"어디까지 썼나"가 아니라 **"누가 볼 수 있나"**라 축이 다르다 — 위
+"허용된 계정만 보는 글" 참고.
 
 - **"published만 보여준다"가 아니다.** 그렇게 두면 published가 0건이라 사이트가
   텅 빈다. 이 사이트의 실체는 `unlisted` 990편이고, `published`는 나중에 홈을
@@ -2854,6 +2895,12 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
   데이터베이스를 가리키는 3곳(posts에 행이 없다)만 남은 것을 확인했다.
 
 **2026-09-03에 한 것**
+
+- **허용된 계정만 보는 글을 만들었다**(`migrations/007`의 `posts.visibility`).
+  status에 값을 더할 수 없어서(CHECK) 축을 하나 더 뒀고, 그게 오히려 맞다 —
+  "draft이면서 비공개"를 적을 수 있다. 판정은 `store`에 그대로 두되 요청마다
+  갈리므로 `Server`가 store를 두 벌 들고 고른다(`viewFor`). admin 편집기와
+  글 화면의 바로 고치기 양쪽에 선택 상자를 놓았다. 위 "허용된 계정만 보는 글" 참고.
 
 - **`Projects` 한 분류를 where42와 심심조각으로 찢었다.** 노션이 서로 다른 두
   서비스의 코드 분석을 절 두 개로 한 글에 담고 있었고, 프로젝트 카드가 그

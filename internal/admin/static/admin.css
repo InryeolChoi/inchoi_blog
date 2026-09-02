@@ -84,6 +84,9 @@ body.admin > * { max-width: none; }
 /* draft만 눈에 띄게 한다 — 공개 화면에서 숨겨지는 것이 그것뿐이다. */
 .ad-chip.st-draft { color: #8a5a00; background: var(--mark-bg); border-color: var(--line-mid); }
 .ad-chip.st-published { color: var(--badge-fg); background: var(--badge-bg); border-color: var(--badge-line); }
+/* 비공개는 status가 아니라 다른 축이다. 색이 아니라 테두리로 말한다 —
+   이 목록에서 색은 이미 status가 쓰고 있다. */
+.ad-chip.ad-chip-private { margin-left: .3rem; border-style: dashed; border-color: var(--ink); }
 
 .ad-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
 .ad-table th, .ad-table td {

@@ -19,14 +19,17 @@ type store struct{ db *sql.DB }
 // PostRow는 목록에 한 줄로 찍을 글이다. 본문은 안 싣는다 — 1,356편의 본문을
 // 다 실으면 목록 한 번에 수십 MB가 나간다.
 type PostRow struct {
-	ID        int64      `json:"id"`
-	Slug      string     `json:"slug"`
-	Title     string     `json:"title"`
-	Status    string     `json:"status"`
-	Category  string     `json:"category"`
-	BodyBytes int        `json:"bodyBytes"`
-	UpdatedAt *time.Time `json:"updatedAt"`
-	CreatedAt *time.Time `json:"createdAt"`
+	ID     int64  `json:"id"`
+	Slug   string `json:"slug"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+	// Visibility는 누가 볼 수 있나다(migrations/007). status와 축이 다르다 —
+	// 이건 "어디까지 썼나"가 아니라 "허용된 계정만 볼 것인가"다.
+	Visibility string     `json:"visibility"`
+	Category   string     `json:"category"`
+	BodyBytes  int        `json:"bodyBytes"`
+	UpdatedAt  *time.Time `json:"updatedAt"`
+	CreatedAt  *time.Time `json:"createdAt"`
 }
 
 // PostDetail은 편집 폼을 채울 글 하나다.
@@ -81,6 +84,27 @@ type CategoryRow struct {
 //	published 골라 앞에 세운 글   — 보인다 (+ 나중에 홈에)
 var Statuses = []string{"draft", "unlisted", "published"}
 
+// Visibilities는 visibility가 가질 수 있는 값이다.
+//
+//	public  누구나 본다 (기본값)
+//	private **허용된 GitHub 계정으로 로그인해야 보인다**
+//
+// 스키마에 CHECK이 없다(migrations/007). 값이 늘어날 수 있는 칸이라 검증은
+// 여기서 한다 — `posts.source`와 같은 판단이다.
+var Visibilities = []string{"public", "private"}
+
+// validVisibility는 사람이 보낸 값이 표에 있는지 본다. **모르는 값은 거절한다** —
+// 오타 하나가 `visibility = "prvate"`로 들어가면 그 글은 비공개가 아니라
+// **아무 조건에도 안 걸리는 공개 글**이 된다.
+func validVisibility(v string) bool {
+	for _, ok := range Visibilities {
+		if v == ok {
+			return true
+		}
+	}
+	return false
+}
+
 func nullTime(t sql.NullTime) *time.Time {
 	if !t.Valid {
 		return nil
@@ -94,7 +118,7 @@ func nullTime(t sql.NullTime) *time.Time {
 // 1,356행을 한 번에 JSON으로 말면 브라우저가 목록을 그리기 전에 멈춘다.
 func (s *store) listPosts(limit int) ([]PostRow, error) {
 	rows, err := s.db.Query(`
-		SELECT p.id, p.slug, p.title, p.status,
+		SELECT p.id, p.slug, p.title, p.status, p.visibility,
 		       coalesce(c.name, ''), length(p.body),
 		       p.updated_at, p.original_created_at
 		FROM posts p
@@ -110,7 +134,7 @@ func (s *store) listPosts(limit int) ([]PostRow, error) {
 	for rows.Next() {
 		var p PostRow
 		var updated, created sql.NullTime
-		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Status,
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Status, &p.Visibility,
 			&p.Category, &p.BodyBytes, &updated, &created); err != nil {
 			return nil, err
 		}
@@ -127,7 +151,7 @@ func (s *store) postBySlug(slug string) (*PostDetail, error) {
 	var notionID sql.NullString
 	var categoryID, parentID sql.NullInt64
 	err := s.db.QueryRow(`
-		SELECT p.id, p.slug, p.title, p.status,
+		SELECT p.id, p.slug, p.title, p.status, p.visibility,
 		       coalesce(c.name, ''), length(p.body),
 		       p.updated_at, p.original_created_at, p.body,
 		       cast(p.updated_at AS TEXT),
@@ -138,7 +162,7 @@ func (s *store) postBySlug(slug string) (*PostDetail, error) {
 		LEFT JOIN categories c ON c.id = p.category_id
 		LEFT JOIN posts pp ON pp.id = p.parent_id
 		WHERE p.slug = ?`, slug).
-		Scan(&p.ID, &p.Slug, &p.Title, &p.Status,
+		Scan(&p.ID, &p.Slug, &p.Title, &p.Status, &p.Visibility,
 			&p.Category, &p.BodyBytes, &updated, &created, &p.Body,
 			&p.Rev, &p.Source, &notionID,
 			&categoryID, &parentID, &p.SortOrder, &published,

@@ -34,12 +34,15 @@ type Category struct {
 
 // PostSummary는 목록에 보여줄 글 한 줄이다.
 type PostSummary struct {
-	ID        int64
-	ParentID  sql.NullInt64
-	Slug      string
-	Title     string
-	Status    string
-	SortOrder int
+	ID       int64
+	ParentID sql.NullInt64
+	Slug     string
+	Title    string
+	Status   string
+	// Visibility는 누가 볼 수 있나다(`public` 또는 `private`, migrations/007).
+	// status와 축이 다르다 — draft이면서 비공개인 글이 있을 수 있다.
+	Visibility string
+	SortOrder  int
 	// CreatedAt은 노션 원본의 작성일이다(이관 시점이 아니다).
 	// sort_order가 이 값에서 나온 목록이 많아서, 순서가 이상해 보일 때
 	// 근거를 눈으로 확인할 수 있게 목록에 같이 찍는다.
@@ -73,12 +76,15 @@ func (p PostSummary) Date() string {
 
 // Post는 글 상세다.
 type Post struct {
-	ID           int64
-	ParentID     sql.NullInt64
-	Slug         string
-	Title        string
-	Body         string
-	Status       string
+	ID       int64
+	ParentID sql.NullInt64
+	Slug     string
+	Title    string
+	Body     string
+	Status   string
+	// Visibility는 누가 볼 수 있나다(migrations/007). 여기까지 온 글은 이미
+	// notHidden을 지났으니 `private`이면 **허용된 계정이 보고 있는 것**이다.
+	Visibility   string
 	OriginalPath sql.NullString
 	CreatedAt    sql.NullTime
 	// NotionPageID는 이 글이 노션에서 왔으면 그 페이지 id다(GitHub이나 admin에서
@@ -119,15 +125,45 @@ type PathBranch struct {
 type store struct {
 	db         *sql.DB
 	showDrafts bool
+	// showPrivate는 **허용된 계정이 들어와 있다**는 뜻이다(migrations/007).
+	//
+	// showDrafts와 달리 이것은 서버 전체의 스위치가 아니라 **요청마다 다르다.**
+	// 그래서 Server가 store를 두 벌 들고 있고 요청마다 하나를 고른다
+	// (`Server.viewFor`). 판정 자체는 여전히 여기 한 곳이다.
+	showPrivate bool
 }
 
 // hidden은 "이 글은 남에게 안 보인다"를 판정하는 SQL 조각이다.
 // alias는 posts 테이블의 별칭이다. 보이는 것만 원하면 notHidden을 쓴다.
+//
+// **두 축을 함께 본다.** status는 글이 어디까지 왔나이고 visibility는 누가 볼
+// 수 있나라, 둘이 서로를 덮지 않는다 — `-drafts`로 draft를 보고 있어도 비공개
+// 글은 로그인해야 보인다.
 func (s *store) notHidden(alias string) string {
-	if s.showDrafts {
+	parts := make([]string, 0, 2)
+	if !s.showDrafts {
+		parts = append(parts, alias+`.status <> 'draft'`)
+	}
+	if !s.showPrivate {
+		parts = append(parts, alias+`.visibility <> 'private'`)
+	}
+	if len(parts) == 0 {
 		return "1=1"
 	}
-	return alias + `.status <> 'draft'`
+	return strings.Join(parts, " AND ")
+}
+
+// hides는 notHidden과 **같은 판정을 Go에서** 한 것이다. 목록을 뽑은 뒤에
+// 거르는 자리가 둘 있어서(글 요약, 인라인 데이터베이스 행) 그 둘이 SQL과
+// 갈라지지 않게 한 곳에서 답한다.
+func (s *store) hides(p PostSummary) bool {
+	if !s.showDrafts && p.Status == "draft" {
+		return true
+	}
+	if !s.showPrivate && p.Visibility == "private" {
+		return true
+	}
+	return false
 }
 
 // subtreePostCount는 카테고리와 그 하위 전체의 **보이는** 글 수를 세는 SQL 조각이다.
@@ -243,7 +279,7 @@ func (s *store) CategoryBySlug(slug string, parentID sql.NullInt64) (*Category, 
 }
 
 // postColumns는 목록 한 줄에 필요한 컬럼이다.
-const postColumns = `p.id, p.parent_id, p.slug, p.title, p.status, p.sort_order,
+const postColumns = `p.id, p.parent_id, p.slug, p.title, p.status, p.visibility, p.sort_order,
 	       p.original_created_at, p.sort_order_manual, p.original_path`
 
 func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
@@ -251,7 +287,7 @@ func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 	var out []PostSummary
 	for rows.Next() {
 		var p PostSummary
-		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
+		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status, &p.Visibility,
 			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &p.OriginalPath); err != nil {
 			return nil, fmt.Errorf("글 스캔: %w", err)
 		}
@@ -630,7 +666,7 @@ func (s *store) PostAncestors(postID int64) ([]PostSummary, error) {
 	for rows.Next() {
 		var p PostSummary
 		var depth int
-		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
+		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status, &p.Visibility,
 			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &p.OriginalPath, &depth); err != nil {
 			return nil, fmt.Errorf("상위 글 스캔: %w", err)
 		}
@@ -644,9 +680,9 @@ func (s *store) PostBySlug(slug string) (*Post, error) {
 	var p Post
 	var categoryID sql.NullInt64
 	err := s.db.QueryRow(`
-		SELECT id, parent_id, slug, title, body, status, original_path, original_created_at, category_id, notion_page_id
+		SELECT id, parent_id, slug, title, body, status, visibility, original_path, original_created_at, category_id, notion_page_id
 		FROM posts p WHERE p.slug = ? AND `+s.notHidden("p")+``, slug).
-		Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Body, &p.Status,
+		Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Body, &p.Status, &p.Visibility,
 			&p.OriginalPath, &p.CreatedAt, &categoryID, &p.NotionPageID)
 	switch {
 	case err == sql.ErrNoRows:
@@ -745,7 +781,7 @@ func (s *store) PostSummariesBySlug(slugs []string) (map[string]PostSummary, err
 	}
 	out := make(map[string]PostSummary, len(list))
 	for _, p := range list {
-		p.Hidden = !s.showDrafts && p.Status == "draft"
+		p.Hidden = s.hides(p)
 		out[p.Slug] = p
 	}
 	return out, nil
@@ -781,7 +817,7 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 	grouped := map[string][]PostSummary{}
 	for rows.Next() {
 		var p PostSummary
-		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status,
+		if err := rows.Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Status, &p.Visibility,
 			&p.SortOrder, &p.CreatedAt, &p.ManualOrder, &p.OriginalPath); err != nil {
 			return nil, fmt.Errorf("인라인 데이터베이스 스캔: %w", err)
 		}
@@ -807,7 +843,7 @@ func (s *store) InlineDBGroups(ownerPath string) (map[string][]PostSummary, erro
 		// 조회하는 쪽에서 ok는 참이고 len이 0이라 그 둘이 구별된다.
 		visible := make([]PostSummary, 0, len(list))
 		for _, p := range list {
-			if !s.showDrafts && p.Status == "draft" {
+			if s.hides(p) {
 				continue
 			}
 			visible = append(visible, p)

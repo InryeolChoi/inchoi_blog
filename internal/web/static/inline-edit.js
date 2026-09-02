@@ -95,8 +95,18 @@
         return o;
       }));
 
+    // 공개 범위도 여기서 바꾼다. 되돌려 보내기만 하면 되지만(PUT은 통째로
+    // 바꾸기다) **이 글이 지금 비공개라는 것을 화면이 말해줘야 한다** —
+    // 로그인해서 보고 있으면 평소와 똑같이 보이므로 다른 단서가 없다.
+    var visSel = el("select", { class: "edit-status" },
+      ["public", "private"].map(function (v) {
+        var o = el("option", { value: v, text: v === "private" ? "🔒 private" : "public" });
+        if (v === (post.visibility || "public")) o.selected = true;
+        return o;
+      }));
+
     var bar = el("div", { class: "edit-bar" }, [
-      titleInput, statusSel, note,
+      titleInput, statusSel, visSel, note,
       el("span", { class: "edit-spacer" }),
       el("a", { class: "edit-more", href: "/admin/edit/" + encodeURIComponent(slug),
         text: "자세히 ↗" }),
@@ -163,7 +173,7 @@
       note.textContent = "저장하는 중…";
       api("PUT", "/api/admin/posts/" + encodeURIComponent(slug), {
         slug: post.slug, title: titleInput.value.trim(), body: area.value,
-        status: statusSel.value, rev: post.rev || "",
+        status: statusSel.value, visibility: visSel.value, rev: post.rev || "",
         // **여기서는 메타를 건드리지 않는다.** PUT은 통째로 바꾸기라 안 보낸
         // 칸은 비워지므로, 지금 값을 그대로 되돌려 보낸다. 분류나 계층을
         // 옮기는 것은 "자세히"로 가서 할 일이다.

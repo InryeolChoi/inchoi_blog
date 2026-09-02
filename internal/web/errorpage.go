@@ -61,7 +61,7 @@ func (s *Server) renderError(w http.ResponseWriter, r *http.Request, status int)
 	}
 
 	data := pageData{Title: fmt.Sprintf("%d · 열렬히.뛰기", info.Code), Err: &info}
-	if nav, err := s.store.NavTree(); err == nil {
+	if nav, err := s.viewFor(r).NavTree(); err == nil {
 		markNav(nav, nil, 0)
 		data.Nav = nav
 		for _, c := range nav {

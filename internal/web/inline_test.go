@@ -108,7 +108,7 @@ func inlineFixture(t *testing.T) (*Server, http.Handler) {
 func TestResolveBodyFillsPlaceholder(t *testing.T) {
 	srv, _ := inlineFixture(t)
 
-	out, fix, err := srv.resolveBody("[페이지 링크](/p/r-tips)", "수학 & 통계 > 탐색적 자료분석")
+	out, fix, err := srv.store.resolveBody("[페이지 링크](/p/r-tips)", "수학 & 통계 > 탐색적 자료분석")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestResolveBodyKeepsPlaceholderWhenTargetMissing(t *testing.T) {
 	srv, _ := inlineFixture(t)
 
 	body := "[페이지 링크](/p/없는글)"
-	out, fix, err := srv.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
+	out, fix, err := srv.store.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestResolveBodyLeavesPlainTextAlone(t *testing.T) {
 	srv, _ := inlineFixture(t)
 
 	body := "‘정보활용 거부 페이지 링크’ 를 제공하여 [R](/p/r-tips) 처럼 쓴다"
-	out, fix, err := srv.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
+	out, fix, err := srv.store.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestEscapeLinkTextGuardsBrackets(t *testing.T) {
 func TestResolveBodyExpandsInlineDB(t *testing.T) {
 	srv, _ := inlineFixture(t)
 
-	out, fix, err := srv.resolveBody("[탐색적 자료분석 : 목차](/p/db-0001)", "수학 & 통계 > 탐색적 자료분석")
+	out, fix, err := srv.store.resolveBody("[탐색적 자료분석 : 목차](/p/db-0001)", "수학 & 통계 > 탐색적 자료분석")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestResolveBodyExpandsSameDBOnce(t *testing.T) {
 	srv, _ := inlineFixture(t)
 
 	body := "[탐색적 자료분석 : 목차](/p/db-0001)\n\n[탐색적 자료분석 : 목차](/p/db-0002)"
-	out, fix, err := srv.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
+	out, fix, err := srv.store.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestResolveBodyKeepsUnmatchedDeadLink(t *testing.T) {
 	srv, _ := inlineFixture(t)
 
 	body := "[Untitled](/p/db-9999)"
-	out, fix, err := srv.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
+	out, fix, err := srv.store.resolveBody(body, "수학 & 통계 > 탐색적 자료분석")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestResolveBodyWithoutOriginalPath(t *testing.T) {
 	srv, _ := inlineFixture(t)
 
 	body := "[목차](/p/db-0001)"
-	out, fix, err := srv.resolveBody(body, "")
+	out, fix, err := srv.store.resolveBody(body, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestDropCoveredChildrenRemovesFullyShown(t *testing.T) {
 		t.Fatalf("하위 분류가 %d개다", len(children))
 	}
 
-	got, err := srv.dropCoveredChildren(children, map[string]bool{"row-1": true, "row-2": true})
+	got, err := srv.store.dropCoveredChildren(children, map[string]bool{"row-1": true, "row-2": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +386,7 @@ func TestDropCoveredChildrenKeepsPartiallyShown(t *testing.T) {
 	exec(`UPDATE posts SET category_id = 2 WHERE slug IN ('row-1', 'row-2')`)
 
 	children, _ := srv.store.ChildCategories(1)
-	got, err := srv.dropCoveredChildren(children, map[string]bool{"row-1": true})
+	got, err := srv.store.dropCoveredChildren(children, map[string]bool{"row-1": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ func TestDropCoveredChildrenLeavesEmptyCategories(t *testing.T) {
 		t.Fatal(err)
 	}
 	children, _ := srv.store.ChildCategories(1)
-	got, err := srv.dropCoveredChildren(children, map[string]bool{"row-1": true, "row-2": true})
+	got, err := srv.store.dropCoveredChildren(children, map[string]bool{"row-1": true, "row-2": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +473,7 @@ func TestOutlineUsesResolvedBody(t *testing.T) {
 	if err != nil || post == nil {
 		t.Fatalf("PostBySlug: %v", err)
 	}
-	rendered, err := srv.renderPostBody(post)
+	rendered, err := srv.renderPostBody(srv.store, post)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -802,7 +802,7 @@ func TestHiddenLinkIsNotMistakenForInlineDB(t *testing.T) {
 	if err != nil || post == nil {
 		t.Fatalf("PostBySlug: %v", err)
 	}
-	_, fix, err := srv.resolveBody(post.Body, post.OriginalPath.String)
+	_, fix, err := srv.store.resolveBody(post.Body, post.OriginalPath.String)
 	if err != nil {
 		t.Fatalf("resolveBody: %v", err)
 	}
