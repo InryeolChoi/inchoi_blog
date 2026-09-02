@@ -313,9 +313,16 @@ func TestMetadataEditsHaveNoDuplicates(t *testing.T) {
 		}
 		seen[edit.NotionPageID] = edit.Title
 	}
-	if got, want := len(PostMetadataEdits),
-		len(linearAlgebraMetadataEdits)+len(multivariateCodeOrderEdits)+len(optimizationPracticeOrderEdits); got != want {
-		t.Errorf("합친 표가 %d건이다, want %d", got, want)
+	// **묶음 하나하나를 세지 않는다.** 새 묶음을 더할 때마다 이 줄을 같이
+	// 고쳐야 하면 언젠가 빠뜨리고, 그때 깨지는 것은 이 테스트가 지키려던
+	// 것(중복 없음)이 아니라 덧셈식이다. 여기서 지킬 것은 **합친 표가 묶음의
+	// 합과 같다**이므로 그것만 본다.
+	sum := 0
+	for _, g := range metadataGroups() {
+		sum += len(g.edits)
+	}
+	if got := len(PostMetadataEdits); got != sum {
+		t.Errorf("합친 표가 %d건이다, 묶음 합은 %d건", got, sum)
 	}
 }
 

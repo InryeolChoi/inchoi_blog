@@ -373,6 +373,26 @@ var optimizationPracticeOrderEdits = []PostMetadataEdit{
 	{NotionPageID: "eedb3add-e5e1-4b8a-a1d3-41bc80e00162", OriginalTitle: "심플렉스와 n분위수", Title: "심플렉스와 n분위수", SortOrder: 4},
 }
 
+// graphAlgorithmOrderEdits는 `알고리즘 : 그래프 (심화)` 일곱 편의 **화면
+// 순서만** 사람이 정한다(2026-09-02). 제목과 작성일은 원본 그대로다.
+//
+// 일곱 편 모두 제목에 앞 번호가 없어 이름 자연 정렬로 서 있었다 —
+// BFS · DFS · 그래프 탐색 유형 · 다익스트라 · 백트래킹 · 연결 요소. 그러면
+// **DFS/BFS의 응용인 `연결 요소`와 `백트래킹`이 가중치 그래프 알고리즘인
+// `다익스트라`보다 뒤에** 온다. 배우는 차례와 어긋난다.
+//
+// 기초(DFS·BFS) → 그 둘로 푸는 문제 유형 → 응용(연결 요소·백트래킹) →
+// 가중치 그래프 → 다익스트라 순으로 다시 세운다.
+var graphAlgorithmOrderEdits = []PostMetadataEdit{
+	{NotionPageID: "05bbcd19-a3c5-4901-8ac6-d8c1061207cc", OriginalTitle: "DFS: 깊이 우선 탐색", Title: "DFS: 깊이 우선 탐색", SortOrder: 0},
+	{NotionPageID: "c9a588c1-d98a-430b-92e2-ececa30c7e77", OriginalTitle: "BFS: 너비 우선 탐색", Title: "BFS: 너비 우선 탐색", SortOrder: 1},
+	{NotionPageID: "3bc18a6c-1108-4996-abc7-8bee7262a80f", OriginalTitle: "그래프 탐색 유형", Title: "그래프 탐색 유형", SortOrder: 2},
+	{NotionPageID: "79d7bd37-3128-49aa-b225-16b6e3e40229", OriginalTitle: "연결 요소", Title: "연결 요소", SortOrder: 3},
+	{NotionPageID: "a9a4cdb3-555c-4ee6-9750-8d3b5151cdee", OriginalTitle: "백트래킹(backtracking)", Title: "백트래킹(backtracking)", SortOrder: 4},
+	{NotionPageID: "57fc8387-caff-4b32-a6c3-7ec5723e9e21", OriginalTitle: "가중치 그래프", Title: "가중치 그래프", SortOrder: 5},
+	{NotionPageID: "0f4a0c87-a897-4a6e-9b24-bc172f8aa0a0", OriginalTitle: "다익스트라 알고리즘", Title: "다익스트라 알고리즘", SortOrder: 6},
+}
+
 // multivariateCodeOrderEdits는 `다변량분석 : 코드` 인라인 데이터베이스 12편의
 // **화면 순서만** 노션 원본과 같게 고정한다. 제목과 작성일은 원본 그대로다 —
 // Title은 OriginalTitle과 같고 OriginalCreatedAt는 비워서 노션 날짜를 유지한다.
@@ -403,11 +423,20 @@ var multivariateCodeOrderEdits = []PostMetadataEdit{
 // **import가 DB에 넣기 직전에 적용하고 sortorder(-only all)가 같은 표로 덮는다.**
 // 웹은 이 표를 모른다 — DB의 sort_order를 읽을 뿐이라, 표를 고친 뒤에는
 // 파이프라인을 다시 돌려야 화면이 바뀐다.
-var PostMetadataEdits = concatMetadataEdits(
-	metadataGroup{"linear-algebra", linearAlgebraMetadataEdits},
-	metadataGroup{"multivariate-code", multivariateCodeOrderEdits},
-	metadataGroup{"optimization-practice", optimizationPracticeOrderEdits},
-)
+var PostMetadataEdits = concatMetadataEdits(metadataGroups()...)
+
+// metadataGroups는 사람이 순서를 정한 묶음들이다. **묶음 목록을 함수로 두는
+// 이유는 테스트가 같은 목록을 볼 수 있게 하기 위해서다** — 예전에는 테스트가
+// 묶음 이름을 하나하나 더한 덧셈식을 들고 있어서, 묶음을 더할 때마다 거기도
+// 같이 고쳐야 했다.
+func metadataGroups() []metadataGroup {
+	return []metadataGroup{
+		{"linear-algebra", linearAlgebraMetadataEdits},
+		{"multivariate-code", multivariateCodeOrderEdits},
+		{"optimization-practice", optimizationPracticeOrderEdits},
+		{"graph-algorithms", graphAlgorithmOrderEdits},
+	}
+}
 
 // metadataGroup은 이름 하나와 그 묶음의 글들이다.
 type metadataGroup struct {
@@ -529,6 +558,12 @@ var StatusEdits = []StatusEdit{
 		Status:       "unlisted",
 		Title:        "HTTP 완벽 가이드",
 		Why:          "HTTP 완벽 가이드 분류의 표지 글이다. 같은 이유로 보이는 글이어야 한다",
+	},
+	{
+		NotionPageID: "57fc8387-caff-4b32-a6c3-7ec5723e9e21",
+		Status:       "unlisted",
+		Title:        "가중치 그래프",
+		Why:          "본문이 한 줄뿐이라 draft였다. 내용을 채웠으므로 공개한다",
 	},
 }
 
