@@ -1309,7 +1309,9 @@ type BodyEdit struct {
 	Why     string
 }
 
-var BodyEdits = []BodyEdit{
+// baseBodyEdits는 글 하나짜리 손질을 모아둔 기본 표다. 최종 `BodyEdits`는
+// body_edits.go가 이 표와 글별 표들을 합쳐서 만든다 — `BodyAppends`와 같은 꼴이다.
+var baseBodyEdits = []BodyEdit{
 	{
 		NotionPageID: "660e3d79-427d-40f7-b98a-6f8be0a5f787",
 		Remove:       "[수업 : 통수 & 선계](/p/5f629e77-097e-40c4-a7d8-bbaa492c782f)",

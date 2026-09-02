@@ -631,6 +631,35 @@ func TestKeepsSingleLinkAsText(t *testing.T) {
 	}
 }
 
+// TestBoxesSingleLinkThatFillsItsSection은 **절의 내용이 링크 하나뿐이면**
+// 그것도 상자로 묶는지 본다.
+//
+// 이게 없으면 같은 표지 글 안에서 두 칸짜리 절은 상자인데 한 칸짜리 절은
+// 맨 링크로 나온다. 같은 구조가 같아 보이지 않으면 읽는 사람이 그 차이를
+// 뜻으로 읽는다 — `확률분포 정리`의 `다변량, 이산형 분포`가 그랬다.
+func TestBoxesSingleLinkThatFillsItsSection(t *testing.T) {
+	// 뒤가 글의 끝인 경우.
+	body := "### 다변량, 이산형 분포\n\n[다항분포](/p/row-1)\n"
+	got, n := groupLinkRuns(body, nil)
+	if n != 1 {
+		t.Errorf("절을 통째로 채운 링크 하나를 안 묶었다:\n%s", got)
+	}
+
+	// 뒤가 다음 제목인 경우.
+	body2 := "## 가\n\n[하나](/p/row-1)\n\n## 나\n\n본문\n"
+	got2, n2 := groupLinkRuns(body2, nil)
+	if n2 != 1 {
+		t.Errorf("다음 제목 앞까지가 링크 하나뿐인데 안 묶었다:\n%s", got2)
+	}
+
+	// 앞에 산문이 있으면 그건 문장 사이의 링크다.
+	body3 := "## 가\n\n앞말이 있다.\n\n[하나](/p/row-1)\n"
+	got3, n3 := groupLinkRuns(body3, nil)
+	if n3 != 0 {
+		t.Errorf("산문 뒤의 링크 하나를 묶었다:\n%s", got3)
+	}
+}
+
 // TestKeepsLinksInsideListItems는 목록 항목 안의 링크는 안 묶는지 본다.
 func TestKeepsLinksInsideListItems(t *testing.T) {
 	body := "- [가](/p/row-1)\n- [나](/p/row-2)\n"

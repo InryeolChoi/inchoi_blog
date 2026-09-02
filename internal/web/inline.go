@@ -325,7 +325,18 @@ func groupLinkRuns(body string, metas map[string]PostSummary) (string, int) {
 			}
 			break
 		}
-		if len(rows) < 2 {
+		// **하나짜리는 그 절의 내용이 그것뿐일 때만 묶는다** (2026-09-02).
+		//
+		// 원래는 둘 이상만 묶었다. 근거는 "하나짜리는 목록이 아니라 문장
+		// 사이의 링크다"였고 대체로 옳다 — 63개 중 36개가 실제로 그렇다.
+		// 그런데 나머지 27개는 제목 바로 아래에 링크 하나만 있고 다음
+		// 제목까지 아무것도 없는 자리다. 그건 **항목이 하나뿐인 목록**이지
+		// 문장 사이의 링크가 아니다.
+		//
+		// 실제로 `확률분포 정리` 표지에서 `다변량, 연속형 분포`는 상자인데
+		// 바로 아래 `다변량, 이산형 분포`는 맨 링크 하나로 나왔다. 같은
+		// 구조가 같아 보이지 않으면 읽는 사람이 그 차이를 뜻으로 읽는다.
+		if len(rows) < 2 && !isWholeSection(lines, i, j) {
 			out = append(out, lines[i])
 			i++
 			continue
@@ -342,4 +353,27 @@ func groupLinkRuns(body string, metas map[string]PostSummary) (string, int) {
 		i = j
 	}
 	return strings.Join(out, "\n"), grouped
+}
+
+// mdHeading은 마크다운 제목 줄이다.
+var mdHeading = regexp.MustCompile(`^#{1,6}\s`)
+
+// isWholeSection은 lines[i:j]의 링크 묶음이 **한 절의 내용 전부**인지 본다.
+// 바로 앞의 빈 줄 아닌 줄이 제목이고, 바로 뒤가 제목이거나 글의 끝이면 그렇다.
+//
+// 이 검사가 가르는 것은 "항목 하나짜리 목록"과 "문장 사이의 링크"다. 앞뒤에
+// 산문이 있으면 그건 문장의 일부라 상자로 감싸면 글이 끊긴다.
+func isWholeSection(lines []string, i, j int) bool {
+	a := i - 1
+	for a >= 0 && strings.TrimSpace(lines[a]) == "" {
+		a--
+	}
+	if a < 0 || !mdHeading.MatchString(strings.TrimSpace(lines[a])) {
+		return false
+	}
+	b := j
+	for b < len(lines) && strings.TrimSpace(lines[b]) == "" {
+		b++
+	}
+	return b >= len(lines) || mdHeading.MatchString(strings.TrimSpace(lines[b]))
 }
