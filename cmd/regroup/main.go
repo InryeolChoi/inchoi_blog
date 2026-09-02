@@ -317,6 +317,35 @@ type catalog struct {
 	byName   map[string]*category
 	bySlug   map[string]*category
 	bySource map[string]*category // source_name = 경로에서 온 이름 (사람이 안 바꾼다)
+	byID     map[int64]*category
+}
+
+// isMidLevel은 이 분류가 **2단계**인지 본다. 부모가 있고 그 부모가 최상위면
+// 2단계다. `Moves`가 노션에서 온 분류를 부모로 받아줄 때 이걸 확인한다 —
+// 3단계가 끝이라 그 밑에 하나를 더 매다는 것이 마지막 칸이다.
+func (c catalog) isMidLevel(cat *category) bool {
+	if cat == nil || !cat.parentID.Valid {
+		return false
+	}
+	parent, ok := c.byID[cat.parentID.Int64]
+	return ok && !parent.parentID.Valid
+}
+
+// moveTarget은 `Moves`의 ToSlug가 가리키는 부모를 찾는다.
+//
+// 세 자리를 본다: 사람이 만든 최상위(groups), 사람이 둔 중간 층(subs),
+// 그리고 **노션에서 온 2단계 분류**다. 마지막 것을 받아주는 이유는 `topics`와
+// 같다 — `개발 > tooling` 밑에 `클라우드 탐구생활`을 매다는 자리가 실제로
+// 생겼고, 그 부모는 groups가 만든 것이 아니라 노션에서 온 분류다.
+//
+// **2단계가 아니면 안 받는다.** 최상위면 groups/subs 쪽에서 이미 잡히고,
+// 3단계면 그 밑이 4단계가 된다.
+func (c catalog) moveTarget(slug string) (*category, bool) {
+	cat, ok := c.bySlug[slug]
+	if !ok || !c.isMidLevel(cat) {
+		return nil, false
+	}
+	return cat, true
 }
 
 // member는 배정표의 이름으로 실제 카테고리를 찾는다.
@@ -377,6 +406,7 @@ func loadCategories(sqlDB *sql.DB) (*catalog, error) {
 		byName:   map[string]*category{},
 		bySlug:   map[string]*category{},
 		bySource: map[string]*category{},
+		byID:     map[int64]*category{},
 	}
 	for rows.Next() {
 		var c category
@@ -386,6 +416,7 @@ func loadCategories(sqlDB *sql.DB) (*catalog, error) {
 		}
 		row := c
 		cat.bySlug[row.slug] = &row
+		cat.byID[row.id] = &row
 		if row.sourceName.Valid {
 			cat.bySource[row.sourceName.String] = &row
 		}
@@ -485,14 +516,22 @@ func checkPlan(cat *catalog) error {
 		if !ok {
 			return fmt.Errorf("옮기려는 카테고리가 없다: source_name %q", mv.SourceName)
 		}
-		if !newSlugs[mv.ToSlug] {
-			return fmt.Errorf("%q의 새 부모 %q가 우리가 만든 분류가 아니다", mv.SourceName, mv.ToSlug)
+		mid, toMid := cat.moveTarget(mv.ToSlug)
+		if !newSlugs[mv.ToSlug] && !toMid {
+			return fmt.Errorf("%q의 새 부모 %q가 우리가 만든 분류도, 노션에서 온 2단계 분류도 아니다",
+				mv.SourceName, mv.ToSlug)
 		}
 		// DB에 아직 없어도 된다. newSlugs에 있으면 **이번 실행이 만드는 분류**라
 		// 옮기기 전에 생긴다(1a·1b가 3보다 먼저다). 새 층을 처음 얹는 실행이
 		// 이 검사에 걸려 멈추던 것을 고쳤다.
 		if c.grandchildren > 0 {
 			return fmt.Errorf("%q는 손자까지 있어 옮기면 4단계가 된다", mv.SourceName)
+		}
+		// **2단계 밑으로 가면 자식 하나만 있어도 4단계다.** 최상위나 사람이 둔
+		// 중간 층으로 갈 때는 손자만 보면 되지만 여기는 한 칸이 더 낮다.
+		if toMid && c.children > 0 {
+			return fmt.Errorf("%q는 자식이 %d개라 2단계인 %q 밑으로 옮기면 4단계가 된다",
+				mv.SourceName, c.children, mid.slug)
 		}
 	}
 
@@ -873,6 +912,13 @@ func applyGroups(sqlDB *sql.DB, cat *catalog) error {
 		if !ok {
 			// 사람이 둔 중간 층도 부모가 될 수 있다.
 			parentID, ok = subID[mv.ToSlug]
+		}
+		if !ok {
+			// 노션에서 온 2단계 분류도 된다. 계획 검사가 깊이를 이미 봤다.
+			var mid *category
+			if mid, ok = cat.moveTarget(mv.ToSlug); ok {
+				parentID = mid.id
+			}
 		}
 		if !ok {
 			return fmt.Errorf("%q의 새 부모 %q를 못 찾았다", mv.SourceName, mv.ToSlug)

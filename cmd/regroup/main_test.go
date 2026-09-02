@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"reflect"
 	"testing"
 
@@ -90,4 +91,47 @@ func TestIntroHasNoNotionLayerBeneathIt(t *testing.T) {
 	if !dropped {
 		t.Errorf("%q를 DropCategories에 적지 않았다. 다음 categorize가 되살린다", notionTop)
 	}
+}
+
+// moveTarget은 **2단계 분류만** 부모로 받아준다.
+//
+// 최상위는 groups/subs 쪽에서 이미 잡히고, 3단계 밑에 매달면 4단계가 된다.
+// 이 판정이 느슨해지면 002의 트리거가 대신 막아주지만, 그때 나오는 말은
+// "트리거가 거부했다"라 무엇이 잘못됐는지 알려주지 않는다.
+func TestMoveTargetTakesOnlyMidLevelCategories(t *testing.T) {
+	top := &category{id: 1, slug: "dev"}
+	mid := &category{id: 2, slug: "tooling", parentID: sql.NullInt64{Int64: 1, Valid: true}}
+	leaf := &category{id: 3, slug: "git", parentID: sql.NullInt64{Int64: 2, Valid: true}}
+	cat := catalog{
+		bySlug: map[string]*category{"dev": top, "tooling": mid, "git": leaf},
+		byID:   map[int64]*category{1: top, 2: mid, 3: leaf},
+	}
+
+	for _, tc := range []struct {
+		slug string
+		want bool
+	}{
+		{"tooling", true},
+		{"dev", false}, // 최상위
+		{"git", false}, // 3단계 — 그 밑은 4단계다
+		{"없다", false},  // 오타
+	} {
+		if _, ok := cat.moveTarget(tc.slug); ok != tc.want {
+			t.Errorf("moveTarget(%q) = %v, want %v", tc.slug, ok, tc.want)
+		}
+	}
+}
+
+// 클라우드가 실제로 tooling을 가리키는지 본다. 이 줄은 노션에서 온 2단계
+// 분류를 부모로 쓰는 **첫 자리**라, 지워지면 moveTarget이 쓰이는 곳이 없어진다.
+func TestCloudMovesUnderTooling(t *testing.T) {
+	for _, mv := range curation.Moves {
+		if mv.SourceName == "클라우드 탐구생활" {
+			if mv.ToSlug != "tooling" {
+				t.Errorf("클라우드가 %q로 간다", mv.ToSlug)
+			}
+			return
+		}
+	}
+	t.Error("클라우드 탐구생활 이동이 표에 없다")
 }

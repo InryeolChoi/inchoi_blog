@@ -24,6 +24,7 @@ var BodyEdits = concatBodyEdits(
 	likelihoodEdits,
 	mathstat1Homework6Edits,
 	projectsCoverEdits,
+	virtualizationCoverEdits,
 )
 
 // concatBodyEdits는 묶음들을 순서대로 이어 붙인다.
