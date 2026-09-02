@@ -86,4 +86,14 @@ var GitHubSources = []GitHubSource{
 			{Path: "src/main/theory/chapter19.md", Title: "모던 자바 19. 함수형 프로그래밍 기법", SortOrder: 15},
 		},
 	},
+	// 데이터베이스: `Database System Concepts` 정리. **이미지가 있는 첫 묶음이다** —
+	// 그래서 importgh에 그림 처리를 더했다(cmd/importgh/images.go).
+	{
+		Repo:         "InryeolChoi/Database-System-Concepts",
+		CategorySlug: "데이터베이스",
+		OriginalPath: "데이터베이스",
+		Docs: []GitHubDoc{
+			{Path: "PART3/chapter8.md", Title: "복합 데이터 타입", SortOrder: 0},
+		},
+	},
 }

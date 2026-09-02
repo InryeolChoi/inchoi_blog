@@ -14,8 +14,9 @@
 //
 //   - **본문을 고치지 않는다.** 딱 하나 예외가 아래 escapeBareTags다.
 //
-//   - **이미지를 받지 않는다.** 지금 대상에 이미지가 없다. 생기면 그때
-//     노션 쪽 images 처리를 그대로 가져온다.
+//   - **이미지는 받는다** (2026-09-02에 더했다, images.go). 본문의
+//     `![](./images/x.png)`를 저장소에서 받아 sha256으로 BLOB에 넣고
+//     `/img/{sha256}`으로 다시 쓴다 — 노션 이미지와 같은 표, 같은 멱등 키다.
 //
 //     go run ./cmd/importgh -db blog.db          # 미리보기 (기본)
 //     go run ./cmd/importgh -db blog.db -apply   # 반영
@@ -58,17 +59,76 @@ func main() {
 		log.Fatalf("마이그레이션: %v", err)
 	}
 
-	docs, err := fetchAll(context.Background())
+	ctx := context.Background()
+	docs, err := fetchAll(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
+	// **그림을 받은 뒤에 본문을 다시 쓴다.** sha256을 알아야 `/img/{sha256}`을
+	// 적을 수 있어서다. 미리보기에서도 받는다 — 그래야 리포트가 "몇 장을
+	// 옮기고 몇 장을 못 찾았나"를 실제 값으로 말한다.
+	images, err := fetchImages(ctx, docs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	missing := rewriteAll(docs, images)
+
 	report(docs)
+	reportImages(images, missing)
 	if !*apply {
 		fmt.Println("\n미리보기다. 실제로 넣으려면 -apply 를 붙여 다시 실행해라.")
 		return
 	}
-	if err := store(sqlDB, docs); err != nil {
+	if err := store(sqlDB, docs, images); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// fetchImages는 글들이 쓰는 그림을 저장소에서 받아온다. 같은 경로가 여러 글에
+// 나와도 한 번만 받는다.
+func fetchImages(ctx context.Context, docs []fetched) (map[string]repoImage, error) {
+	out := map[string]repoImage{}
+	for _, d := range docs {
+		for _, p := range d.images {
+			if _, ok := out[p]; ok {
+				continue
+			}
+			img, err := fetchImage(ctx, d.src, p)
+			if err != nil {
+				// **한 장이 없다고 전체를 멈추지 않는다.** 그림이 빠진 것은
+				// 글이 안 들어오는 것보다 가벼운 사고고, 아래 리포트가 어느
+				// 것을 못 받았는지 이름으로 짚어 준다.
+				fmt.Fprintf(os.Stderr, "!! 그림을 못 받았다: %v\n", err)
+				continue
+			}
+			out[p] = img
+		}
+	}
+	return out, nil
+}
+
+// rewriteAll은 받아온 그림으로 본문의 참조를 바꾼다. 못 바꾼 경로를 돌려준다.
+func rewriteAll(docs []fetched, images map[string]repoImage) []string {
+	var missing []string
+	for i := range docs {
+		body, want := rewriteImages(docs[i].body, docs[i].doc.Path, images)
+		docs[i].body = body
+		missing = append(missing, want...)
+	}
+	return missing
+}
+
+func reportImages(images map[string]repoImage, missing []string) {
+	var bytes int
+	for _, img := range images {
+		bytes += len(img.Data)
+	}
+	fmt.Printf("\n■ 그림\n  옮김 %d장 (%.1f MB)\n", len(images), float64(bytes)/(1<<20))
+	if len(missing) > 0 {
+		fmt.Printf("  **못 옮긴 참조 %d개 — 본문에 원문 그대로 남는다**\n", len(missing))
+		for _, m := range missing {
+			fmt.Printf("    %s\n", m)
+		}
 	}
 }
 
@@ -84,6 +144,11 @@ type fetched struct {
 	createdAt time.Time
 	// commits는 이 파일을 건드린 커밋 수다. 리포트에만 쓴다.
 	commits int
+	// images는 이 글이 쓰는 저장소 안 그림의 경로다. fetchAll이 모으고
+	// storeImages가 받아온다.
+	images []string
+	// bold는 짝이 안 되어 <strong>으로 바꾼 굵게 표시다. 리포트가 짚어준다.
+	bold []string
 }
 
 // fetchAll은 표에 적힌 파일을 전부 받아온다.
@@ -95,14 +160,15 @@ func fetchAll(ctx context.Context) ([]fetched, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", src.SourceRef(doc), err)
 			}
-			body, fixed := prepareBody(raw)
+			body, fixed, bold := prepareBody(raw)
 			first, n, err := firstCommit(ctx, src, doc)
 			if err != nil {
 				return nil, fmt.Errorf("%s 커밋 이력: %w", src.SourceRef(doc), err)
 			}
 			out = append(out, fetched{
-				src: src, doc: doc, body: body, fixed: fixed,
+				src: src, doc: doc, body: body, fixed: fixed, bold: bold,
 				createdAt: first, commits: n,
+				images: collectImagePaths(body, doc.Path),
 			})
 		}
 	}
@@ -222,9 +288,10 @@ func githubToken() string {
 // 한 함수로 묶은 이유는 **호출 순서와 조합 자체가 규칙**이기 때문이다.
 // 떼기만 하고 안 올리면 h1 다음이 h3이 되고, 올리기만 하고 안 떼면 글
 // 제목이 h2로 한 번 더 나온다.
-func prepareBody(raw string) (string, []string) {
+func prepareBody(raw string) (string, []string, []string) {
 	body, fixed := escapeBareTags(raw)
-	return promoteHeadings(dropLeadingTitle(body)), fixed
+	body, bold := fixUnpairedBold(body)
+	return promoteHeadings(dropLeadingTitle(body)), fixed, bold
 }
 
 // bareTag는 줄 전체가 `<낱말>` 하나인 것을 찾는다.
@@ -333,14 +400,34 @@ func report(docs []fetched) {
 			d.createdAt.Format("2006-01-02"), d.commits, warn, note)
 	}
 	fmt.Printf("\n본문 합계 %d자\n", total)
+	// 짝이 안 되어 <strong>으로 바꾼 굵게 표시. 그냥 두면 별표가 글자로 보인다.
+	boldTotal := 0
+	for _, d := range docs {
+		boldTotal += len(d.bold)
+	}
+	if boldTotal > 0 {
+		fmt.Printf("\n■ 짝이 안 되는 굵게 %d자리를 <strong>으로 바꿈\n", boldTotal)
+	}
 }
 
-func store(sqlDB *sql.DB, docs []fetched) error {
+func store(sqlDB *sql.DB, docs []fetched, images map[string]repoImage) error {
 	tx, err := sqlDB.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+
+	// 그림을 먼저 넣는다. 본문이 이미 `/img/{sha256}`을 가리키고 있으므로
+	// 같은 트랜잭션에서 함께 들어가야 중간에 깨진 상태가 남지 않는다.
+	// **멱등 키는 sha256이라** 노션 이미지와 같은 행을 쓴다.
+	imgNow := time.Now().UTC()
+	for _, img := range images {
+		if err := importer.UpsertImage(tx, importer.Image{
+			SHA256: img.SHA256, Data: img.Data, MIME: img.MIME,
+		}, imgNow); err != nil {
+			return err
+		}
+	}
 
 	// 분류는 여기서 만들지 않는다. 없으면 멈춘다 — 트리를 손대는 곳은
 	// categorize·regroup 둘뿐이어야 한다.

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/inryeol/blog/internal/markdown"
 )
 
 // ImageURLPrefix는 결과 마크다운이 이미지를 가리킬 경로 앞부분이다.
@@ -817,35 +819,16 @@ func firstRune(s string) rune {
 	return r
 }
 
-// canPairEmphasis는 `**알맹이**` 꼴이 CommonMark에서 짝이 되는지 본다.
-//
-// 규칙은 "여는 기호는 왼쪽으로, 닫는 기호는 오른쪽으로 붙어야 한다"인데,
-// **문장부호가 끼면 조건이 하나 더 붙는다**: 닫는 기호 바로 앞이 문장부호면
-// 기호 뒤가 공백이거나 문장부호여야 한다. 한국어에서 이게 자주 걸린다 —
-// `**릴레이션(relation)**이라고`는 닫는 기호 앞이 `)`이고 뒤가 `이`라서
-// 짝이 안 지어지고 별표가 글자로 보인다. 덤프 전체에서 186자리가 이랬다.
-//
-// prev는 앞에 이미 쓴 글자, next는 뒤에 나올 글자다. 줄의 처음과 끝(0)은
-// 공백으로 친다.
+// 강조 짝 판정은 CommonMark의 규칙이라 `internal/markdown`이 정본이다.
+// GitHub 이관도 같은 자리에서 같은 판정을 해야 해서 거기로 옮겼다(2026-09-02).
+// 여기서는 짧은 이름으로 가져다 쓴다.
 func canPairEmphasis(core string, prev, next rune) bool {
-	open, _ := utf8.DecodeRuneInString(core)
-	close, _ := utf8.DecodeLastRuneInString(core)
-	// 여는 기호: 알맹이 첫 글자가 문장부호면 기호 앞이 공백이나 문장부호여야 한다.
-	if isPunct(open) && !isSpaceOrEdge(prev) && !isPunct(prev) {
-		return false
-	}
-	// 닫는 기호: 알맹이 끝 글자가 문장부호면 기호 뒤가 공백이나 문장부호여야 한다.
-	if isPunct(close) && !isSpaceOrEdge(next) && !isPunct(next) {
-		return false
-	}
-	return true
+	return markdown.CanPairEmphasis(core, prev, next)
 }
 
-func isSpaceOrEdge(r rune) bool { return r == 0 || unicode.IsSpace(r) }
+func isSpaceOrEdge(r rune) bool { return markdown.IsSpaceOrEdge(r) }
 
-// isPunct는 CommonMark가 말하는 문장부호다. 기호(S 범주)도 여기 든다 —
-// `✅`나 `→` 같은 것도 문장부호로 친다.
-func isPunct(r rune) bool { return unicode.IsPunct(r) || unicode.IsSymbol(r) }
+func isPunct(r rune) bool { return markdown.IsPunct(r) }
 
 func renderRichTextOne(rt RichText, prev, next rune) string {
 	if rt.Type == "equation" && rt.Equation != nil {

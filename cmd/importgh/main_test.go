@@ -83,12 +83,20 @@ func TestPromoteHeadingsLeavesTopLevelAlone(t *testing.T) {
 	}
 }
 
-// prepareBody는 세 손질을 한 쌍으로 묶는다. **조합 자체가 규칙이라** 그것을
+// prepareBody는 손질 넷을 한 쌍으로 묶는다. **조합 자체가 규칙이라** 그것을
 // 여기서 지킨다 — 예전에는 손질 하나하나만 테스트해서, 호출부에서 하나를
 // 빼도 아무 테스트도 실패하지 않았다.
 func TestPrepareBodyDoesAllThree(t *testing.T) {
-	raw := "# 3. 람다식 써보기!\n## 복습\n<javascript>\n### 하위\n"
-	body, fixed := prepareBody(raw)
+	raw := "# 3. 람다식 써보기!\n## 복습\n<javascript>\n### 하위\n\n**경로 표현(Path Expression)**으로 찾는다\n"
+	body, fixed, bold := prepareBody(raw)
+
+	// 짝이 안 되는 굵게는 <strong>으로 나가야 한다. 안 그러면 별표가 글자로 보인다.
+	if !strings.Contains(body, "<strong>경로 표현(Path Expression)</strong>") {
+		t.Errorf("짝이 안 되는 굵게를 안 고쳤다 — 별표가 글자로 보인다:\n%s", body)
+	}
+	if len(bold) != 1 {
+		t.Errorf("고친 굵게가 %d개다, want 1", len(bold))
+	}
 
 	if strings.Contains(body, "# 3. 람다식 써보기!") {
 		t.Error("글 제목을 안 뗐다 — 페이지에 같은 말이 두 번 나온다")
