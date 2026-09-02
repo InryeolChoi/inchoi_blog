@@ -351,6 +351,21 @@ var linearAlgebraMetadataEdits = []PostMetadataEdit{
 	{NotionPageID: "f77c0e4e-dd54-4a4a-9534-e9f8ca1846a8", OriginalTitle: "특이값 분해", Title: "11. 특이값 분해", OriginalCreatedAt: "2022-07-30", SortOrder: 10},
 }
 
+// optimizationPracticeOrderEdits는 `최적화이론` 표지 밑 실전 글 다섯 편의
+// **화면 순서만** 사람이 정한다(2026-09-02). 제목과 작성일은 원본 그대로다.
+//
+// 다섯 편 모두 노션 `created_time`이 분 단위로 겹쳐서(`sortorder`가 못 가르는
+// 자리) 이름 자연 정렬로 세워졌었다 — 라그랑주 → 선형계획법 → 심플렉스
+// 알고리즘 → 심플렉스와 n분위수 → 쌍대정리: 선형. 사람이 `선형계획법`을
+// 맨 앞으로 올리기로 정했다. 나머지 넷의 상대 순서는 그대로 둔다.
+var optimizationPracticeOrderEdits = []PostMetadataEdit{
+	{NotionPageID: "ad882859-b0f2-41d9-9552-c7c14cf0b559", OriginalTitle: "선형계획법", Title: "선형계획법", SortOrder: 0},
+	{NotionPageID: "404c96b3-e53c-4edb-88ee-8ef0f717ce79", OriginalTitle: "라그랑주 승수법", Title: "라그랑주 승수법", SortOrder: 1},
+	{NotionPageID: "ff7a1343-68d1-4465-9df0-ea48a0a2565b", OriginalTitle: "심플렉스 알고리즘", Title: "심플렉스 알고리즘", SortOrder: 2},
+	{NotionPageID: "e96b9abf-d1de-4790-8656-7ba4a57c4d89", OriginalTitle: "쌍대정리: 선형", Title: "쌍대정리: 선형", SortOrder: 3},
+	{NotionPageID: "eedb3add-e5e1-4b8a-a1d3-41bc80e00162", OriginalTitle: "심플렉스와 n분위수", Title: "심플렉스와 n분위수", SortOrder: 4},
+}
+
 // multivariateCodeOrderEdits는 `다변량분석 : 코드` 인라인 데이터베이스 12편의
 // **화면 순서만** 노션 원본과 같게 고정한다. 제목과 작성일은 원본 그대로다 —
 // Title은 OriginalTitle과 같고 OriginalCreatedAt는 비워서 노션 날짜를 유지한다.
@@ -384,6 +399,7 @@ var multivariateCodeOrderEdits = []PostMetadataEdit{
 var PostMetadataEdits = concatMetadataEdits(
 	metadataGroup{"linear-algebra", linearAlgebraMetadataEdits},
 	metadataGroup{"multivariate-code", multivariateCodeOrderEdits},
+	metadataGroup{"optimization-practice", optimizationPracticeOrderEdits},
 )
 
 // metadataGroup은 이름 하나와 그 묶음의 글들이다.

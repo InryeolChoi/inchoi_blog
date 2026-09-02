@@ -88,7 +88,12 @@ func seedTestDB(t *testing.T) *sql.DB {
 		      VALUES (?, ?, ?, ?, 'unlisted', 'notion', ?, 0, ?, ?)`,
 			id, slug, title, body, catID, now, now)
 	}
-	post(1, "cover-language", "언어", "표지 본문\n\n## 목차\n\n[목차 글](/p/toc-post)\n\n## 참고 동영상\n\n[영상](https://www.youtube.com/watch?v=fNk_zzaMoSs)", 2)
+	// notion_page_id를 채운다. deferredSections는 이제 slug가 아니라 이
+	// 값으로 절을 가려낸다(2026-09-02) — 표지가 둘 이상 같은 절 이름을
+	// 쓸 수 있어서, 실제 매핑에 있는 id를 그대로 재사용한다(선형대수 표지).
+	exec(`INSERT INTO posts (id, slug, title, body, status, source, category_id, sort_order, notion_page_id, created_at, updated_at)
+	      VALUES (1, 'cover-language', '언어', ?, 'unlisted', 'notion', 2, 0, 'ad1ef256-4567-4b9f-b57e-6f16486d0606', ?, ?)`,
+		"표지 본문\n\n## 목차\n\n[목차 글](/p/toc-post)\n\n## 참고 동영상\n\n[영상](https://www.youtube.com/watch?v=fNk_zzaMoSs)", now, now)
 	post(5, "category-post", "언어 글", "언어 글 본문", 2)
 	post(6, "toc-post", "목차 글", "목차 글 본문", 2)
 	post(7, "toc-child", "목차 글의 하위 글", "하위 글 본문", 2)

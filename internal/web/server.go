@@ -291,13 +291,35 @@ func (s *Server) renderPostBody(post *Post) (renderedBody, error) {
 	return out, nil
 }
 
-// referenceVideoHeading은 카테고리 표지 글에서 글 목록 뒤로 보낼 절의 시작이다.
-// 현재 이 제목을 쓰는 표지 글은 선형대수 하나뿐이다. 글 상세는 원문 순서를
-// 그대로 두고, 카테고리에서 펼칠 때만 이 절을 떼어낸다.
-var referenceVideoHeading = regexp.MustCompile(`(?m)^#{1,6}[ \t]+참고 동영상[ \t]*\r?$`)
+// deferredSections는 표지 글에서 **글 목록 뒤로 보낼 절**이다. `notion_page_id`
+// 별로 절 제목을 적는다 — 이름이 같은 절이 다른 글에도 생기면 엉뚱한 곳까지
+// 떼어내는 것을 막기 위해서다. 글 상세는 원문 순서를 그대로 두고, 카테고리에서
+// 펼칠 때만 이 절을 떼어낸다.
+//
+// **사람이 정하는 화면 장치라 웹 코드에 둔다.** 갈래 카드·외부 링크·바깥으로
+// 나가는 링크와 같은 이유다 — 본문(DB)에 순서를 적으면 다음 `import -db`가
+// 덮어써서 사라진다.
+var deferredSections = map[string]string{
+	// 선형대수: 소개 → 글 목록을 먼저 보여주고 참고 영상은 맨 아래로.
+	"ad1ef256-4567-4b9f-b57e-6f16486d0606": "참고 동영상",
+	// 최적화이론(2026-09-02): `수치해석과 코딩` 절이 소개 바로 뒤에 있어서
+	// 소개 → 인라인 목록 → 글 목록 순으로 읽혔다. 소개 → 글 목록 → 그 절
+	// 순이 자연스럽다는 사람의 판단으로 뒤로 보낸다.
+	"660e3d79-427d-40f7-b98a-6f8be0a5f787": "수치해석과 코딩",
+}
 
-func splitReferenceVideoSection(source string) (before, after string) {
-	loc := referenceVideoHeading.FindStringIndex(source)
+// deferredSectionHeading은 `## 이름` 형태의 절 제목을 찾는다. 레벨(`#`~`######`)은
+// 가리지 않는다 — 표지 글마다 절 깊이가 다를 수 있어서다.
+func deferredSectionHeading(name string) *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^#{1,6}[ \t]+` + regexp.QuoteMeta(name) + `[ \t]*\r?$`)
+}
+
+func splitDeferredSection(pageID, source string) (before, after string) {
+	name, ok := deferredSections[pageID]
+	if !ok {
+		return source, ""
+	}
+	loc := deferredSectionHeading(name).FindStringIndex(source)
 	if loc == nil {
 		return source, ""
 	}
@@ -305,13 +327,13 @@ func splitReferenceVideoSection(source string) (before, after string) {
 }
 
 // renderCategoryCoverBody는 표지 글을 카테고리 페이지용으로 그린다.
-// `참고 동영상` 절은 글 목록을 먼저 훑은 뒤 볼 수 있도록 별도로 렌더링한다.
+// `deferredSections`에 적힌 절은 글 목록을 먼저 훑은 뒤 볼 수 있도록 별도로 렌더링한다.
 func (s *Server) renderCategoryCoverBody(post *Post) (renderedBody, error) {
 	resolved, fix, err := s.resolveBody(post.Body, post.OriginalPath.String)
 	if err != nil {
 		return renderedBody{}, err
 	}
-	before, after := splitReferenceVideoSection(resolved)
+	before, after := splitDeferredSection(post.NotionPageID.String, resolved)
 	beforeHTML, err := s.md.Render(before)
 	if err != nil {
 		return renderedBody{}, err

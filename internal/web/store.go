@@ -81,6 +81,10 @@ type Post struct {
 	Status       string
 	OriginalPath sql.NullString
 	CreatedAt    sql.NullTime
+	// NotionPageID는 이 글이 노션에서 왔으면 그 페이지 id다(GitHub이나 admin에서
+	// 온 글은 NULL). `deferredSections`가 표지 글별로 절을 가려낼 때 쓴다 — slug는
+	// 사람이 admin에서 바꿀 수 있지만 이 값은 안 바뀐다.
+	NotionPageID sql.NullString
 	// Trail은 최상위부터 이 글이 속한 카테고리까지의 경로다.
 	Trail []Category
 	// Ancestors는 위에서부터 이 글의 부모까지의 글 사슬이다.
@@ -640,10 +644,10 @@ func (s *store) PostBySlug(slug string) (*Post, error) {
 	var p Post
 	var categoryID sql.NullInt64
 	err := s.db.QueryRow(`
-		SELECT id, parent_id, slug, title, body, status, original_path, original_created_at, category_id
+		SELECT id, parent_id, slug, title, body, status, original_path, original_created_at, category_id, notion_page_id
 		FROM posts p WHERE p.slug = ? AND `+s.notHidden("p")+``, slug).
 		Scan(&p.ID, &p.ParentID, &p.Slug, &p.Title, &p.Body, &p.Status,
-			&p.OriginalPath, &p.CreatedAt, &categoryID)
+			&p.OriginalPath, &p.CreatedAt, &categoryID, &p.NotionPageID)
 	switch {
 	case err == sql.ErrNoRows:
 		return nil, nil
