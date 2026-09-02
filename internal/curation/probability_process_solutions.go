@@ -10,7 +10,10 @@ type BodyAppend struct {
 	Why          string
 }
 
-var BodyAppends = []BodyAppend{
+// probabilityProcessAppends는 확률과정론 `중간 & 기말` 글의 해답이다.
+// **여러 글의 해답이 생기면서 표를 파일별로 나눴다**(2026-09-02) —
+// 최종 `BodyAppends`는 body_appends.go가 이 묶음들을 합쳐서 만든다.
+var probabilityProcessAppends = []BodyAppend{
 	{
 		NotionPageID: "eb9b0b6c-697e-4ebe-b8b5-34a44e59095f",
 		Marker:       "## 중간고사 해답",
