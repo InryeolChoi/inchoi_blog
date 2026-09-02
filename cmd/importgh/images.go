@@ -39,6 +39,15 @@ import (
 // 저장소의 파일이 아니라 남의 그림이라 받아올 대상이 아니다.
 var mdImage = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\s]+)\)`)
 
+// htmlImage는 본문에 그대로 쓴 `<img src="...">`를 찾는다.
+//
+// **마크다운 문법만 보면 놓친다.** 이 저장소는 가운데 정렬을 하려고
+// `<p align="center"><img src="./Images/x.png"></p>` 꼴을 섞어 쓴다.
+// 렌더러가 `html.WithUnsafe()`라 그 태그가 그대로 나가는데, 주소를 안 바꾸면
+// **우리 사이트 안의 없는 경로**를 가리켜 깨진 그림이 된다. 실제로 14장이
+// 그랬다 — 마크다운 43장만 옮기고 리포트는 "못 옮긴 참조 1개"라고 했다.
+var htmlImage = regexp.MustCompile(`(<img\s[^>]*?src=")([^"]+)(")`)
+
 // repoImage는 받아온 그림 한 장이다.
 type repoImage struct {
 	// RepoPath는 저장소 안의 경로다. 같은 그림을 여러 글이 쓰면 한 번만 받는다.
@@ -59,19 +68,34 @@ type repoImage struct {
 func rewriteImages(body, docPath string, have map[string]repoImage) (string, []string) {
 	dir := path.Dir(docPath)
 	var want []string
-	out := mdImage.ReplaceAllStringFunc(body, func(m string) string {
-		g := mdImage.FindStringSubmatch(m)
-		alt, ref := g[1], g[2]
+	resolve := func(ref string) (string, bool) {
 		if isExternal(ref) {
-			return m
+			return "", false
 		}
 		repoPath := path.Clean(path.Join(dir, ref))
 		img, ok := have[repoPath]
 		if !ok {
 			want = append(want, repoPath)
+			return "", false
+		}
+		return "/img/" + img.SHA256, true
+	}
+
+	out := mdImage.ReplaceAllStringFunc(body, func(m string) string {
+		g := mdImage.FindStringSubmatch(m)
+		url, ok := resolve(g[2])
+		if !ok {
 			return m
 		}
-		return "![" + alt + "](/img/" + img.SHA256 + ")"
+		return "![" + g[1] + "](" + url + ")"
+	})
+	out = htmlImage.ReplaceAllStringFunc(out, func(m string) string {
+		g := htmlImage.FindStringSubmatch(m)
+		url, ok := resolve(g[2])
+		if !ok {
+			return m
+		}
+		return g[1] + url + g[3]
 	})
 	return out, want
 }
@@ -85,11 +109,17 @@ func isExternal(ref string) bool {
 func collectImagePaths(body, docPath string) []string {
 	dir := path.Dir(docPath)
 	var out []string
-	for _, g := range mdImage.FindAllStringSubmatch(body, -1) {
-		if isExternal(g[2]) {
-			continue
+	add := func(ref string) {
+		if isExternal(ref) {
+			return
 		}
-		out = append(out, path.Clean(path.Join(dir, g[2])))
+		out = append(out, path.Clean(path.Join(dir, ref)))
+	}
+	for _, g := range mdImage.FindAllStringSubmatch(body, -1) {
+		add(g[2])
+	}
+	for _, g := range htmlImage.FindAllStringSubmatch(body, -1) {
+		add(g[2])
 	}
 	return out
 }

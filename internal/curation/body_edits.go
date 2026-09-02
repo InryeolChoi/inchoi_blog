@@ -17,6 +17,7 @@ var BodyEdits = concatBodyEdits(
 	multinomialEdits,
 	discreteMathEdits,
 	networkEdits,
+	databaseTOCEdits,
 )
 
 // concatBodyEdits는 묶음들을 순서대로 이어 붙인다.

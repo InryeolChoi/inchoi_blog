@@ -88,12 +88,45 @@ var GitHubSources = []GitHubSource{
 	},
 	// 데이터베이스: `Database System Concepts` 정리. **이미지가 있는 첫 묶음이다** —
 	// 그래서 importgh에 그림 처리를 더했다(cmd/importgh/images.go).
+	// 데이터베이스: `Database System Concepts` 10판 정리. **이미지가 있는 첫
+	// 묶음이다** — 그래서 importgh에 그림 처리를 더했다(cmd/importgh/images.go).
+	//
+	// **순서와 제목은 저장소의 `Syllabus.md`를 따랐다.** 파일 이름은 `chapter4_1`
+	// 이고 파일 안의 첫 제목은 `4. 중급 SQL (1)`인데, 둘 다 읽는 사람을 위한
+	// 이름이 아니다. Syllabus가 사람이 붙인 이름을 이미 들고 있다.
+	//
+	// **9·11단원은 저장소에 없다.** Syllabus가 "생략"이라고 적어뒀다 — 빠진
+	// 것이 아니라 안 쓴 것이다.
 	{
 		Repo:         "InryeolChoi/Database-System-Concepts",
 		CategorySlug: "데이터베이스",
 		OriginalPath: "데이터베이스",
 		Docs: []GitHubDoc{
-			{Path: "PART3/chapter8.md", Title: "복합 데이터 타입", SortOrder: 0},
+			// PART1 — 관계형 모델과 SQL
+			{Path: "PART1/chapter2.md", Title: "2. 관계형 모델이란?", SortOrder: 0},
+			{Path: "PART1/chapter3.md", Title: "3. SQL이란?", SortOrder: 1},
+			{Path: "PART1/chapter4_1.md", Title: "4. 중급 SQL (1) : 조인 · 뷰 · 트랜잭션", SortOrder: 2},
+			{Path: "PART1/chapter4_2.md", Title: "4. 중급 SQL (2) : 무결성 제약 · 데이터 타입", SortOrder: 3},
+			{Path: "PART1/chapter4_3.md", Title: "4. 중급 SQL (3) : 인덱스 정의 · 권한", SortOrder: 4},
+			{Path: "PART1/chapter5.md", Title: "5. 고급 SQL", SortOrder: 5},
+			// PART2 — 데이터베이스 설계
+			{Path: "PART2/chapter6_1.md", Title: "6. ERD 설계 (1)", SortOrder: 6},
+			{Path: "PART2/chapter6_2.md", Title: "6. ERD 설계 (2)", SortOrder: 7},
+			{Path: "PART2/chapter6_3.md", Title: "6. ERD 설계 (3)", SortOrder: 8},
+			{Path: "PART2/chapter7_1.md", Title: "7. 관계형 DB 설계 (1)", SortOrder: 9},
+			{Path: "PART2/chapter7_2.md", Title: "7. 관계형 DB 설계 (2)", SortOrder: 10},
+			// PART3 — 응용
+			{Path: "PART3/chapter8.md", Title: "8. 복합 데이터 타입", SortOrder: 11},
+			// PART4 — 빅데이터
+			{Path: "PART4/chapter10.md", Title: "10. 빅데이터 다루기", SortOrder: 12},
+			// PART5 — 저장장치와 인덱싱
+			{Path: "PART5/chapter12.md", Title: "12. 물리적 저장장치", SortOrder: 13},
+			{Path: "PART5/chapter13.md", Title: "13. DB 저장장치 구조", SortOrder: 14},
+			{Path: "PART5/chapter14_1.md", Title: "14. 인덱싱 (1)", SortOrder: 15},
+			{Path: "PART5/chapter14_2.md", Title: "14. 인덱싱 (2) : B+ 트리", SortOrder: 16},
+			// 연습문제
+			{Path: "PracticeSet/chapter2.md", Title: "연습문제 : 2단원", SortOrder: 17},
+			{Path: "PracticeSet/chapter3.md", Title: "연습문제 : 3단원", SortOrder: 18},
 		},
 	},
 }

@@ -1294,6 +1294,33 @@ var DropPosts = []DropPost{
 		Why: "본문이 \"advanced ver. : 하향식 접근으로 알아보는 네트워크\" 한 줄(37자)뿐이고 " +
 			"딸린 글도 분류도 없다. 앞으로 읽을 책 이름을 적어둔 껍데기다",
 	},
+
+	// 데이터베이스 노션 글 스무 편(2026-09-02). **같은 책 정리를 GitHub
+	// 저장소(`InryeolChoi/Database-System-Concepts`)에서 다시 옮겨오면서
+	// 대체한다** — 그쪽이 분량도 크고(전체 48만 자) 그림 40장이 함께 온다.
+	// 둘 다 남기면 같은 내용이 두 벌로 보인다.
+	//
+	// 되돌리려면 이 묶음을 지우면 된다. 덤프는 그대로 있다.
+	{NotionPageID: "16c0901b-87f1-8057-b537-d88e8d37fe53", Title: "관계형 모델 설계", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "16c0901b-87f1-80d9-acbc-f889e6a590a8", Title: "SQL의 소개", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "16c0901b-87f1-80a6-8ed9-f0c5c3eb50b6", Title: "중급 SQL (1)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1790901b-87f1-807f-a403-f09cccd1d93d", Title: "중급 SQL (2)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1880901b-87f1-8011-b679-e4b78259ef46", Title: "중급 SQL (3)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "16c0901b-87f1-8065-b5a2-ec396a3773e8", Title: "고급 SQL", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "16d0901b-87f1-80da-a45e-ec60c83d6240", Title: "2단원 연습문제", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "16f0901b-87f1-8016-9c75-da1ef968c6af", Title: "3단원 연습문제", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1880901b-87f1-8091-b34b-cf10b90f4abc", Title: "4단원 연습문제", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1890901b-87f1-80a7-b446-e1881af546d4", Title: "E-R 모델 기반 설계 (1)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1aa0901b-87f1-8013-add5-f2ee2c342ab3", Title: "E-R 모델 기반 설계 (2)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1b20901b-87f1-80ed-b517-f5af0d895db7", Title: "E-R 모델 기반 설계 (3)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "18e0901b-87f1-802f-94d1-d40a91ffc815", Title: "관계형 DB 설계 (1)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1bd0901b-87f1-8021-b1de-ee41a458e3e5", Title: "관계형 DB 설계 (2)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1c80901b-87f1-80ba-9f3a-caf38aac9fae", Title: "복합 데이터 타입", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1cf0901b-87f1-80c0-bae8-c30ecc36b238", Title: "빅데이터 다루기", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1ff0901b-87f1-8048-a21d-d399e5d64ae0", Title: "물리적 저장 장치 시스템", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1f80901b-87f1-8037-80b7-e03f77b84ca8", Title: "데이터 저장 장치 구조", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "1f80901b-87f1-8080-8640-ec5dd787d989", Title: "인덱싱 (1) - 순서 인덱스", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
+	{NotionPageID: "2100901b-87f1-804c-ae6d-f6a88ef102c5", Title: "인덱싱 (2)", Why: "GitHub 저장소의 같은 단원 정리로 대체했다"},
 }
 
 // Dropped는 이 글을 이관에서 빼야 하는지다.
