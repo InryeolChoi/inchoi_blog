@@ -19,6 +19,8 @@ var BodyEdits = concatBodyEdits(
 	networkEdits,
 	databaseTOCEdits,
 	graphAlgorithmEdits,
+	mathstat1DedupEdits,
+	optimizationCoverEdits,
 )
 
 // concatBodyEdits는 묶음들을 순서대로 이어 붙인다.
