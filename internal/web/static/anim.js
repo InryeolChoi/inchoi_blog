@@ -253,8 +253,8 @@
     // 칸 넓이는 그대로 두고 **색 진하기로** 확률을 나타낸다. 넓이까지
     // 바꾸면 모자이크가 되어 행·열을 눈으로 따라가기 어렵다.
     function drawTop() {
-      var L = 62, T = 16, CW = 96, CH = 52, MB = 22;
-      var W = L + nx * CW + MB + 12, H = T + ny * CH + MB + 26;
+      var L = 62, T = 18, CW = 92, CH = 50, MW = 58, MH = 34;
+      var W = L + nx * CW + MW + 10, H = T + ny * CH + MH + 10;
       var svg = svgEl("svg", {
         viewBox: "0 0 " + W + " " + H, class: "joint-svg",
         role: "img", "aria-label": "결합확률 표를 위에서 본 그림"
@@ -262,17 +262,27 @@
 
       // 열 이름
       for (var i = 0; i < nx; i++) {
-        svg.appendChild(text(L + i * CW + CW / 2, T - 5, d.xs[i], "joint-axis"));
+        svg.appendChild(text(L + i * CW + CW / 2, T - 6, d.xs[i], "joint-axis"));
       }
+
+      // 결합확률 칸 — **노란색**. 본문이 "노란색 부분을 결합확률"이라고 부른다.
       for (var j = 0; j < ny; j++) {
-        svg.appendChild(text(L - 6, T + j * CH + CH / 2 + 4, d.ys[j], "joint-axis joint-axis-y"));
+        svg.appendChild(text(L - 8, T + j * CH + CH / 2 + 4, d.ys[j], "joint-axis joint-axis-y"));
         for (var i2 = 0; i2 < nx; i2++) {
           var p = d.p[j][i2];
           var g = svgEl("g", { class: cellClass(i2, j), tabindex: "0", role: "button",
-            "aria-label": d.xs[i2] + " " + d.ys[j] + " 확률 " + p.toFixed(2) });
+            "aria-label": d.xs[i2] + " " + d.ys[j] + " 결합확률 " + p.toFixed(2) });
+          // **흰 바탕을 먼저 깐다.** 진하기로 크기를 나타내는데, 그냥 투명하게
+          // 두면 다크 테마에서 옅은 칸이 검게 가라앉아 그 위의 검정 숫자가
+          // 안 보인다. 노랑·초록은 검정 글자를 얹는 지면이라 어느 테마에서든
+          // 밝은 바탕 위에 있어야 한다.
           g.appendChild(svgEl("rect", {
             x: L + i2 * CW + 2, y: T + j * CH + 2, width: CW - 4, height: CH - 4,
-            class: "joint-fill", "fill-opacity": (0.12 + 0.88 * (p / maxP)).toFixed(3)
+            class: "joint-bg"
+          }));
+          g.appendChild(svgEl("rect", {
+            x: L + i2 * CW + 2, y: T + j * CH + 2, width: CW - 4, height: CH - 4,
+            class: "joint-fill", "fill-opacity": (0.14 + 0.86 * (p / maxP)).toFixed(3)
           }));
           g.appendChild(text(L + i2 * CW + CW / 2, T + j * CH + CH / 2 + 5, p.toFixed(2), "joint-num"));
           bindPick(g, i2, j);
@@ -280,16 +290,42 @@
         }
       }
 
-      // 주변확률: 오른쪽(행 합)과 아래(열 합)
+      // 주변확률 — **초록색 띠**. 본문이 "초록색 부분을 주변확률"이라고 부른다.
+      // 색을 나누는 것이 이 그림이 하는 일의 절반이다: 조건부확률은
+      // 노란 칸 하나를 그 줄의 초록 띠로 나눈 값이다.
+      var maxMy = Math.max.apply(null, py), maxMx = Math.max.apply(null, px);
       for (var j2 = 0; j2 < ny; j2++) {
-        svg.appendChild(text(L + nx * CW + 8, T + j2 * CH + CH / 2 + 4, py[j2].toFixed(2),
-          "joint-marg" + (sel && sel.j === j2 ? " is-on" : "")));
+        var on = sel && sel.j === j2;
+        var gm = svgEl("g", { class: "joint-marg-cell" + (sel ? (on ? " is-sel" : " is-dim") : "") });
+        gm.appendChild(svgEl("rect", {
+          x: L + nx * CW + 6, y: T + j2 * CH + 2, width: MW - 12, height: CH - 4,
+          class: "joint-bg"
+        }));
+        gm.appendChild(svgEl("rect", {
+          x: L + nx * CW + 6, y: T + j2 * CH + 2, width: MW - 12, height: CH - 4,
+          class: "joint-mfill", "fill-opacity": (0.16 + 0.84 * (py[j2] / maxMy)).toFixed(3)
+        }));
+        gm.appendChild(text(L + nx * CW + 6 + (MW - 12) / 2, T + j2 * CH + CH / 2 + 5,
+          py[j2].toFixed(2), "joint-num"));
+        svg.appendChild(gm);
       }
       for (var i3 = 0; i3 < nx; i3++) {
-        svg.appendChild(text(L + i3 * CW + CW / 2, T + ny * CH + 16, px[i3].toFixed(2),
-          "joint-marg" + (sel && sel.i === i3 ? " is-on" : "")));
+        var on2 = sel && sel.i === i3;
+        var gm2 = svgEl("g", { class: "joint-marg-cell" + (sel ? (on2 ? " is-sel" : " is-dim") : "") });
+        gm2.appendChild(svgEl("rect", {
+          x: L + i3 * CW + 2, y: T + ny * CH + 6, width: CW - 4, height: MH - 12,
+          class: "joint-bg"
+        }));
+        gm2.appendChild(svgEl("rect", {
+          x: L + i3 * CW + 2, y: T + ny * CH + 6, width: CW - 4, height: MH - 12,
+          class: "joint-mfill", "fill-opacity": (0.16 + 0.84 * (px[i3] / maxMx)).toFixed(3)
+        }));
+        gm2.appendChild(text(L + i3 * CW + CW / 2, T + ny * CH + 6 + (MH - 12) / 2 + 5,
+          px[i3].toFixed(2), "joint-num"));
+        svg.appendChild(gm2);
       }
-      svg.appendChild(text(L - 6, T + ny * CH + 16, "주변확률", "joint-axis joint-axis-y"));
+      svg.appendChild(text(L - 8, T + ny * CH + 6 + (MH - 12) / 2 + 5, "주변확률", "joint-axis joint-axis-y"));
+      svg.appendChild(text(L + nx * CW + 6 + (MW - 12) / 2, T - 6, "주변확률", "joint-axis"));
       return svg;
     }
 
@@ -313,7 +349,14 @@
       var pts = [];
       // 바닥 네 귀퉁이로 화면 크기를 잡는다. 가장 높은 막대의 꼭대기도 넣는다.
       for (var j = 0; j <= ny; j++) for (var i = 0; i <= nx; i++) pts.push(iso(i, j, 0));
+      // 주변확률 막대가 서는 바깥 줄과, 가장 높은 막대의 꼭대기까지 넣는다.
+      // 안 넣으면 그것들이 viewBox 밖으로 잘려 나간다.
+      for (var jj = 0; jj <= ny; jj++) pts.push(iso(-1.15, jj, 0));
+      for (var ii = 0; ii <= nx; ii++) pts.push(iso(ii, -1.15, 0));
+      var maxM = Math.max(Math.max.apply(null, px), Math.max.apply(null, py));
       pts.push(iso(0, 0, maxP));
+      pts.push(iso(-1.15, 0, maxM));
+      pts.push(iso(nx, -1.15, maxM));
       var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
       pts.forEach(function (p) {
         minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
@@ -338,50 +381,73 @@
         }
       }
 
-      // **뒤에서 앞으로 그린다.** i+j가 작을수록 뒤라, 그 순서로 그려야
-      // 앞 막대가 뒤 막대를 제대로 가린다(화가 알고리즘).
-      var order = [];
-      for (var j2 = 0; j2 < ny; j2++) for (var i2 = 0; i2 < nx; i2++) order.push({ i: i2, j: j2 });
-      order.sort(function (a, b) { return (a.i + a.j) - (b.i + b.j); });
+      // **결합 막대와 주변 막대를 한 목록에 담아 함께 정렬한다.** 예전에는
+      // 노란 막대를 다 그린 뒤 초록 막대를 그렸는데, 그러면 뒤에 있어야 할
+      // 초록 막대가 앞의 노란 막대를 덮었다. 깊이는 종류가 아니라 자리가
+      // 정하는 것이라 한 번에 세워야 한다.
+      var boxes = [];
+      for (var j2 = 0; j2 < ny; j2++) {
+        for (var i2 = 0; i2 < nx; i2++) {
+          boxes.push({ i0: i2, j0: j2, i1: i2 + 1, j1: j2 + 1, h: d.p[j2][i2],
+            kind: "joint", i: i2, j: j2 });
+        }
+      }
+      // 주변확률은 바닥 바깥 줄에 세운다. 결합확률(노랑) 옆에 나란히 서야
+      // "노란 칸을 초록 줄로 나눈 것이 조건부확률"이라는 말이 그림에서 읽힌다.
+      for (var jm = 0; jm < ny; jm++) {
+        boxes.push({ i0: -1.15, j0: jm, i1: -0.15, j1: jm + 1, h: py[jm], kind: "marg", j: jm });
+      }
+      for (var im = 0; im < nx; im++) {
+        boxes.push({ i0: im, j0: -1.15, i1: im + 1, j1: -0.15, h: px[im], kind: "marg", i: im });
+      }
+      // i+j가 작을수록 뒤다(화가 알고리즘). 바깥 줄은 좌표가 음수라 저절로
+      // 맨 뒤로 간다.
+      boxes.sort(function (a, b) { return (a.i0 + a.j0) - (b.i0 + b.j0); });
 
-      // **막대를 다 그린 뒤에 라벨만 따로 한 번 더 돈다.** 한 덩어리로 그리면
-      // 앞 막대가 뒤 막대의 라벨을 덮는다.
       var labels = [];
 
-      order.forEach(function (c) {
-        var h = d.p[c.j][c.i];
-        var g = svgEl("g", { class: cellClass(c.i, c.j), tabindex: "0", role: "button",
-          "aria-label": d.xs[c.i] + " " + d.ys[c.j] + " 확률 " + h.toFixed(2) });
-        var i0 = c.i, j0 = c.j, i1b = c.i + 1, j1b = c.j + 1;
+      boxes.forEach(function (c) {
+        var joint = c.kind === "joint";
+        var pre = joint ? "joint" : "joint-m";
+        var on = sel && (joint ? (sel.i === c.i && sel.j === c.j)
+          : (c.i !== undefined ? sel.i === c.i : sel.j === c.j));
+        var attrs = joint
+          ? { class: cellClass(c.i, c.j), tabindex: "0", role: "button",
+              "aria-label": d.xs[c.i] + " " + d.ys[c.j] + " 결합확률 " + c.h.toFixed(2) }
+          : { class: "joint-marg-cell" + (sel ? (on ? " is-sel" : " is-dim") : "") };
+        var g = svgEl("g", attrs);
         // 윗면
         g.appendChild(svgEl("polygon", {
-          points: [P(i0, j0, h), P(i1b, j0, h), P(i1b, j1b, h), P(i0, j1b, h)].join(" "),
-          class: "joint-top"
+          points: [P(c.i0, c.j0, c.h), P(c.i1, c.j0, c.h), P(c.i1, c.j1, c.h), P(c.i0, c.j1, c.h)].join(" "),
+          class: pre + "-top"
         }));
         // 왼쪽 면 (j가 커지는 쪽)
         g.appendChild(svgEl("polygon", {
-          points: [P(i0, j1b, h), P(i1b, j1b, h), P(i1b, j1b, 0), P(i0, j1b, 0)].join(" "),
-          class: "joint-side"
+          points: [P(c.i0, c.j1, c.h), P(c.i1, c.j1, c.h), P(c.i1, c.j1, 0), P(c.i0, c.j1, 0)].join(" "),
+          class: pre + "-side"
         }));
         // 오른쪽 면 (i가 커지는 쪽)
         g.appendChild(svgEl("polygon", {
-          points: [P(i1b, j0, h), P(i1b, j1b, h), P(i1b, j1b, 0), P(i1b, j0, 0)].join(" "),
-          class: "joint-face"
+          points: [P(c.i1, c.j0, c.h), P(c.i1, c.j1, c.h), P(c.i1, c.j1, 0), P(c.i1, c.j0, 0)].join(" "),
+          class: pre + "-face"
         }));
-        // 라벨은 윗면 한가운데 바로 위에 둔다. 글자에 지면색 테두리를 둘러
-        // (CSS의 paint-order) 뒤 막대와 겹쳐도 읽힌다.
-        bindPick(g, c.i, c.j);
+        if (joint) bindPick(g, c.i, c.j);
         svg.appendChild(g);
 
-        var lab = iso(i0 + 0.5, j0 + 0.5, h);
-        var lg = svgEl("g", { class: cellClass(c.i, c.j) + " joint-lab" });
-        lg.appendChild(text(lab.x + ox, lab.y + oy - 7, h.toFixed(2), "joint-num3"));
+        // 라벨은 윗면 한가운데 바로 위에 둔다. 글자에 지면색 테두리를 둘러
+        // (CSS의 paint-order) 뒤 막대와 겹쳐도 읽힌다.
+        var lab = iso((c.i0 + c.i1) / 2, (c.j0 + c.j1) / 2, c.h);
+        var lg = svgEl("g", { class: (joint ? cellClass(c.i, c.j) : "") + " joint-lab" });
+        lg.appendChild(text(lab.x + ox, lab.y + oy - 7, c.h.toFixed(2), "joint-num3"));
         labels.push(lg);
       });
+
+      // **라벨은 막대를 전부(결합 + 주변) 세운 뒤 한 번에 얹는다.** 중간에
+      // 얹으면 나중에 그린 막대가 앞선 라벨을 덮는다.
       labels.forEach(function (lg) { svg.appendChild(lg); });
 
       // 축 이름은 바닥에서 충분히 떨어뜨린다. 가까이 두면 막대 옆면에 묻힌다.
-      var xm = iso(nx / 2, ny + 0.75, 0), ym = iso(-0.75, ny / 2, 0);
+      var xm = iso(nx / 2, ny + 0.75, 0), ym = iso(nx + 0.75, ny / 2, 0);
       svg.appendChild(text(xm.x + ox, xm.y + oy, d.xName, "joint-axis"));
       svg.appendChild(text(ym.x + ox, ym.y + oy, d.yName, "joint-axis"));
       return svg;

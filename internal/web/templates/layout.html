@@ -862,10 +862,31 @@
   .joint-cell { cursor: pointer; outline: none; }
   .joint-cell:focus-visible .joint-fill,
   .joint-cell:focus-visible .joint-top { stroke: var(--accent); stroke-width: 2.5; }
-  /* 결합확률은 노랑(라이트)·초록(다크) 포인트 한 색을 진하기로만 나눈다.
-     본문이 "노란색 부분을 결합확률"이라고 부르는 것과 이어진다. */
-  .joint-fill { fill: var(--rail); stroke: var(--ink); stroke-width: .8; }
-  .joint-num { font: 600 13px var(--mono); fill: var(--ink); text-anchor: middle; }
+  /* **여기만 색을 둘 쓴다.** 본문이 바로 아래에서 "노란색 부분을 결합확률",
+     "초록색 부분을 주변확률"이라고 **글자로 부르기 때문**이다. 한 색으로
+     칠하면 그 두 문장이 그림과 어긋나고, 실제로 처음엔 전부 노랑이라
+     무엇이 결합이고 무엇이 주변인지 구별되지 않았다.
+     두 색 모두 검정 글자를 얹는 지면이라 라이트·다크에서 같은 값을 쓴다. */
+  /* **면마다 불투명한 색을 따로 준다.** fill-opacity로 명암을 만들면 바닥
+     격자와 뒤 막대가 비쳐서 유리처럼 보인다 — 입체가 아니라 반투명 덩어리가
+     된다. 윗면·오른면·왼면 순으로 어두워지는 세 단계를 직접 적는다. */
+  .joint {
+    --joint-y: #FFE600; --joint-y2: #E0C400; --joint-y3: #B99F00;
+    --joint-g: #34D399; --joint-g2: #22A97A; --joint-g3: #15805B;
+  }
+  .joint-bg { fill: #FFFFFF; }
+  .joint-fill { fill: var(--joint-y); stroke: var(--ink); stroke-width: .8; }
+  .joint-mfill { fill: var(--joint-g); stroke: var(--ink); stroke-width: .8; }
+  /* 주변확률 띠도 고른 줄만 남기고 나머지는 물린다. */
+  .joint-marg-cell.is-dim { opacity: .3; }
+  .joint-marg-cell.is-sel .joint-mfill,
+  .joint-marg-cell.is-sel .joint-m-top { stroke-width: 2.5; }
+  .joint-m-top  { fill: var(--joint-g);  stroke: var(--ink); stroke-width: .8; }
+  .joint-m-face { fill: var(--joint-g2); stroke: var(--ink); stroke-width: .8; }
+  .joint-m-side { fill: var(--joint-g3); stroke: var(--ink); stroke-width: .8; }
+  /* 숫자는 노랑·초록 **지면 위에** 앉으므로 테마와 무관하게 검정이다.
+     다크에서 --ink는 밝은 색이라 그대로 쓰면 노란 칸에서 안 보인다. */
+  .joint-num { font: 600 13px var(--mono); fill: #121415; text-anchor: middle; }
   /* 3D 라벨은 뒤 막대와 겹칠 수 있어서 지면색 테두리를 두른다.
      paint-order로 테두리를 글자보다 먼저 그려야 획이 안 먹힌다. */
   .joint-num3 {
@@ -881,9 +902,9 @@
   .joint-marg.is-on { fill: var(--ink); }
   /* 3D. 한 막대의 세 면이 같은 색이면 입체로 안 읽히므로 밝기를 나눈다. */
   .joint-floor { fill: var(--surface); stroke: var(--line); stroke-width: .8; }
-  .joint-top   { fill: var(--rail); stroke: var(--ink); stroke-width: .8; }
-  .joint-face  { fill: var(--rail); fill-opacity: .72; stroke: var(--ink); stroke-width: .8; }
-  .joint-side  { fill: var(--rail); fill-opacity: .45; stroke: var(--ink); stroke-width: .8; }
+  .joint-top   { fill: var(--joint-y);  stroke: var(--ink); stroke-width: .8; }
+  .joint-face  { fill: var(--joint-y2); stroke: var(--ink); stroke-width: .8; }
+  .joint-side  { fill: var(--joint-y3); stroke: var(--ink); stroke-width: .8; }
   /* 고른 칸의 행·열은 남기고 나머지는 물린다 — 조건부확률이 "그 줄만 떼어
      다시 1로 만든 것"이라는 게 눈에 보여야 한다. */
   /* 라벨 묶음은 누름을 가로채지 않는다 — 막대 위에 겹쳐 있을 뿐이다. */
