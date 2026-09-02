@@ -350,8 +350,12 @@ func TestApplyPostMetadata(t *testing.T) {
 }
 
 func TestMathStatsTwoReferenceTitlesDropDuplicateSuffix(t *testing.T) {
-	if got, want := len(PostTitleEdits), 4; got != want {
-		t.Fatalf("수리통계2 제목 수정이 %d건이다, want %d", got, want)
+	// **건수를 못박지 않는다.** 이 표는 수리통계2 넷으로 시작했지만 제목만
+	// 바꾸는 예외는 다른 글에서도 생긴다(네트워크 이론). 여기서 지키는 것은
+	// 건수가 아니라 아래 세 가지다 — 중복 없음, 제목에 `(1)`이 안 남음,
+	// 작성일과 순서를 건드리지 않음.
+	if len(PostTitleEdits) == 0 {
+		t.Fatal("제목만 바꾸는 표가 비었다")
 	}
 	seen := map[string]bool{}
 	for _, edit := range PostTitleEdits {

@@ -311,6 +311,13 @@ var PostMoves = []PostMove{
 	{NotionPageID: "9cd6dead-7590-45d5-848a-941447d4abba", ToSlug: "bj-기하", Title: "어린왕자 : 1004번"},
 	{NotionPageID: "d8ac33a0-5a03-4589-9903-725c6c180c23", ToSlug: "bj-기하", Title: "하키 : 1358번"},
 	{NotionPageID: "4f646fbf-d572-4ead-8a9a-275589e7b309", ToSlug: "bj-기하", Title: "참외밭 : 2477번"},
+	// 네트워크 표지 본문이 가리키던 입구 글 셋. **같은 이름의 하위 분류로
+	// 내려보내 그 분류의 표지로 삼는다**(Covers) — école 42에서 쓴 방법과 같다.
+	// 안 그러면 `네트워크` 화면에 입구 글 이름과 같은 이름의 하위 분류가
+	// 나란히 서서 같은 곳으로 가는 길이 두 벌이 된다.
+	{NotionPageID: "55abb689-6d32-4c4f-9949-94b868e6aaec", ToSlug: "네트워크-이론", Title: "네트워크 이론"},
+	{NotionPageID: "8188d988-ae1f-4bb8-b677-62d13490b036", ToSlug: "소켓-프로그래밍", Title: "소켓 프로그래밍"},
+	{NotionPageID: "c8c7eeac-71b2-43fb-87a8-0fa9901a2536", ToSlug: "http-완벽-가이드", Title: "HTTP 완벽 가이드"},
 }
 
 // PostMetadataEdit는 노션 원본과 다르게 공개 아카이브에서 쓸 제목·작성일·순서다.
@@ -434,6 +441,9 @@ var PostTitleEdits = []PostTitleEdit{
 	{NotionPageID: "805825dd-084e-4612-9465-a2054a0d2004", OriginalTitle: "확률함수와 커널 (1)", Title: "확률함수와 커널"},
 	{NotionPageID: "d9fe0a39-89cd-48b6-84ee-0efaa78cf67b", OriginalTitle: "수리통계2 - 과제 (1)", Title: "수리통계2 - 과제"},
 	{NotionPageID: "1f3d0731-e367-4d0d-8239-94d92d6d02d5", OriginalTitle: "수리통계2 - 시험 (1)", Title: "수리통계2 - 시험"},
+	// `네트워크 이론 (2)`를 없앴으므로 `(1)`도 뜻을 잃었다. 분류 이름은
+	// cmd/regroup의 renames가 함께 바꾼다. 원본 제목 끝에 공백이 있다.
+	{NotionPageID: "55abb689-6d32-4c4f-9949-94b868e6aaec", OriginalTitle: "네트워크 이론 (1) ", Title: "네트워크 이론"},
 }
 
 // PostTitleByID는 제목만 바꾸는 예외를 notion_page_id로 찾는다.
@@ -505,6 +515,21 @@ type StatusEdit struct {
 var StatusEdits = []StatusEdit{
 	// 지금은 비어 있다. 여기 있던 빅데이터 분석기사의 두 마디(개념정리·실전문제)는
 	// 커리어 분류를 통째로 없애면서 DropPosts로 갔다.
+	// 네트워크의 입구 글 둘. **표지로 쓰려면 보이는 글이어야 한다** —
+	// store.coverSlug가 notHidden을 거치므로 draft인 표지는 없는 것과 같고,
+	// 그러면 본문 링크가 분류 URL로 안 바뀌어 같은 이름이 두 벌로 나온다.
+	{
+		NotionPageID: "55abb689-6d32-4c4f-9949-94b868e6aaec",
+		Status:       "unlisted",
+		Title:        "네트워크 이론",
+		Why:          "네트워크 이론 분류의 표지 글이다. draft면 표지가 무효라 분류 이름이 본문과 목록에 두 벌로 나온다",
+	},
+	{
+		NotionPageID: "c8c7eeac-71b2-43fb-87a8-0fa9901a2536",
+		Status:       "unlisted",
+		Title:        "HTTP 완벽 가이드",
+		Why:          "HTTP 완벽 가이드 분류의 표지 글이다. 같은 이유로 보이는 글이어야 한다",
+	},
 }
 
 // ApplyStatus는 CSV가 준 status 위에 사람이 정한 값을 얹는다.
@@ -694,6 +719,21 @@ var Covers = []Cover{
 	{Slug: "minishell", NotionPageID: "518ea6e1-306c-4cfa-8b3e-6ac182c16e14", Why: "école 42의 minishell 입구 글을 해당 분류 표지로 쓴다"},
 	{Slug: "philosopher", NotionPageID: "cdf4ecb8-ecdb-4cda-9dbc-d74722213449", Why: "école 42의 philosopher 입구 글을 해당 분류 표지로 쓴다"},
 	{Slug: "pipex", NotionPageID: "250631b1-6ac8-4e58-8dc2-eec4ecaca254", Why: "école 42의 pipex 입구 글을 해당 분류 표지로 쓴다"},
+	// 네트워크의 하위 분류 셋. 입구 글이 그 분류의 표지가 되면 표지 본문의
+	// 링크가 분류 URL로 바뀌고(linkCoveredChildCategories), 이미 안내한
+	// 하위 분류는 아래 목록에서 빠진다.
+	{
+		Slug: "네트워크-이론", NotionPageID: "55abb689-6d32-4c4f-9949-94b868e6aaec",
+		Why: "네트워크 표지가 이미 이 이름을 안내한다. 목록에 같은 이름이 두 벌로 나오지 않게 한다",
+	},
+	{
+		Slug: "소켓-프로그래밍", NotionPageID: "8188d988-ae1f-4bb8-b677-62d13490b036",
+		Why: "〃",
+	},
+	{
+		Slug: "http-완벽-가이드", NotionPageID: "c8c7eeac-71b2-43fb-87a8-0fa9901a2536",
+		Why: "〃",
+	},
 }
 
 // MovedSourceNames는 사람이 옮긴 카테고리의 source_name 집합이다.
@@ -1248,6 +1288,12 @@ var DropPosts = []DropPost{
 	{NotionPageID: "9cf067d5-606b-4391-96cd-0d6f9e2ac459", Title: "최소공배수", Why: "본문이 0바이트다. 제목만 있고 내용이 없다"},
 	{NotionPageID: "d394cf76-5612-4f6b-896d-73c7de79b21c", Title: "Big-O Notation", Why: "본문이 0바이트다. 제목만 있고 내용이 없다"},
 	{NotionPageID: "f6d59063-e30e-47e4-ae44-0b69426b45c3", Title: "시간복잡도", Why: "본문이 0바이트다. 제목만 있고 내용이 없다 (draft가 아니라 공개 화면에 빈 페이지로 나가고 있었다)"},
+	{
+		NotionPageID: "14e265f9-f285-4302-905e-42783a4a769c",
+		Title:        "네트워크 이론 (2)",
+		Why: "본문이 \"advanced ver. : 하향식 접근으로 알아보는 네트워크\" 한 줄(37자)뿐이고 " +
+			"딸린 글도 분류도 없다. 앞으로 읽을 책 이름을 적어둔 껍데기다",
+	},
 }
 
 // Dropped는 이 글을 이관에서 빼야 하는지다.

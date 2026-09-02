@@ -710,7 +710,12 @@ func verify(sqlDB *sql.DB, p *plan) error {
 			`SELECT id FROM categories WHERE slug = ?`, cv.Slug).Scan(&id); err {
 		case nil:
 		case sql.ErrNoRows:
-			return fmt.Errorf("표지를 붙일 카테고리가 없다: %q", cv.Slug)
+			// **아직 없으면 regroup을 기다린다.** 그 분류를 만들거나 이름을
+			// 바꾸는 것은 regroup의 일이라, 새 Covers를 추가한 직후에는
+			// categorize가 먼저 돌 수 있다. 실패로 다루면 두 도구가 서로를
+			// 기다리는 교착이 된다 — `PostMoves`의 대상 slug를 미루는 것과
+			// 같은 이유다(CLAUDE.md "새 층을 처음 얹을 때").
+			continue
 		default:
 			return fmt.Errorf("표지 카테고리 조회(%s): %w", cv.Slug, err)
 		}

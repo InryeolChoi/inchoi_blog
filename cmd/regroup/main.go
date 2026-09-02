@@ -169,6 +169,9 @@ var renames = []rename{
 	// 달고 있던 카테고리는 글이 열 편뿐이고 내용이 여기와 겹쳐서 없앴다.
 	{fromName: "핸즈온 머신러닝 2", toName: "머신러닝: 기초이론", toSlug: "머신러닝-기초이론"},
 	{fromName: "자연어처리 (1) : BERT와 GPT", toName: "자연어처리", toSlug: "자연어처리"},
+	// `(2)`가 없어졌으므로 `(1)`이라는 번호도 뜻을 잃었다. 껍데기뿐이던
+	// `네트워크 이론 (2)`는 DropPosts로 뺐다.
+	{fromName: "네트워크 이론 (1)", toName: "네트워크 이론", toSlug: "네트워크-이론"},
 }
 
 // allScheduledToLeave는 이 카테고리에 남은 글과 하위 분류가 **전부** curation의
@@ -486,10 +489,29 @@ func checkPlan(cat *catalog) error {
 	}
 
 	// covers가 가리키는 카테고리가 있는지. 글은 DB를 봐야 알 수 있어 여기선 안 본다.
-	for _, cv := range curation.Covers {
-		if _, ok := cat.bySlug[cv.Slug]; !ok {
-			return fmt.Errorf("표지를 붙일 카테고리가 없다: slug %q", cv.Slug)
+	//
+	// **이번 실행이 만들 slug도 받아들인다.** `renames`가 이름과 slug를 함께
+	// 바꾸는 경우, 표지가 가리키는 것은 바뀐 뒤의 slug다. 그런데 그 이름 변경은
+	// 이 검사보다 **뒤에** 일어나므로 DB에는 아직 옛 slug만 있다. 여기서 막으면
+	// 이름을 바꾸면서 표지를 지정하는 실행이 통째로 멈춘다 —
+	// `Moves`의 `ToSlug`를 받아주는 것과 같은 이유다.
+	willExist := map[string]bool{}
+	for _, r := range renames {
+		if _, ok := cat.byName[r.fromName]; ok {
+			willExist[r.toSlug] = true
 		}
+	}
+	for _, t := range topics {
+		willExist[t.slug] = true
+	}
+	for _, cv := range curation.Covers {
+		if _, ok := cat.bySlug[cv.Slug]; ok {
+			continue
+		}
+		if willExist[cv.Slug] {
+			continue
+		}
+		return fmt.Errorf("표지를 붙일 카테고리가 없다: slug %q", cv.Slug)
 	}
 	return nil
 }
