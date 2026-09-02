@@ -223,6 +223,22 @@ func crumbs(trail []Category) ([]Crumb, string) {
 	return out, path
 }
 
+// appendPostCrumbs는 카테고리 경로 뒤에 상위 글 사슬을 잇는다.
+//
+// **이름이 바로 앞 칸과 같으면 건너뛴다.** 분류의 표지 글은 그 분류와 이름이
+// 같은 경우가 많은데(수리통계1·2, 탐색적 자료분석, 확률과정론 — 61편),
+// 그대로 이으면 경로에 `… / 수리통계2 / 수리통계2`처럼 같은 말이 두 번 찍힌다.
+// 가는 곳도 사실상 같다 — 그 분류를 열면 표지 본문이 위에 펼쳐지기 때문이다.
+func appendPostCrumbs(crumbList []Crumb, ancestors []PostSummary) []Crumb {
+	for _, a := range ancestors {
+		if len(crumbList) > 0 && crumbList[len(crumbList)-1].Name == a.Title {
+			continue
+		}
+		crumbList = append(crumbList, Crumb{Name: a.Title, URL: "/p/" + url.PathEscape(a.Slug)})
+	}
+	return crumbList
+}
+
 // render는 페이지 하나를 그린다. 사이드바는 모든 페이지에 나오므로 여기서
 // 한 번에 채운다 — 핸들러마다 잊지 않고 넣게 하는 것보다 안전하다.
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data pageData) {
@@ -639,10 +655,14 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// 카테고리 경로 뒤에 상위 글 사슬을 이어붙인다. 노션 계층이 카테고리 3단계보다
 	// 깊었던 글은 카테고리만으로는 어디쯤인지 알 수 없다.
+	//
+	// **이름이 바로 앞 칸과 같으면 건너뛴다.** 분류의 표지 글은 그 분류와
+	// 이름이 같은 경우가 많은데(수리통계1·2, 탐색적 자료분석, 확률과정론 —
+	// 61편), 그대로 이으면 경로에 `… / 수리통계2 / 수리통계2`처럼 같은 말이
+	// 두 번 찍힌다. 가는 곳도 사실상 같다 — 그 분류를 열면 표지 본문이 위에
+	// 펼쳐지기 때문이다.
 	crumbList, _ := crumbs(post.Trail)
-	for _, a := range post.Ancestors {
-		crumbList = append(crumbList, Crumb{Name: a.Title, URL: "/p/" + url.PathEscape(a.Slug)})
-	}
+	crumbList = appendPostCrumbs(crumbList, post.Ancestors)
 
 	// 본문이 이미 가리키고 있는 글은 "하위 글"에서 뺀다. 안 그러면 한 화면에
 	// 같은 목록이 두 번 나온다.
