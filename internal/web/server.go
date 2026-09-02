@@ -514,19 +514,67 @@ func listOnlyCategory(slug string) bool {
 // 부모 글이 목차에 있으면 그 상세 페이지에서 하위 글로 이어지므로, 카테고리
 // 화면에 같은 사슬을 한 벌 더 펼칠 필요가 없다. 상단에서 안내하지 않은 갈래는
 // 그대로 남겨 길을 잃지 않게 한다.
+//
+// # 자손은 parent_id만으로 찾을 수 없다
+//
+// 예전에는 `Children`만 훑었다. 그런데 `parent_id`는 5개 카테고리 172건에만
+// 채워져 있어서(CLAUDE.md "글 계층"), 나머지 글은 부모가 목차에 있어도 자손이
+// **뿌리로 남는다.** 그러면 `pathTree`가 그것들을 경로로 다시 묶으면서 이미
+// 뺀 부모를 **이름표로 되살린다** — 표지의 목록과 아래 `글`이 같은 사슬을 두
+// 벌로 보여준다. `HTTP 완벽 가이드`가 실제로 그랬다(표지에 5편, 아래에 그 중
+// 하나의 자손 60여 편).
+//
+// 그래서 `original_path`로도 본다. 목차에 있는 글의 경로 뒤에 한 칸이라도 더
+// 붙어 있으면 그 글의 자손이다 — `pathTree`가 층을 되살릴 때 쓰는 것과 같은
+// 근거다(pathtree.go).
 func dropShownPostTrees(posts []PostSummary, shown map[string]bool) []PostSummary {
 	if len(posts) == 0 || len(shown) == 0 {
 		return posts
 	}
+	prefixes := shownPathPrefixes(posts, shown)
+	return dropShownRecursive(posts, shown, prefixes)
+}
+
+// shownPathPrefixes는 목차에 있는 글들의 `original_path`를 모은다. 자손을
+// 가려내는 데 쓴다.
+func shownPathPrefixes(posts []PostSummary, shown map[string]bool) []string {
+	var out []string
+	var walk func([]PostSummary)
+	walk = func(list []PostSummary) {
+		for _, p := range list {
+			if shown[p.Slug] && p.OriginalPath.Valid && p.OriginalPath.String != "" {
+				out = append(out, p.OriginalPath.String+" > ")
+			}
+			walk(p.Children)
+		}
+	}
+	walk(posts)
+	return out
+}
+
+func dropShownRecursive(posts []PostSummary, shown map[string]bool, prefixes []string) []PostSummary {
 	out := make([]PostSummary, 0, len(posts))
 	for _, post := range posts {
-		if shown[post.Slug] {
+		if shown[post.Slug] || underShown(post, prefixes) {
 			continue
 		}
-		post.Children = dropShownPostTrees(post.Children, shown)
+		post.Children = dropShownRecursive(post.Children, shown, prefixes)
 		out = append(out, post)
 	}
 	return out
+}
+
+// underShown은 이 글이 목차에 있는 어느 글의 자손인지 본다.
+func underShown(post PostSummary, prefixes []string) bool {
+	if !post.OriginalPath.Valid {
+		return false
+	}
+	for _, pre := range prefixes {
+		if strings.HasPrefix(post.OriginalPath.String, pre) {
+			return true
+		}
+	}
+	return false
 }
 
 // dropCoveredChildren은 표지 글 본문이 이미 통째로 펼쳐 보여준 하위 분류를
