@@ -846,6 +846,53 @@
     font-size: .8rem; color: var(--ink-dim); min-height: 1.2em;
   }
 
+  /* ── 결합확률 / 조건부확률 ────────────────────────────────────
+     `:::anim joint-probability`. 위에서 보기와 비스듬히 보기를 버튼으로
+     오간다. 두 그림 모두 SVG viewBox라 폭에 맞춰 저절로 줄어든다 —
+     모바일·태블릿·PC에서 따로 손볼 것이 없다. */
+  .joint-stage { padding: .7rem .5rem .2rem; }
+  .joint-svg {
+    display: block; width: 100%; height: auto;
+    /* 좁은 화면에서 글자가 뭉개지지 않게 최소 폭을 준다. 넘치면 페이지가
+       아니라 이 상자가 가로로 스크롤한다(아래 overflow-x). */
+    min-width: 20rem;
+  }
+  /* 넘치는 것은 제 안에서만 스크롤한다 — pre·table·수식과 같은 규칙이다. */
+  .joint-stage { overflow-x: auto; }
+  .joint-cell { cursor: pointer; outline: none; }
+  .joint-cell:focus-visible .joint-fill,
+  .joint-cell:focus-visible .joint-top { stroke: var(--accent); stroke-width: 2.5; }
+  /* 결합확률은 노랑(라이트)·초록(다크) 포인트 한 색을 진하기로만 나눈다.
+     본문이 "노란색 부분을 결합확률"이라고 부르는 것과 이어진다. */
+  .joint-fill { fill: var(--rail); stroke: var(--ink); stroke-width: .8; }
+  .joint-num { font: 600 13px var(--mono); fill: var(--ink); text-anchor: middle; }
+  /* 3D 라벨은 뒤 막대와 겹칠 수 있어서 지면색 테두리를 두른다.
+     paint-order로 테두리를 글자보다 먼저 그려야 획이 안 먹힌다. */
+  .joint-num3 {
+    font: 600 12px var(--mono); fill: var(--ink); text-anchor: middle;
+    paint-order: stroke; stroke: var(--bg); stroke-width: 3.5; stroke-linejoin: round;
+  }
+  .joint-axis {
+    font: 600 12px var(--chrome); fill: var(--ink-dim); text-anchor: middle;
+    paint-order: stroke; stroke: var(--bg); stroke-width: 3.5; stroke-linejoin: round;
+  }
+  .joint-axis-y { text-anchor: end; }
+  .joint-marg { font: 600 12px var(--mono); fill: var(--ink-dim); text-anchor: middle; }
+  .joint-marg.is-on { fill: var(--ink); }
+  /* 3D. 한 막대의 세 면이 같은 색이면 입체로 안 읽히므로 밝기를 나눈다. */
+  .joint-floor { fill: var(--surface); stroke: var(--line); stroke-width: .8; }
+  .joint-top   { fill: var(--rail); stroke: var(--ink); stroke-width: .8; }
+  .joint-face  { fill: var(--rail); fill-opacity: .72; stroke: var(--ink); stroke-width: .8; }
+  .joint-side  { fill: var(--rail); fill-opacity: .45; stroke: var(--ink); stroke-width: .8; }
+  /* 고른 칸의 행·열은 남기고 나머지는 물린다 — 조건부확률이 "그 줄만 떼어
+     다시 1로 만든 것"이라는 게 눈에 보여야 한다. */
+  /* 라벨 묶음은 누름을 가로채지 않는다 — 막대 위에 겹쳐 있을 뿐이다. */
+  .joint-lab { pointer-events: none; }
+  .joint-cell.is-dim { opacity: .28; }
+  .joint-cell.is-line { opacity: .72; }
+  .joint-cell.is-sel .joint-fill,
+  .joint-cell.is-sel .joint-top { stroke-width: 2.5; }
+
   /* ── 복사 버튼 ────────────────────────────────────────────────── */
   /* **버튼은 static/copy.js가 만든다.** 클립보드는 스크립트 없이 못 쓰므로
      서버가 미리 찍으면 스크립트가 꺼진 브라우저에 죽은 버튼이 남는다.

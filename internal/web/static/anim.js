@@ -157,10 +157,265 @@
     player(ui, steps, function (s) { bars(ui.stage, s.arr, s.mark); });
   }
 
+  // ── 결합확률 / 조건부확률 ─────────────────────────────────────
+  //
+  // 죽은 apption.co 임베드가 있던 자리를 대신한다. 본문은 "노란색 부분이
+  // 결합확률, 초록색 부분이 주변확률"이라고 설명하는데 정작 볼 그림이 없었다.
+  //
+  // **두 눈높이를 버튼으로 오간다.** 위에서 내려다보면 어느 칸이 큰지 표처럼
+  // 한눈에 읽히고, 오른쪽 위에서 비스듬히 보면 높이가 곧 확률이라는 것이
+  // 보인다. 기본은 위에서 보는 쪽이다 — 표를 읽는 것이 먼저다.
+  //
+  // 3D는 **등각투상(isometric)을 직접 계산해서** 그린다. 라이브러리를 쓰지
+  // 않는 이유는 이 파일의 다른 것들과 같다(빌드 스텝 없음, CDN 의존 없음).
+  // 막대 하나가 윗면·왼면·오른면 세 개의 다각형이라 그게 전부다.
+  var JOINT = {
+    xName: "날씨", yName: "행동",
+    xs: ["맑음", "흐림", "비"],
+    ys: ["산책", "집"],
+    // p[j][i] = P(X = xs[i], Y = ys[j]). 합이 1이다.
+    p: [
+      [0.30, 0.10, 0.02],
+      [0.12, 0.16, 0.30]
+    ]
+  };
+
+  function jointProbability(host) {
+    var d = JOINT;
+    var nx = d.xs.length, ny = d.ys.length;
+
+    var maxP = 0, total = 0;
+    for (var j = 0; j < ny; j++) {
+      for (var i = 0; i < nx; i++) { maxP = Math.max(maxP, d.p[j][i]); total += d.p[j][i]; }
+    }
+    // 주변확률. px[i] = P(X = xs[i]), py[j] = P(Y = ys[j]).
+    var px = [], py = [];
+    for (var a = 0; a < nx; a++) { var s = 0; for (var b = 0; b < ny; b++) s += d.p[b][a]; px.push(s); }
+    for (var c = 0; c < ny; c++) { var t = 0; for (var e = 0; e < nx; e++) t += d.p[c][e]; py.push(t); }
+
+    host.textContent = "";
+    var wrap = el("div", { class: "joint" });
+    var head = el("div", { class: "anim-head" }, [
+      el("span", { class: "anim-title", text: "결합확률 P(" + d.xName + ", " + d.yName + ")" })
+    ]);
+    var barBox = el("div", { class: "anim-bar" });
+    head.appendChild(barBox);
+    var stage = el("div", { class: "joint-stage" });
+    var note = el("p", { class: "anim-note", role: "status" });
+    wrap.appendChild(head);
+    wrap.appendChild(stage);
+    wrap.appendChild(note);
+    host.appendChild(wrap);
+
+    var mode = "top";      // 기본은 위에서 바라보기
+    var sel = null;        // 고른 칸 {i, j}
+
+    var btn = el("button", {
+      type: "button", class: "anim-btn", text: "비스듬히 보기", "aria-pressed": "false",
+      onclick: function () {
+        mode = mode === "top" ? "iso" : "top";
+        btn.textContent = mode === "top" ? "비스듬히 보기" : "위에서 보기";
+        btn.setAttribute("aria-pressed", mode === "top" ? "false" : "true");
+        draw();
+      }
+    });
+    barBox.appendChild(btn);
+
+    function tell() {
+      if (!sel) {
+        note.textContent = "칸을 누르면 결합확률과 조건부확률을 함께 보여준다. 전체 합 = " + total.toFixed(2);
+        return;
+      }
+      var joint = d.p[sel.j][sel.i], mx = px[sel.i], my = py[sel.j];
+      note.textContent =
+        "P(" + d.xs[sel.i] + ", " + d.ys[sel.j] + ") = " + joint.toFixed(2) +
+        " · P(" + d.ys[sel.j] + " | " + d.xs[sel.i] + ") = " +
+        joint.toFixed(2) + "/" + mx.toFixed(2) + " = " + (joint / mx).toFixed(3) +
+        " · P(" + d.xs[sel.i] + " | " + d.ys[sel.j] + ") = " +
+        joint.toFixed(2) + "/" + my.toFixed(2) + " = " + (joint / my).toFixed(3);
+    }
+
+    function pick(i, j) {
+      sel = (sel && sel.i === i && sel.j === j) ? null : { i: i, j: j };
+      draw();
+    }
+
+    // 고른 칸이 있으면 그 칸의 행과 열을 함께 물들인다 — 조건부확률은
+    // "그 줄만 떼어 다시 1로 만든 것"이라, 어느 줄로 나누는지가 보여야 한다.
+    function cellClass(i, j) {
+      if (!sel) return "joint-cell";
+      if (sel.i === i && sel.j === j) return "joint-cell is-sel";
+      if (sel.i === i || sel.j === j) return "joint-cell is-line";
+      return "joint-cell is-dim";
+    }
+
+    // ── 위에서 바라보기 ──────────────────────────────────────
+    // 칸 넓이는 그대로 두고 **색 진하기로** 확률을 나타낸다. 넓이까지
+    // 바꾸면 모자이크가 되어 행·열을 눈으로 따라가기 어렵다.
+    function drawTop() {
+      var L = 62, T = 16, CW = 96, CH = 52, MB = 22;
+      var W = L + nx * CW + MB + 12, H = T + ny * CH + MB + 26;
+      var svg = svgEl("svg", {
+        viewBox: "0 0 " + W + " " + H, class: "joint-svg",
+        role: "img", "aria-label": "결합확률 표를 위에서 본 그림"
+      });
+
+      // 열 이름
+      for (var i = 0; i < nx; i++) {
+        svg.appendChild(text(L + i * CW + CW / 2, T - 5, d.xs[i], "joint-axis"));
+      }
+      for (var j = 0; j < ny; j++) {
+        svg.appendChild(text(L - 6, T + j * CH + CH / 2 + 4, d.ys[j], "joint-axis joint-axis-y"));
+        for (var i2 = 0; i2 < nx; i2++) {
+          var p = d.p[j][i2];
+          var g = svgEl("g", { class: cellClass(i2, j), tabindex: "0", role: "button",
+            "aria-label": d.xs[i2] + " " + d.ys[j] + " 확률 " + p.toFixed(2) });
+          g.appendChild(svgEl("rect", {
+            x: L + i2 * CW + 2, y: T + j * CH + 2, width: CW - 4, height: CH - 4,
+            class: "joint-fill", "fill-opacity": (0.12 + 0.88 * (p / maxP)).toFixed(3)
+          }));
+          g.appendChild(text(L + i2 * CW + CW / 2, T + j * CH + CH / 2 + 5, p.toFixed(2), "joint-num"));
+          bindPick(g, i2, j);
+          svg.appendChild(g);
+        }
+      }
+
+      // 주변확률: 오른쪽(행 합)과 아래(열 합)
+      for (var j2 = 0; j2 < ny; j2++) {
+        svg.appendChild(text(L + nx * CW + 8, T + j2 * CH + CH / 2 + 4, py[j2].toFixed(2),
+          "joint-marg" + (sel && sel.j === j2 ? " is-on" : "")));
+      }
+      for (var i3 = 0; i3 < nx; i3++) {
+        svg.appendChild(text(L + i3 * CW + CW / 2, T + ny * CH + 16, px[i3].toFixed(2),
+          "joint-marg" + (sel && sel.i === i3 ? " is-on" : "")));
+      }
+      svg.appendChild(text(L - 6, T + ny * CH + 16, "주변확률", "joint-axis joint-axis-y"));
+      return svg;
+    }
+
+    // ── 오른쪽 위에서 비스듬히 보기 (등각투상) ──────────────────
+    // 격자 좌표 (i, j)와 높이 h를 화면 좌표로 옮긴다. 등각투상이라 깊이와
+    // 관계없이 같은 비율이고, 그래서 뒤쪽 막대가 작아 보이지 않는다.
+    function iso(i, j, h) {
+      // **같은 대각선(i-j가 같은) 칸들은 화면에서 x가 똑같다.** 그래서 그
+      // 칸들의 숫자 라벨은 세로로만 갈리는데, 높이 차이가 깊이 차이를 거의
+      // 지우면 두 라벨이 겹친다. 실제로 (흐림, 산책)=0.10과 (비, 집)=0.30이
+      // 14px까지 붙었다. 깊이 간격 V를 키우고 높이 배율 HZ를 줄여 그 최소
+      // 간격을 32px로 벌렸다.
+      var U = 46, V = 32, HZ = 160;   // 가로/세로 한 칸, 확률 1의 높이
+      return {
+        x: (i - j) * U,
+        y: (i + j) * V - h * HZ
+      };
+    }
+
+    function drawIso() {
+      var pts = [];
+      // 바닥 네 귀퉁이로 화면 크기를 잡는다. 가장 높은 막대의 꼭대기도 넣는다.
+      for (var j = 0; j <= ny; j++) for (var i = 0; i <= nx; i++) pts.push(iso(i, j, 0));
+      pts.push(iso(0, 0, maxP));
+      var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+      pts.forEach(function (p) {
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+      });
+      var pad = 34;
+      var W = (maxX - minX) + pad * 2, H = (maxY - minY) + pad * 2;
+      var ox = -minX + pad, oy = -minY + pad;
+      var svg = svgEl("svg", {
+        viewBox: "0 0 " + W.toFixed(1) + " " + H.toFixed(1), class: "joint-svg",
+        role: "img", "aria-label": "결합확률을 오른쪽 위에서 비스듬히 본 3차원 막대그림"
+      });
+      function P(i, j, h) { var q = iso(i, j, h); return (q.x + ox).toFixed(2) + "," + (q.y + oy).toFixed(2); }
+
+      // 바닥 격자를 먼저 깐다.
+      for (var j1 = 0; j1 < ny; j1++) {
+        for (var i1 = 0; i1 < nx; i1++) {
+          svg.appendChild(svgEl("polygon", {
+            points: [P(i1, j1, 0), P(i1 + 1, j1, 0), P(i1 + 1, j1 + 1, 0), P(i1, j1 + 1, 0)].join(" "),
+            class: "joint-floor"
+          }));
+        }
+      }
+
+      // **뒤에서 앞으로 그린다.** i+j가 작을수록 뒤라, 그 순서로 그려야
+      // 앞 막대가 뒤 막대를 제대로 가린다(화가 알고리즘).
+      var order = [];
+      for (var j2 = 0; j2 < ny; j2++) for (var i2 = 0; i2 < nx; i2++) order.push({ i: i2, j: j2 });
+      order.sort(function (a, b) { return (a.i + a.j) - (b.i + b.j); });
+
+      // **막대를 다 그린 뒤에 라벨만 따로 한 번 더 돈다.** 한 덩어리로 그리면
+      // 앞 막대가 뒤 막대의 라벨을 덮는다.
+      var labels = [];
+
+      order.forEach(function (c) {
+        var h = d.p[c.j][c.i];
+        var g = svgEl("g", { class: cellClass(c.i, c.j), tabindex: "0", role: "button",
+          "aria-label": d.xs[c.i] + " " + d.ys[c.j] + " 확률 " + h.toFixed(2) });
+        var i0 = c.i, j0 = c.j, i1b = c.i + 1, j1b = c.j + 1;
+        // 윗면
+        g.appendChild(svgEl("polygon", {
+          points: [P(i0, j0, h), P(i1b, j0, h), P(i1b, j1b, h), P(i0, j1b, h)].join(" "),
+          class: "joint-top"
+        }));
+        // 왼쪽 면 (j가 커지는 쪽)
+        g.appendChild(svgEl("polygon", {
+          points: [P(i0, j1b, h), P(i1b, j1b, h), P(i1b, j1b, 0), P(i0, j1b, 0)].join(" "),
+          class: "joint-side"
+        }));
+        // 오른쪽 면 (i가 커지는 쪽)
+        g.appendChild(svgEl("polygon", {
+          points: [P(i1b, j0, h), P(i1b, j1b, h), P(i1b, j1b, 0), P(i1b, j0, 0)].join(" "),
+          class: "joint-face"
+        }));
+        // 라벨은 윗면 한가운데 바로 위에 둔다. 글자에 지면색 테두리를 둘러
+        // (CSS의 paint-order) 뒤 막대와 겹쳐도 읽힌다.
+        bindPick(g, c.i, c.j);
+        svg.appendChild(g);
+
+        var lab = iso(i0 + 0.5, j0 + 0.5, h);
+        var lg = svgEl("g", { class: cellClass(c.i, c.j) + " joint-lab" });
+        lg.appendChild(text(lab.x + ox, lab.y + oy - 7, h.toFixed(2), "joint-num3"));
+        labels.push(lg);
+      });
+      labels.forEach(function (lg) { svg.appendChild(lg); });
+
+      // 축 이름은 바닥에서 충분히 떨어뜨린다. 가까이 두면 막대 옆면에 묻힌다.
+      var xm = iso(nx / 2, ny + 0.75, 0), ym = iso(-0.75, ny / 2, 0);
+      svg.appendChild(text(xm.x + ox, xm.y + oy, d.xName, "joint-axis"));
+      svg.appendChild(text(ym.x + ox, ym.y + oy, d.yName, "joint-axis"));
+      return svg;
+    }
+
+    function text(x, y, s, cls) {
+      var t = svgEl("text", { x: x.toFixed(2), y: y.toFixed(2), class: cls });
+      t.textContent = s;
+      return t;
+    }
+
+    // 누르는 길을 마우스와 키보드 양쪽으로 연다. SVG 안이라 <button>을
+    // 쓸 수 없어서 role과 tabindex를 손으로 단다.
+    function bindPick(g, i, j) {
+      g.addEventListener("click", function () { pick(i, j); });
+      g.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(i, j); }
+      });
+    }
+
+    function draw() {
+      stage.textContent = "";
+      stage.appendChild(mode === "top" ? drawTop() : drawIso());
+      tell();
+    }
+
+    draw();
+  }
+
   // **이름표는 여기 하나뿐이다.** 본문의 `:::anim 이름`이 이 표를 찾는다.
   var COMPONENTS = {
     "sort-bubble": sortBubble,
     "binary-search": binarySearch,
+    "joint-probability": jointProbability,
   };
 
   function mount(root) {

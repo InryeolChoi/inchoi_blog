@@ -12,6 +12,7 @@ package curation
 // 훑으며 `appendBody`를 부르므로, 같은 글의 항목은 본문에 놓일 순서대로 적는다.
 var BodyAppends = concatBodyAppends(
 	probabilityProcessAppends,
+	mathstat1ExamAppends,
 	mathstat2ExamAppends,
 )
 

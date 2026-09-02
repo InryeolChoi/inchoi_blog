@@ -1476,6 +1476,24 @@ var BodyEdits = []BodyEdit{
 	// 남겨두면 펼칠 것이 없어 링크가 글자로 풀리고, 그 자리는 막다른 길이 된다.
 	{NotionPageID: "bab05ef2-8d1b-44a1-995b-41971e6cccc4", Remove: "[알고리즘 : 기초 (1)](/p/6a1964c7-fa99-4045-9944-99f701c238a2)", Title: "알고리즘: 이론", Why: "그 아래 글 아홉이 전부 본문 0바이트라 분류를 없앴다. 펼칠 것이 없는 목록이다"},
 	{NotionPageID: "bab05ef2-8d1b-44a1-995b-41971e6cccc4", Remove: "[알고리즘 : 기초 (2)](/p/b18bed3d-bf63-44b5-a9ef-1d4483752268)", Title: "알고리즘: 이론", Why: "그 아래 글 아홉이 전부 본문 0바이트라 분류를 없앴다. 펼칠 것이 없는 목록이다"},
+	// `1. 확률`의 조건부확률 절에 있던 apption.co 임베드. **이미 죽은 외부
+	// 링크다** — 그 자리에 결합확률·조건부확률을 직접 보여주는 그림을 넣는다
+	// (`internal/web/static/anim.js`의 joint-probability).
+	//
+	// 본문은 바로 아래에서 "노란색 부분을 결합확률", "초록색 부분을 주변확률"
+	// 이라고 설명하는데 정작 볼 그림이 없었다. 그림이 그 두 문장을 다시
+	// 이어 준다.
+	//
+	// **본문에는 이름만 들어간다.** 렌더러가 html.WithUnsafe()라 본문에
+	// <script>를 쓰면 이미 실행되므로, 임의 JS를 담는 길은 열지 않는다
+	// (CLAUDE.md "정해둔 것 ④").
+	{
+		NotionPageID: "3afca6f5-eb55-4276-98fb-9b7c2fab863c",
+		Remove:       "[https://apption.co/embeds/349a18d1](https://apption.co/embeds/349a18d1)",
+		Replace:      ":::anim joint-probability",
+		Title:        "1. 확률",
+		Why:          "apption.co 임베드가 이미 죽어서 눌러도 아무것도 안 나온다. 결합·주변·조건부확률을 직접 보여주는 그림으로 바꾼다",
+	},
 }
 
 // ApplyBodyEdits는 한 페이지의 변환 결과에 BodyEdits와 BodyAppends를 적용한다.
