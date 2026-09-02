@@ -302,9 +302,12 @@ tooling은 노션 최상위가 그대로 한 갈래인데, `웹 프로그래밍`
   알파벳순도 뜻이 없다. 지금은 노션에서 온 형제가 남지 않아 0부터 세지만,
   남겨야 할 형제가 생기면 `subs`가 `members` 다음부터 세는 것처럼 고칠 자리다.
 
-- **표지가 가리키는 분류는 `renames`가 이번 실행에서 만들 slug여도 된다**
-  (2026-09-02). `Covers`가 이름이 바뀔 분류를 가리키면 그 slug는 아직 DB에
-  없는데, 이름 변경은 계획 검사보다 **뒤에** 일어난다. 막으면 이름을 바꾸면서
+- **표지가 가리키는 분류는 `renames`·`topics`·`groups`·`subs`가 이번 실행에서
+  만들 slug여도 된다** (2026-09-02, 2026-09-03에 `groups`/`subs`를 더했다).
+  `Covers`가 이름이 바뀌거나 새로 생길 분류를 가리키면 그 slug는 아직 DB에
+  없는데, 만드는 일도 이름 변경도 계획 검사보다 **뒤에** 일어난다(1a·1b가 3보다
+  앞이다). 새 갈래를 놓으면서 그 갈래에 표지를 지정하는 실행이 통째로 멈추던
+  자리다 — `프로젝트 > 심심조각`이 실제로 그랬다. 막으면 이름을 바꾸면서
   표지를 지정하는 실행이 통째로 멈춘다 — `Moves`의 `ToSlug`를 받아주는 것과
   같은 이유다. **categorize 쪽은 아예 미룬다**: 그 분류를 만들거나 이름을 바꾸는
   것은 regroup의 일이라, 새 `Covers`를 추가한 직후에는 categorize가 먼저 돌 수
@@ -417,8 +420,8 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 | 표 | 뜻 | 멱등 키 | 보는 쪽 | 현재 |
 |---|---|---|---|---|
 | `Moves` | 카테고리를 사람이 정한 다른 분류 밑으로 | `source_name` | categorize·regroup | 17건 (웹 5갈래 + 모바일 → 개발 두 갈래) |
-| `Covers` | 사람이 정한 분류에 표지 글 붙이기 | `notion_page_id` | 〃 | 36건 (기존 14 + école 42 하위 분류 17 + 웹 입구 글 5) |
-| `PostMoves` | 글 하나를 경로와 다른 카테고리에 붙임 | `notion_page_id` | 〃 | 171건 (기존 67 + 백준 104) |
+| `Covers` | 사람이 정한 분류에 표지 글 붙이기 | `notion_page_id` | 〃 | 46건 (기존 36 + 운영체제 하위 분류 6 + 심심조각 + 데이터베이스 + 네트워크 2) |
+| `PostMoves` | 글 하나를 경로와 다른 카테고리에 붙임 | `notion_page_id` | 〃 | 189건 (기존 171 + 운영체제 입구 6 + Projects 분해 10 + 네트워크 2) |
 | `PostMetadataEdits` | 글 제목·원작성일·순서를 사람이 지정 | `notion_page_id` | import·sortorder | 28건 (선형대수 11 + 다변량분석 12 + 최적화이론 실전 순서 5) |
 | `PostTitleEdits` | 작성일·순서는 유지하고 글 제목만 지정 | `notion_page_id` | import | 수리통계2 참고자료 4건의 `(1)` 제거 |
 | `StatusEdits` | **글의 status를 사람이 지정** | `notion_page_id` | **import** | 0건 (빅데이터 분석기사의 마디 둘은 커리어와 함께 뺐다) |
@@ -1521,10 +1524,18 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
   - `prefers-reduced-motion: reduce`면 판이 어긋나지 않는다.
   - **카드가 있는 분류는 카드만 보여준다.** 표지 글 본문과 글 목록까지 함께 두면
     같은 곳으로 가는 길이 세 벌이 된다. 카드가 곧 그 분류의 안내다.
-  - **프로젝트는 예외적으로 하위 분류만 카드로 만들지 않는다.** école 42는 기존
-    하위 분류로, where42와 심심조각은 `Projects` 표지 글의 해당 제목 앵커로 보낸다.
-    두 서비스의 글 수는 그 DB 본문 절에 있는 `/p/` 링크를 세므로 코드에 박지 않는다.
-    셋 중 하나라도 없으면 평소 목록으로 돌아간다.
+  - **프로젝트도 평범한 `childDeck`이다** (2026-09-03에 그렇게 됐다). 예전에는
+    `Projects` 표지 글 본문에서 `# where42`·`# 심심조각` 두 절을 읽어 그 앵커로
+    보내는 전용 `projectDeck`이었다. **노션이 두 서비스를 한 분류에 절로 담고
+    있었기 때문**인데, where42는 Xcode 앱이고 심심조각은 스프링 서버라 한 이름
+    아래 둘 이유가 없다. 이제 `cmd/regroup`의 `subs`가 두 갈래를 실제 분류로
+    세우고(`where42`·`심심조각`) 옛 `Projects`는 `DropCategories`로 없앴다.
+    표지 글은 목차 두 벌을 `BodyEdits`로 걷어내면 심심조각 서버 메모만 남으므로
+    그 갈래의 표지가 된다 — 그 메모가 LightSail 컨테이너의 AI·Nginx·스프링
+    이야기라 where42의 것일 수 없다.
+    - **카드 그림의 키가 하위 분류 slug가 됐다**(`project-where42` → `where42`).
+      `childDeck`은 자식 slug로 그림을 찾으므로 어긋나면 프로젝트가 통째로
+      목록으로 돌아간다. `TestChildDeckSlugsHaveArt`가 지킨다.
   - **경로에서 다시 묶은 갈래 카드는 제 분류에 선다** (2026-09-01에 내렸다).
     `프로그래밍 언어` 6장(C·C++·Java·Python·R·TypeScript)과
     `마크업 / 스타일링 / 표현식` 7장(HTML·CSS·LaTex·Mermaid·정규 표현식·
@@ -2841,6 +2852,25 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
   `PostSummariesBySlug`로 바꿔 status와 `original_created_at`을 함께 가져온다.
   글 1357편과 카테고리 87개를 전부 훑어, 날짜 없는 줄이 이름 없는 인라인
   데이터베이스를 가리키는 3곳(posts에 행이 없다)만 남은 것을 확인했다.
+
+**2026-09-03에 한 것**
+
+- **`Projects` 한 분류를 where42와 심심조각으로 찢었다.** 노션이 서로 다른 두
+  서비스의 코드 분석을 절 두 개로 한 글에 담고 있었고, 프로젝트 카드가 그
+  앵커(`#where42`)로 보내고 있었다. `cmd/regroup`의 `subs`로 실제 분류 둘을
+  세워 글 아홉을 나누고, 표지 글은 목차 두 벌을 걷어 심심조각의 표지로 삼았다.
+  전용 `projectDeck`과 `projectSectionCounts`가 없어지고 평범한 `childDeck`이 됐다.
+  분류 87 → **88개.**
+- **운영체제 화면의 두 벌을 없앴다.** 입구 글 여섯(Part 1~6)이 운영체제에 직접
+  붙어 있고 같은 이름의 하위 분류가 따로 있어서, 표지 목차와 `하위 분류`가 같은
+  여섯 이름을 나란히 세웠다. **école 42·네트워크와 똑같은 자리**라 처방도 같다 —
+  `PostMoves`로 내려보내고 `Covers`로 그 분류의 표지를 삼는다.
+  `part 5 : 저장장치`만 draft라 표지가 무효였고(`store.coverSlug`가 `notHidden`을
+  거친다) 그 하나만 두 벌로 남았을 것이라, `StatusEdits`로 unlisted로 올렸다.
+- **`데이터베이스` 표지를 사람 표에 적었다.** 그 아래 스무 편을 GitHub 정리로
+  갈아치우면서(`DropPosts`) 경로가 이 글을 표지로 세우던 근거가 사라져,
+  **categorize의 검증이 이미 실패하고 있었다**(계획 49 vs 실제 50). 표지는
+  그대로 두기로 한 결정이므로 `Covers`에 적는다.
 
 **2026-09-01에 한 것**
 

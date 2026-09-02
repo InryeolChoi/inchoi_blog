@@ -3,7 +3,6 @@ package web
 import (
 	"html/template"
 	"net/url"
-	"strings"
 )
 
 // 분류 하나를 "아이콘 카드 묶음"으로 펼쳐 보여준다.
@@ -48,7 +47,7 @@ var deckSources = map[string]deckSource{
 	"language":   childDeck{},
 	languageSlug: languageDeck{},
 	markupSlug:   markupDeck{},
-	projectSlug:  projectDeck{},
+	projectSlug:  childDeck{},
 }
 
 // deckFor는 카드로 펼칠 분류면 카드 목록을, 아니면 nil을 돌려준다.
@@ -142,14 +141,14 @@ func branchDeck(branches []PathBranch, order []string, art map[string]cardArt) [
 // 아이콘은 인라인 SVG다. 파일로 두지 않는 이유: 카드마다 하나씩이라 요청을 늘릴
 // 값어치가 없고, currentColor를 쓰면 색을 카드가 정한다.
 var cardArtBySlug = map[string]cardArt{
-	"project-école-42": {
+	"école-42": {
 		Blurb: "42 서울에서 통과한 과제와 시험, 구현하며 남긴 기록.",
 		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
 			<path d="M8 12h13v12H8zM27 12h13v24H27zM8 30h13v6H8z"/>
 			<path d="M21 18h6M14 24v6"/>
 		</svg>`),
 	},
-	"project-where42": {
+	"where42": {
 		Blurb: "카뎃 활동을 한눈에 보는 서비스. 화면 구조를 따라가며 남긴 코드 분석.",
 		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
 			<path d="M9 34c4-8 8-12 15-12s11 4 15 12"/>
@@ -157,7 +156,7 @@ var cardArtBySlug = map[string]cardArt{
 			<path d="M8 39h32M34 10l6 4-6 4"/>
 		</svg>`),
 	},
-	"project-심심조각": {
+	"심심조각": {
 		Blurb: "AI, 다이어리, 리포트까지. 기록을 조각처럼 모으는 서비스의 코드 분석.",
 		Icon: template.HTML(`<svg viewBox="0 0 48 48" aria-hidden="true">
 			<path d="M10 10h12v12H10zM26 10h12v12H26zM10 26h12v12H10z"/>
@@ -395,82 +394,4 @@ func (markupDeck) cards(s *Server, cat Category, _ string, _ []Category) ([]Deck
 		return nil, err
 	}
 	return branchDeck(branches, markupOrder, markupArt), nil
-}
-
-// projectDeck은 `Projects` 표지 글 본문에서 where42·심심조각 두 절을 읽어야
-// 성립한다. 그 분류나 표지 글이 없으면 카드를 만들지 않는다.
-type projectDeck struct{}
-
-func (projectDeck) cards(s *Server, _ Category, basePath string, children []Category) ([]DeckCard, error) {
-	child, ok := childBySlug(children, "projects")
-	if !ok || child.CoverPostSlug == "" {
-		return nil, nil
-	}
-	cover, err := s.store.PostBySlug(child.CoverPostSlug)
-	if err != nil {
-		return nil, err
-	}
-	if cover == nil {
-		return nil, nil
-	}
-	return projectDeckFor(basePath, children, cover.Body), nil
-}
-
-// projectDeckFor는 프로젝트 첫 화면을 세 갈래로 정리한다.
-//
-// école 42는 이미 하위 카테고리라 그쪽으로 바로 보낸다. where42와 심심조각은
-// 노션의 `Projects` 표지 글 한 편 안에 두 절로 함께 들어 있으므로, DB 본문을
-// 다시 만들지 않고 그 절의 앵커로 보낸다. 링크 수도 같은 본문에서 세어 코드의
-// 숫자가 정본보다 앞서거나 뒤처지지 않게 한다.
-//
-// 필요한 분류나 두 절이 없으면 nil이다. 반쪽짜리 카드 묶음 대신 평소 목록으로
-// 돌아가는 편이 탐색 경로를 잃지 않는다.
-func projectDeckFor(basePath string, children []Category, projectsBody string) []DeckCard {
-	ecole, hasEcole := childBySlug(children, "école-42")
-	projects, hasProjects := childBySlug(children, "projects")
-	whereCount, pieceCount := projectSectionCounts(projectsBody)
-	if !hasEcole || !hasProjects || whereCount == 0 || pieceCount == 0 {
-		return nil
-	}
-
-	makeCard := func(name, target string, count int, artKey string) DeckCard {
-		art := cardArtBySlug[artKey]
-		return DeckCard{Name: name, URL: target, Count: count, Blurb: art.Blurb, Icon: art.Icon}
-	}
-	projectsURL := basePath + "/" + url.PathEscape(projects.Slug)
-	return []DeckCard{
-		makeCard("école 42", basePath+"/"+url.PathEscape(ecole.Slug), ecole.PostCount, "project-école-42"),
-		makeCard("where42", projectsURL+"#where42", whereCount, "project-where42"),
-		makeCard("심심조각", projectsURL+"#심심조각", pieceCount, "project-심심조각"),
-	}
-}
-
-// projectSectionCounts는 Projects 표지 글의 두 최상위 절에서 글 링크를 센다.
-// 변환된 HTML이 아니라 DB의 마크다운을 보는 이유는 이 숫자 역시 DB를 따라야
-// 하기 때문이다. 제목 단계는 중요하지 않고 제목 글자만 정확히 맞춘다.
-func projectSectionCounts(body string) (where42, piece int) {
-	section := ""
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") {
-			heading := strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
-			switch {
-			case strings.EqualFold(heading, "where42"):
-				section = "where42"
-			case heading == "심심조각":
-				section = "심심조각"
-			default:
-				section = ""
-			}
-			continue
-		}
-		links := strings.Count(line, "](/p/")
-		switch section {
-		case "where42":
-			where42 += links
-		case "심심조각":
-			piece += links
-		}
-	}
-	return where42, piece
 }

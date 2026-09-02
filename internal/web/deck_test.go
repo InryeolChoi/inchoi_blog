@@ -2,26 +2,21 @@ package web
 
 import "testing"
 
-func TestProjectDeckUsesThreeDBBackedBranches(t *testing.T) {
+func TestProjectDeckStandsOnRealCategories(t *testing.T) {
+	// where42와 심심조각은 예전에 `Projects` 표지 글의 절 두 개였고 카드가 그
+	// 앵커(`#where42`)로 보냈다. 이제는 제 분류라 카드가 분류 URL을 가리킨다 —
+	// 다른 갈래 카드와 같은 childDeck 하나면 된다.
 	children := []Category{
-		{Name: "Projects", Slug: "projects", PostCount: 10},
 		{Name: "école 42", Slug: "école-42", PostCount: 324},
+		{Name: "where42", Slug: "where42", PostCount: 3},
+		{Name: "심심조각", Slug: "심심조각", PostCount: 7},
 	}
-	body := `# where42
-
-[기본](/p/where-basic)
-[View](/p/where-view)
-
-# 심심조각
-
-[AI](/p/piece-ai)
-[다이어리](/p/piece-diary)
-[리포트](/p/piece-report)
-`
-
-	cards := projectDeckFor("/project", children, body)
+	cards, err := childDeck{}.cards(nil, Category{}, "/project", children)
+	if err != nil {
+		t.Fatalf("cards: %v", err)
+	}
 	if len(cards) != 3 {
-		t.Fatalf("카드가 %d개다, 3개여야 한다", len(cards))
+		t.Fatalf("카드가 %d장이다, 3장이어야 한다: %#v", len(cards), cards)
 	}
 	wants := []struct {
 		name  string
@@ -29,8 +24,8 @@ func TestProjectDeckUsesThreeDBBackedBranches(t *testing.T) {
 		count int
 	}{
 		{"école 42", "/project/%C3%A9cole-42", 324},
-		{"where42", "/project/projects#where42", 2},
-		{"심심조각", "/project/projects#심심조각", 3},
+		{"where42", "/project/where42", 3},
+		{"심심조각", "/project/%EC%8B%AC%EC%8B%AC%EC%A1%B0%EA%B0%81", 7},
 	}
 	for i, want := range wants {
 		got := cards[i]
@@ -40,13 +35,6 @@ func TestProjectDeckUsesThreeDBBackedBranches(t *testing.T) {
 		if got.Blurb == "" || got.Icon == "" {
 			t.Errorf("카드 %q의 설명이나 아이콘이 비었다", got.Name)
 		}
-	}
-}
-
-func TestProjectDeckFallsBackWhenASectionIsMissing(t *testing.T) {
-	children := []Category{{Slug: "projects"}, {Slug: "école-42"}}
-	if got := projectDeckFor("/project", children, "# where42\n\n[글](/p/one)\n"); got != nil {
-		t.Fatalf("심심조각 절이 없는데 카드 묶음을 만들었다: %#v", got)
 	}
 }
 
@@ -117,6 +105,7 @@ func TestChildDeckSlugsHaveArt(t *testing.T) {
 		"data-math": {"수리통계-이론", "수리통계-응용", "머신러닝"},
 		"algorithm": {"알고리즘-이론", "알고리즘-실전"},
 		"cs-theory": {"운영체제", "네트워크", "데이터베이스", "가상화기술"},
+		"project":   {"école-42", "where42", "심심조각"},
 	}
 	for parent, kids := range want {
 		if _, ok := deckSources[parent]; !ok {

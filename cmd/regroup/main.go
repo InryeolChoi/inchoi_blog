@@ -96,8 +96,16 @@ var groups = []group{
 			"핸즈온 머신러닝 2", "자연어처리 (1) : BERT와 GPT",
 		}},
 	}},
+	// 프로젝트는 members와 subs를 함께 쓴다. école 42는 노션 최상위가 그대로
+	// 한 갈래인데, 노션의 `Projects` 한 분류 안에는 **서로 다른 두 서비스**의
+	// 코드 분석이 절 두 개로 섞여 있었다(where42 9편 · 심심조각 6편). 그 둘은
+	// 만든 것도 쓴 언어도 달라서 한 이름 아래 둘 이유가 없다 — 표지 글의 절이
+	// 아니라 제 분류를 갖는다. 옛 `Projects`는 DropCategories로 없앤다.
 	{slug: "project", name: "프로젝트", members: []string{
-		"école 42", "Projects",
+		"école 42",
+	}, subs: []subgroup{
+		{slug: "where42", name: "where42"},
+		{slug: "심심조각", name: "심심조각"},
 	}},
 	{slug: "life", name: "라이프", members: nil},
 }
@@ -503,6 +511,14 @@ func checkPlan(cat *catalog) error {
 	}
 	for _, t := range topics {
 		willExist[t.slug] = true
+	}
+	// `groups`와 `subs`가 만들 분류도 같다. 1a·1b가 이 검사보다 뒤에 돌므로
+	// 사람이 새 층을 놓으면서 그 층에 표지를 지정하면 여기서 걸렸다.
+	for _, g := range groups {
+		willExist[g.slug] = true
+		for _, sub := range g.subs {
+			willExist[sub.slug] = true
+		}
 	}
 	for _, cv := range curation.Covers {
 		if _, ok := cat.bySlug[cv.Slug]; ok {

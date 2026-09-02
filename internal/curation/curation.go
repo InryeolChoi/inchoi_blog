@@ -318,6 +318,33 @@ var PostMoves = []PostMove{
 	{NotionPageID: "55abb689-6d32-4c4f-9949-94b868e6aaec", ToSlug: "네트워크-이론", Title: "네트워크 이론"},
 	{NotionPageID: "8188d988-ae1f-4bb8-b677-62d13490b036", ToSlug: "소켓-프로그래밍", Title: "소켓 프로그래밍"},
 	{NotionPageID: "c8c7eeac-71b2-43fb-87a8-0fa9901a2536", ToSlug: "http-완벽-가이드", Title: "HTTP 완벽 가이드"},
+
+	// 운영체제 표지 본문이 가리키던 입구 글 여섯. 네트워크·école 42와 **똑같은
+	// 자리**다 — 여섯 편이 운영체제에 직접 붙어 있고 같은 이름의 하위 분류가
+	// 따로 있어서, 한 화면에 목차와 `하위 분류`가 같은 여섯 이름을 두 벌로 세웠다.
+	{NotionPageID: "33c90690-98c3-432f-ac34-2557d6df5747", ToSlug: "part-1-운영체제란", Title: "Part 1 : 운영체제란?"},
+	{NotionPageID: "aa769806-17eb-4db9-ade2-ab7a237e467c", ToSlug: "part-2-프로세스-관리", Title: "Part 2 : 프로세스 관리"},
+	{NotionPageID: "bb163855-556e-4292-9245-1f35e4a6f7ad", ToSlug: "part-3-프로세스-동기화", Title: "part 3 : 프로세스 동기화"},
+	{NotionPageID: "a0791942-b3aa-41bb-b73b-44f727155d68", ToSlug: "part-4-메모리-관리", Title: "part 4 : 메모리 관리"},
+	{NotionPageID: "9fc39617-ae2b-4c10-b307-2113fef7707f", ToSlug: "part-5-저장장치", Title: "part 5 : 저장장치"},
+	{NotionPageID: "61d3c830-c878-4ccf-b401-8c57a9a10f85", ToSlug: "part-6-파일-시스템", Title: "part 6 : 파일 시스템"},
+
+	// 노션의 `Projects` 한 분류에 **서로 다른 두 서비스**의 코드 분석이 절 두
+	// 개로 들어 있었다. where42는 Xcode로 만든 앱이고 심심조각은 스프링 서버라
+	// 한 이름 아래 둘 이유가 없다. regroup이 만든 두 갈래로 나눈다.
+	{NotionPageID: "a82c5952-ce31-4670-a56e-7fbcccb5199e", ToSlug: "where42", Title: "코드분석 (1) : 기본"},
+	{NotionPageID: "1050901b-87f1-805a-8138-c284ec864dbc", ToSlug: "where42", Title: "코드분석 (2) : View"},
+	{NotionPageID: "1050901b-87f1-809c-bdad-ecf1a4fc9ece", ToSlug: "where42", Title: "코드분석 (3) : View"},
+
+	// 표지 글도 심심조각으로 간다. 남는 본문이 심심조각 서버를 옮기는 메모라
+	// (LightSail 컨테이너의 AI·Nginx·스프링) 그 갈래의 것이 분명하다.
+	{NotionPageID: "10d0901b-87f1-80b2-881f-effe3c29eff5", ToSlug: "심심조각", Title: "Projects"},
+	{NotionPageID: "10e0901b-87f1-800d-a76a-c7aea7486da0", ToSlug: "심심조각", Title: "코드분석 (1)"},
+	{NotionPageID: "10f0901b-87f1-804b-8d57-ed2c843a1475", ToSlug: "심심조각", Title: "코드분석 (2) : AI"},
+	{NotionPageID: "10f0901b-87f1-80bf-b23b-d5d6ede71715", ToSlug: "심심조각", Title: "코드분석 (3) : 다이어리"},
+	{NotionPageID: "1130901b-87f1-8072-abc4-c96c2cda3df1", ToSlug: "심심조각", Title: "코드분석 (4) : 레포트"},
+	{NotionPageID: "1130901b-87f1-80d4-9e49-d27e6297547f", ToSlug: "심심조각", Title: "코드분석 (5) : 사용자"},
+	{NotionPageID: "1140901b-87f1-8093-a12a-e364f769afbc", ToSlug: "심심조각", Title: "코드분석 (6) : filter"},
 }
 
 // PostMetadataEdit는 노션 원본과 다르게 공개 아카이브에서 쓸 제목·작성일·순서다.
@@ -473,6 +500,8 @@ var PostTitleEdits = []PostTitleEdit{
 	// `네트워크 이론 (2)`를 없앴으므로 `(1)`도 뜻을 잃었다. 분류 이름은
 	// cmd/regroup의 renames가 함께 바꾼다. 원본 제목 끝에 공백이 있다.
 	{NotionPageID: "55abb689-6d32-4c4f-9949-94b868e6aaec", OriginalTitle: "네트워크 이론 (1) ", Title: "네트워크 이론"},
+	// `Projects`가 심심조각 하나만 가리키게 됐다. 제 갈래의 표지라 이름도 그것이다.
+	{NotionPageID: "10d0901b-87f1-80b2-881f-effe3c29eff5", OriginalTitle: "Projects", Title: "심심조각"},
 }
 
 // PostTitleByID는 제목만 바꾸는 예외를 notion_page_id로 찾는다.
@@ -560,6 +589,12 @@ var StatusEdits = []StatusEdit{
 		Why:          "HTTP 완벽 가이드 분류의 표지 글이다. 같은 이유로 보이는 글이어야 한다",
 	},
 	{
+		NotionPageID: "9fc39617-ae2b-4c10-b307-2113fef7707f",
+		Status:       "unlisted",
+		Title:        "part 5 : 저장장치",
+		Why:          "part 5 : 저장장치 분류의 표지 글이다. draft면 표지가 무효라 여섯 중 이 하나만 목록에 두 벌로 남는다",
+	},
+	{
 		NotionPageID: "57fc8387-caff-4b32-a6c3-7ec5723e9e21",
 		Status:       "unlisted",
 		Title:        "가중치 그래프",
@@ -591,6 +626,11 @@ type DropCategory struct {
 }
 
 var DropCategories = []DropCategory{
+	{
+		SourceName: "Projects",
+		Why: "노션의 한 분류에 where42와 심심조각 두 서비스가 절로 섞여 있었다. " +
+			"regroup이 만든 두 갈래로 글을 전부 옮겼으므로 남는 것이 없다",
+	},
 	{
 		SourceName: "최인렬 (Inryeol Choi)",
 		Why: "사람이 만든 `소개` 분류와 이름만 다른 같은 층이다. 자기소개 글은 " +
@@ -768,6 +808,28 @@ var Covers = []Cover{
 	{
 		Slug: "http-완벽-가이드", NotionPageID: "c8c7eeac-71b2-43fb-87a8-0fa9901a2536",
 		Why: "〃",
+	},
+
+	// 운영체제의 하위 분류 여섯. 같은 이유다.
+	{Slug: "part-1-운영체제란", NotionPageID: "33c90690-98c3-432f-ac34-2557d6df5747", Why: "운영체제 표지가 이미 이 이름을 안내한다. 목록에 같은 이름이 두 벌로 나오지 않게 한다"},
+	{Slug: "part-2-프로세스-관리", NotionPageID: "aa769806-17eb-4db9-ade2-ab7a237e467c", Why: "〃"},
+	{Slug: "part-3-프로세스-동기화", NotionPageID: "bb163855-556e-4292-9245-1f35e4a6f7ad", Why: "〃"},
+	{Slug: "part-4-메모리-관리", NotionPageID: "a0791942-b3aa-41bb-b73b-44f727155d68", Why: "〃"},
+	{Slug: "part-5-저장장치", NotionPageID: "9fc39617-ae2b-4c10-b307-2113fef7707f", Why: "〃"},
+	{Slug: "part-6-파일-시스템", NotionPageID: "61d3c830-c878-4ccf-b401-8c57a9a10f85", Why: "〃"},
+
+	// 데이터베이스 표지는 노션 글이 그대로 남았는데, 그 아래 스무 편은
+	// GitHub 정리로 갈아치웠다(DropPosts). 그래서 경로가 이 글을 표지로 세우던
+	// 근거가 사라져 categorize의 계획에서 빠졌다 — 표지는 그대로 두기로 한
+	// 결정이므로 사람 표에 적는다.
+	{
+		Slug: "데이터베이스", NotionPageID: "f3203051-811a-4342-9edb-10a4bef313a5",
+		Why: "노션 표지는 남기고 본문 스무 편만 GitHub 정리로 갈아치웠다. 경로가 더는 이 글을 표지로 세우지 않는다",
+	},
+
+	{
+		Slug: "심심조각", NotionPageID: "10d0901b-87f1-80b2-881f-effe3c29eff5",
+		Why: "옛 `Projects` 표지 글이다. 목록 두 벌을 덜어내면 심심조각 서버 메모만 남으므로 그 갈래의 표지로 쓴다",
 	},
 }
 
