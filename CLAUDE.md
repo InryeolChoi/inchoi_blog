@@ -1028,7 +1028,7 @@ DB 접속 문자열을 정규식으로 찾아 **0건**이다. `password=` 5건�
   마지막 구멍이다.**
 
 **아직 안 한 것:** 백업을 기계 밖으로 자동으로 꺼내기(지금은 인스턴스 안
-7벌 + 사람이 `fetch-db.sh`), robots.txt/sitemap.xml, 속도 제한(Caddy에서 하면
+7벌 + 사람이 `fetch-db.sh`), 속도 제한(Caddy에서 하면
 된다), `www` 리다이렉트, 배포 키를 Workload Identity Federation으로 옮기기.
 
 **3단계(서버 DB에 쓰기)를 막던 것이 전부 없어졌다.** HTTPS가 2026-08-30에,
@@ -1146,6 +1146,33 @@ go run ./cmd/blog -db blog.db -addr 127.0.0.1:8080            # draft 가림 (�
 go run ./cmd/blog -db blog.db -addr 127.0.0.1:8080 -drafts    # draft까지 보임 (로컬 확인용)
 go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지 (로컬 전용)
 ```
+
+### 검색엔진에 주는 두 파일 (2026-09-03)
+
+`robots.txt`와 `sitemap.xml`이다. **둘 다 파일로 두지 않고 요청이 올 때 DB에서
+그린다** — DB가 정본이라 글이 늘거나 status가 바뀔 때마다 파일을 다시 만들어야
+하는데, 그리면 그 일이 아예 없고 배포물도 안 는다.
+
+- **사이트맵이 draft를 흘리면 안 된다.** 크롤러에게 주소를 알려주는 것이 곧
+  공개라, 숨긴 글의 slug가 나가면 목록·카운트·본문 링크에서 draft를 가려온
+  것이 통째로 무의미해진다. 그래서 새 조건을 쓰지 않고 `store`가 이미 쓰는
+  `notHidden`·`visibleCategory`를 그대로 부른다. 현재 1,042개(홈 1 + 글 953 +
+  분류 88)이고 draft 누출 0건이다. `TestSitemapNeverLeaksDrafts`가 지킨다.
+- **호스트를 코드에 박지 않는다.** 요청의 `Host`를 쓴다 — 박아두면 로컬에서
+  띄운 사이트맵이 배포 주소를 가리킨다. 스킴은 `X-Forwarded-Proto`로 안다.
+  **blog 자신은 평문 8080을 듣고 있어서 `r.TLS`가 언제나 nil이다** — admin
+  세션 쿠키가 `Secure`를 정하는 근거와 같은 자리다.
+- **slug에 한글이 그대로 있어서** 경로 조각마다 URL 인코딩을 한다. 안 하면
+  규격에 안 맞는다.
+- `<lastmod>`는 `updated_at`이고 **날짜까지만** 적는다. 시각까지 주면 초 단위로
+  바뀔 때마다 크롤러가 다시 받는다. 분류에는 고칠 때가 없어 아예 안 적는다 —
+  모르는 날짜를 지어내지 않는다.
+- **`robots.txt`는 차단 장치가 아니라 요청이다.** 나쁜 봇은 무시하므로 이걸로
+  무엇을 지키지는 못한다 — `/admin`의 진짜 관문은 허용 목록과 세션이고
+  `/api/admin`은 로그인 없이 401 JSON을 준다. 여기서 얻는 것은 **크롤 예산을
+  글 쪽에 쓰게 하는 것**뿐이다. `/img/`와 `/static/`도 같은 이유로 막는다.
+- 돌연변이 셋(draft를 안 가림 / 한글을 인코딩 안 함 / `X-Forwarded-Proto`
+  무시)을 넣어 테스트가 실제로 실패하는 것을 확인했다.
 
 ### 없는 길과 터진 요청 (2026-08-24)
 
@@ -1269,6 +1296,8 @@ go run ./cmd/blog -db /tmp/admin.db -admin -admin-no-auth -drafts  # admin까지
 | 라우트 | 하는 일 |
 |---|---|
 | `GET /{$}` | 표제지 하나뿐인 홈 (분야 탐색은 사이드바가 전담) |
+| `GET /robots.txt` | 크롤러에게 주는 규칙 (sitemap.go) |
+| `GET /sitemap.xml` | 주소 목록. DB에서 그때그때 그린다 |
 | `GET /{l1}` `GET /{l1}/{l2}` `GET /{l1}/{l2}/{l3}` | 하위 분류 + 직속 글 |
 | `GET /p/{slug}` | 글 상세 (마크다운 렌더링) |
 | `GET /img/{sha256}` | 이미지 BLOB, Content-Type은 `images.mime` |

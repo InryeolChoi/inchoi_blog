@@ -114,6 +114,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /p/{slug}", s.handlePost)
 	mux.HandleFunc("GET /img/{sha256}", s.handleImage)
 	mux.HandleFunc("GET /static/{file}", s.handleStatic)
+	// 검색엔진에 주는 두 파일(sitemap.go). 리터럴 패턴이라 아래 `/{l1}`보다
+	// 먼저 고른다 — ServeMux가 더 구체적인 쪽을 이기게 한다.
+	mux.HandleFunc("GET /robots.txt", s.handleRobots)
+	mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
 	mux.HandleFunc("GET /{l1}", s.handleCategory)
 	mux.HandleFunc("GET /{l1}/{l2}", s.handleCategory)
 	mux.HandleFunc("GET /{l1}/{l2}/{l3}", s.handleCategory)

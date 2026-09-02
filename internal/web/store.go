@@ -1071,3 +1071,81 @@ func likePrefix(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return r.Replace(s)
 }
+
+// SitemapEntry는 sitemap.xml에 실을 주소 하나다.
+type SitemapEntry struct {
+	// Path는 사이트 안의 경로다(`/p/{slug}`, `/dev/language`). 호스트는 없다 —
+	// 그건 핸들러가 요청에서 알아내 붙인다.
+	Path string
+	// Updated는 마지막으로 고친 때다. 없으면 비어 있고, 그러면 <lastmod>를
+	// 안 적는다 — **모르는 날짜를 지어내지 않는다.**
+	Updated sql.NullTime
+}
+
+// SitemapEntries는 검색엔진에 알릴 주소를 모아 준다.
+//
+// # draft는 여기서도 안 나간다
+//
+// **판정은 `notHidden`·`visibleCategory` 그대로다.** 사이트맵이 숨긴 글의
+// slug를 흘리면 draft 366편을 목록·카운트·본문 링크에서 가려온 것이 통째로
+// 무의미해진다 — 크롤러에게 주소를 알려주는 것이 곧 공개다. 그래서 새 조건을
+// 쓰지 않고 store가 이미 쓰는 판정을 그대로 부른다.
+//
+// # 무엇을 싣나
+//
+// 홈, 보이는 글 전부, 보이는 분류 전부다. `/img/`와 `/static/`은 넣지 않는다 —
+// 검색 결과에 나올 것이 아니라 페이지가 쓰는 자산이다.
+func (s *store) SitemapEntries() ([]SitemapEntry, error) {
+	out := []SitemapEntry{{Path: "/"}}
+
+	rows, err := s.db.Query(`
+		SELECT p.slug, p.updated_at
+		FROM posts p
+		WHERE ` + s.notHidden("p") + `
+		ORDER BY p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("사이트맵 글 조회: %w", err)
+	}
+	for rows.Next() {
+		var slug string
+		var updated sql.NullTime
+		if err := rows.Scan(&slug, &updated); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("사이트맵 글 스캔: %w", err)
+		}
+		out = append(out, SitemapEntry{Path: "/p/" + slug, Updated: updated})
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// 분류는 경로가 조상까지 이어져야 주소가 된다(`/dev/language/…`).
+	// 카테고리는 3단계가 끝이라 재귀 CTE로 위에서부터 이어 붙인다.
+	crows, err := s.db.Query(`
+		WITH RECURSIVE tree(id, path) AS (
+			SELECT id, '/' || slug FROM categories WHERE parent_id IS NULL
+			UNION ALL
+			SELECT c.id, tree.path || '/' || c.slug
+			FROM categories c JOIN tree ON c.parent_id = tree.id
+		)
+		SELECT tree.path
+		FROM tree JOIN categories c ON c.id = tree.id
+		WHERE ` + s.visibleCategory() + `
+		ORDER BY tree.path`)
+	if err != nil {
+		return nil, fmt.Errorf("사이트맵 분류 조회: %w", err)
+	}
+	defer crows.Close()
+	for crows.Next() {
+		var path string
+		if err := crows.Scan(&path); err != nil {
+			return nil, fmt.Errorf("사이트맵 분류 스캔: %w", err)
+		}
+		// 분류에는 고칠 때가 따로 없다. 날짜를 비워 두면 <lastmod>가 빠진다.
+		out = append(out, SitemapEntry{Path: path})
+	}
+	return out, crows.Err()
+}
