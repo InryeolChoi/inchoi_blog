@@ -252,3 +252,35 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// 상단 메뉴는 **서버가 그린다.** 스크립트가 못 떠도 세 화면 사이를 오갈 수
+// 있어야 하고, admin.js는 지금 어디인지 표시만 덧입힌다. 여기서 JS로 만들면
+// 그 점진적 향상이 사라진다.
+func TestShellRendersTopMenu(t *testing.T) {
+	body := do(t, testHandler(t), "GET", "/admin", "").Body.String()
+	for _, want := range []string{
+		`class="ad-menu"`,
+		`href="/admin" data-menu="/admin"`,
+		`href="/admin/data" data-menu="/admin/data"`,
+		`href="/admin/settings" data-menu="/admin/settings"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("껍데기에 %q가 없다", want)
+		}
+	}
+}
+
+// 메뉴가 가리키는 세 주소가 전부 껍데기를 준다. 하나라도 404면 스크립트가
+// 꺼진 브라우저에서 그 메뉴는 막다른 길이다.
+func TestMenuPathsServeTheShell(t *testing.T) {
+	h := testHandler(t)
+	for _, path := range []string{"/admin", "/admin/data", "/admin/settings"} {
+		rec := do(t, h, "GET", path, "")
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s = %d, 200을 바랐다", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), `id="ad-root"`) {
+			t.Errorf("%s에 껍데기가 없다", path)
+		}
+	}
+}

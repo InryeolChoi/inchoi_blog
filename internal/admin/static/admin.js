@@ -82,22 +82,66 @@
 
   window.addEventListener("popstate", route);
 
+  // drawTicket은 지금 그리고 있는 화면의 표다.
+  //
+  // **목록과 데이터 보기는 서버에 물어본 뒤에 그린다.** 그 사이에 사람이
+  // 메뉴를 한 번 더 누르면 늦게 온 응답이 **새 화면을 덮어쓴다** — 실제로
+  // 데이터를 누르고 곧장 환경설정을 눌렀더니 주소는 설정인데 화면은 데이터가
+  // 나왔다. 그릴 때 표를 확인해서, 그 사이에 다른 화면으로 갔으면 그린다.
+  var drawTicket = 0;
+
+  function ticket() {
+    return ++drawTicket;
+  }
+
+  function stale(mine) {
+    return mine !== drawTicket;
+  }
+
   function route() {
     var path = location.pathname.replace(/\/+$/, "") || "/admin";
+    markMenu(path);
+    ticket();
     var m = /^\/admin\/edit\/(.+)$/.exec(path);
     if (m) return showEditor(decodeURIComponent(m[1]));
     if (path === "/admin/new") return showEditor(null);
     if (path === "/admin/data") return showStats();
+    if (path === "/admin/settings") return showSettings();
     return showList();
   }
+
+  // markMenu는 상단 메뉴에서 지금 있는 곳을 표시한다.
+  //
+  // **메뉴 자체는 서버가 그렸다.** 여기서 하는 일은 표시뿐이라, 스크립트가
+  // 못 떠도 세 링크는 그대로 눌린다. 새 글과 편집 화면은 `전체 글`에 딸린
+  // 자리라 그쪽을 켠다 — 어디에도 안 걸린 화면을 만들지 않는다.
+  function markMenu(path) {
+    var here = path === "/admin/data" || path === "/admin/settings" ? path : "/admin";
+    Array.prototype.forEach.call(document.querySelectorAll(".ad-menu a"), function (a) {
+      var on = a.dataset.menu === here;
+      a.classList.toggle("ad-on", on);
+      if (on) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  // 메뉴 링크는 진짜 링크지만, 눌렀을 때 페이지를 통째로 다시 받을 이유는 없다.
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest ? e.target.closest(".ad-menu a") : null;
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    go(a.getAttribute("href"));
+  });
 
   // ---------------------------------------------------------------- 목록
 
   function showList() {
+    var mine = drawTicket;
     clear(root);
     root.appendChild(el("p", { class: "ad-empty", text: "불러오는 중…" }));
 
     api("GET", "/api/admin/posts").then(function (r) {
+      if (stale(mine)) return;
       clear(root);
       if (!r.ok) {
         root.appendChild(el("p", { class: "ad-error", text: r.data.error || "목록을 못 가져왔다" }));
@@ -107,14 +151,21 @@
       var counts = r.data.counts || {};
 
       var head = el("div", { class: "ad-listhead" }, [
-        el("h1", { text: "글" }),
+        el("h1", { text: "전체 글" }),
         el("p", { class: "ad-counts" }, config.statuses.map(function (s) {
           return el("span", { class: "ad-chip st-" + s, text: s + " " + (counts[s] || 0) });
         })),
-        el("button", { class: "ad-btn", onclick: function () { go("/admin/data"); }, text: "데이터" }),
         el("button", { class: "ad-btn primary", onclick: function () { go("/admin/new"); }, text: "새 글" }),
       ]);
       root.appendChild(head);
+
+      // 필터는 메뉴 바로 아래에 깐다. **서버에 다시 묻지 않는다** — 목록이
+      // 이미 통째로 와 있어서 거르는 일은 이 자리에서 끝난다. `/` 팔레트가
+      // 서버에 안 묻는 것과 같은 판단이다: 친 순간과 걸러진 순간 사이에
+      // 네트워크가 끼면 그 지연은 감출 수 없다.
+      var filter = { q: "", status: "", category: "", empty: false };
+      var tbody = el("tbody");
+      root.appendChild(filterBar(posts, filter, function () { fill(tbody, posts, filter); }));
 
       if (posts.length >= r.data.limit) {
         root.appendChild(el("p", {
@@ -133,9 +184,76 @@
           el("th", { class: "ad-acts-head", text: "" }),
         ])]),
       ]);
-      var tbody = el("tbody");
-      posts.forEach(function (p) {
-        tbody.appendChild(el("tr", {}, [
+      fill(tbody, posts, filter);
+      table.appendChild(tbody);
+      // 표는 제 안에서만 가로로 스크롤한다. 여섯 칸이라 375px에서 35px쯤
+      // 넘치는데, 그대로 두면 페이지 전체가 밀린다 — 공개 화면에서 코드와
+      // 표를 가두는 것과 같은 규칙이다.
+      root.appendChild(el("div", { class: "ad-tablewrap" }, [table]));
+    });
+  }
+
+  // filterBar는 목록 위의 거르개다. 무엇 하나라도 바꾸면 표를 다시 채운다.
+  function filterBar(posts, filter, redraw) {
+    var cats = [];
+    var seen = {};
+    posts.forEach(function (p) {
+      if (p.category && !seen[p.category]) { seen[p.category] = true; cats.push(p.category); }
+    });
+    cats.sort();
+
+    function onChange(key) {
+      return function (e) {
+        filter[key] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+        redraw();
+      };
+    }
+
+    return el("div", { class: "ad-filters" }, [
+      el("input", {
+        class: "ad-search", type: "search", placeholder: "제목이나 slug로 찾기",
+        "aria-label": "제목이나 slug로 찾기", oninput: onChange("q"),
+      }),
+      el("select", { "aria-label": "상태", onchange: onChange("status") },
+        [el("option", { value: "", text: "상태 전체" })].concat(config.statuses.map(function (s) {
+          return el("option", { value: s, text: s });
+        }))),
+      el("select", { "aria-label": "분류", onchange: onChange("category") },
+        [el("option", { value: "", text: "분류 전체" })].concat(cats.map(function (c) {
+          return el("option", { value: c, text: c });
+        }))),
+      // 본문이 없는 글을 골라내는 것이 이 화면에서 가장 자주 하는 일이다.
+      // 공개 화면에서 제목만 뜨는 글이 그것들이다.
+      el("label", { class: "ad-check" }, [
+        el("input", { type: "checkbox", onchange: onChange("empty") }),
+        document.createTextNode(" 본문 없는 것만"),
+      ]),
+    ]);
+  }
+
+  function keep(p, f) {
+    if (f.status && p.status !== f.status) return false;
+    if (f.category && p.category !== f.category) return false;
+    if (f.empty && p.bodyBytes >= 50) return false;
+    if (f.q) {
+      var q = f.q.toLowerCase();
+      if ((p.title || "").toLowerCase().indexOf(q) < 0 &&
+          (p.slug || "").toLowerCase().indexOf(q) < 0) return false;
+    }
+    return true;
+  }
+
+  // fill은 거른 결과로 표 몸통을 다시 채운다.
+  //
+  // **한 건도 안 남으면 그렇다고 적는다.** 빈 표만 남으면 거르개가 걸린 것인지
+  // 목록을 못 가져온 것인지 화면만 보고는 알 수 없다.
+  function fill(tbody, posts, filter) {
+    clear(tbody);
+    var shown = 0;
+    posts.forEach(function (p) {
+      if (!keep(p, filter)) return;
+      shown++;
+      tbody.appendChild(el("tr", {}, [
           el("td", {}, [el("a", {
             class: "ad-title", href: "/admin/edit/" + encodeURIComponent(p.slug),
             onclick: function (e) { e.preventDefault(); go("/admin/edit/" + encodeURIComponent(p.slug)); },
@@ -168,10 +286,12 @@
             }),
           ]),
         ]));
-      });
-      table.appendChild(tbody);
-      root.appendChild(table);
     });
+    if (shown === 0) {
+      tbody.appendChild(el("tr", {}, [
+        el("td", { class: "ad-empty", colspan: "6", text: "거르고 나니 남는 글이 없다." }),
+      ]));
+    }
   }
 
   // removeFromList는 목록에서 글 하나를 지운다.
@@ -214,6 +334,61 @@
       });
   }
 
+  // ---------------------------------------------------------------- 환경설정
+  //
+  // **여기 있는 것은 이 브라우저의 설정뿐이다.** 서버에 저장하지 않고
+  // localStorage에만 남는다 — 공개 화면의 화면 설정과 같은 자리, 같은 키를
+  // 쓰므로 admin에서 다크로 바꾸면 공개 화면도 다크다.
+  //
+  // **없는 것을 있는 척하지 않는다.** 글쓰기 기본값이나 계정 설정 같은 것은
+  // 아직 저장할 자리가 없어서 여기 두지 않는다.
+
+  function showSettings() {
+    clear(root);
+    root.appendChild(el("div", { class: "ad-listhead" }, [el("h1", { text: "환경설정" })]));
+
+    var choice = "system";
+    try { choice = localStorage.getItem("blog-theme") || "system"; } catch (_) {}
+
+    var buttons = [];
+    function paint() {
+      buttons.forEach(function (b) {
+        b.setAttribute("aria-pressed", b.dataset.themeChoice === choice ? "true" : "false");
+      });
+    }
+    function pick(v) {
+      choice = v;
+      var resolved = v === "system"
+        ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        : v;
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.themeChoice = v;
+      try { localStorage.setItem("blog-theme", v); } catch (_) {}
+      paint();
+    }
+
+    buttons = [["system", "시스템"], ["light", "화이트"], ["dark", "다크"]].map(function (t) {
+      return el("button", {
+        type: "button", class: "ad-seg", "data-theme-choice": t[0], text: t[1],
+        onclick: function () { pick(t[0]); },
+      });
+    });
+    buttons.forEach(function (b) { b.dataset.themeChoice = b.getAttribute("data-theme-choice"); });
+    paint();
+
+    root.appendChild(el("section", { class: "ad-card" }, [
+      el("h2", { text: "테마" }),
+      el("p", { class: "ad-dim", text: "이 브라우저에만 저장한다. 공개 화면과 같은 설정이다." }),
+      el("div", { class: "ad-segs" }, buttons),
+    ]));
+
+    root.appendChild(el("section", { class: "ad-card" }, [
+      el("h2", { text: "계정" }),
+      el("p", { class: "ad-dim", text: "로그인한 계정과 로그아웃은 화면 오른쪽 위에 있다. 들어올 수 있는 계정은 서버의 허용 목록이 정하므로 여기서 바꿀 수 없다." }),
+      el("p", {}, [el("a", { class: "ad-act", href: "/", target: "_blank", rel: "noreferrer", text: "공개 화면 보기 ↗" })]),
+    ]));
+  }
+
   // ---------------------------------------------------------------- 데이터 보기
   //
   // **이 아카이브가 지금 어떤 상태인지 한 화면에서 본다.** 글이 1,356편이라
@@ -249,10 +424,12 @@
   }
 
   function showStats() {
+    var mine = drawTicket;
     clear(root);
     root.appendChild(el("p", { class: "ad-empty", text: "세는 중…" }));
 
     api("GET", "/api/admin/stats").then(function (r) {
+      if (stale(mine)) return;
       clear(root);
       if (!r.ok) {
         root.appendChild(el("p", { class: "ad-error", text: r.data.error || "데이터를 못 가져왔다" }));
@@ -347,11 +524,13 @@
   }
 
   function showEditor(slug) {
+    var mine = drawTicket;
     clear(root);
     root.appendChild(el("p", { class: "ad-empty", text: "불러오는 중…" }));
 
     if (slug === null) {
       return loadCategories().then(function (cs) {
+        if (stale(mine)) return;
         renderEditor({ slug: "", title: "", body: "", status: "draft", sortOrder: 0 }, true, cs);
       });
     }
@@ -359,6 +538,7 @@
       api("GET", "/api/admin/posts/" + encodeURIComponent(slug)),
       loadCategories(),
     ]).then(function (out) {
+      if (stale(mine)) return;
       var r = out[0];
       if (!r.ok) {
         clear(root);

@@ -88,6 +88,15 @@
 </p>
 {{end}}
 
+{{/* 상단 메뉴. **서버가 그린다** — 진짜 링크라 스크립트가 못 떠도 세 화면
+     사이를 오갈 수 있고, admin.js는 지금 어디인지 표시만 덧입힌다(ad-on).
+     공개 화면의 사이드바가 서버에서 펼쳐 나가는 것과 같은 점진적 향상이다. */}}
+<nav class="ad-menu" aria-label="admin 메뉴">
+  <a href="/admin" data-menu="/admin">전체 글</a>
+  <a href="/admin/data" data-menu="/admin/data">데이터</a>
+  <a href="/admin/settings" data-menu="/admin/settings">환경설정</a>
+</nav>
+
 <main class="ad-main" id="ad-root">
   <noscript>
     <p class="ad-empty">

@@ -290,3 +290,81 @@ body.admin > * { max-width: none; }
 .ad-acts .ad-act.danger:hover, .ad-acts .ad-act.danger:focus-visible {
   background: var(--warn); color: var(--bg); border-color: var(--warn);
 }
+
+/* ------------------------------------------------------------------ 메뉴 */
+/* 상단 메뉴는 서버가 그린다. 지금 있는 곳만 admin.js가 표시한다(ad-on). */
+.ad-menu {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--ink);
+  padding: 0 1.2rem;
+  font-family: var(--chrome, inherit);
+}
+.ad-menu a {
+  padding: .55rem .9rem;
+  text-decoration: none;
+  color: var(--ink-dim);
+  border: 2px solid transparent;
+  border-bottom: none;
+  margin-bottom: -2px;
+  font-size: .92rem;
+}
+.ad-menu a:hover { color: var(--ink); background: var(--mark-bg); }
+/* 지금 있는 곳은 반전 블록이다 — 사이드바의 현재 위치와 같은 신호를 쓴다. */
+.ad-menu a.ad-on {
+  color: var(--badge-fg);
+  background: var(--badge-bg);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- 필터 */
+.ad-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  margin: .9rem 0 .2rem;
+}
+.ad-filters input[type="search"],
+.ad-filters select {
+  font: inherit;
+  font-family: var(--chrome, inherit);
+  padding: .35rem .5rem;
+  border: 2px solid var(--line-mid);
+  background: var(--bg);
+  color: var(--ink);
+}
+.ad-filters .ad-search { flex: 1 1 16rem; min-width: 10rem; }
+.ad-check { display: inline-flex; align-items: center; gap: .3rem; color: var(--ink-dim); font-size: .9rem; }
+
+/* -------------------------------------------------------------- 환경설정 */
+.ad-card {
+  border: 2px solid var(--line-mid);
+  padding: 1rem 1.1rem;
+  margin: 1rem 0;
+}
+.ad-card h2 { margin: 0 0 .3rem; font-size: 1.05rem; }
+.ad-card p { margin: 0 0 .6rem; }
+.ad-segs { display: flex; gap: 0; }
+.ad-seg {
+  font: inherit;
+  font-family: var(--chrome, inherit);
+  padding: .4rem .9rem;
+  border: 2px solid var(--line-mid);
+  margin-left: -2px;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+.ad-seg:first-child { margin-left: 0; }
+.ad-seg[aria-pressed="true"] {
+  background: var(--badge-bg);
+  color: var(--badge-fg);
+  border-color: var(--ink);
+  position: relative;
+}
+
+/* 표는 제 안에서만 가로로 스크롤한다. 페이지가 밀리면 안 된다. */
+.ad-tablewrap { overflow-x: auto; }
+.ad-tablewrap .ad-table { min-width: 34rem; }
