@@ -407,7 +407,7 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 | `Moves` | 카테고리를 사람이 정한 다른 분류 밑으로 | `source_name` | categorize·regroup | 17건 (웹 5갈래 + 모바일 → 개발 두 갈래) |
 | `Covers` | 사람이 정한 분류에 표지 글 붙이기 | `notion_page_id` | 〃 | 36건 (기존 14 + école 42 하위 분류 17 + 웹 입구 글 5) |
 | `PostMoves` | 글 하나를 경로와 다른 카테고리에 붙임 | `notion_page_id` | 〃 | 171건 (기존 67 + 백준 104) |
-| `PostMetadataEdits` | 글 제목·원작성일·순서를 사람이 지정 | `notion_page_id` | import·sortorder | 23건 (선형대수 11 + 다변량분석 12) |
+| `PostMetadataEdits` | 글 제목·원작성일·순서를 사람이 지정 | `notion_page_id` | import·sortorder | 28건 (선형대수 11 + 다변량분석 12 + 최적화이론 실전 순서 5) |
 | `PostTitleEdits` | 작성일·순서는 유지하고 글 제목만 지정 | `notion_page_id` | import | 수리통계2 참고자료 4건의 `(1)` 제거 |
 | `StatusEdits` | **글의 status를 사람이 지정** | `notion_page_id` | **import** | 0건 (빅데이터 분석기사의 마디 둘은 커리어와 함께 뺐다) |
 | `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | 21건 (`컴퓨터 시스템` 계열, `웹 프로그래밍`, 커리어 4갈래, 옛 백준 묶음 4갈래 포함) |

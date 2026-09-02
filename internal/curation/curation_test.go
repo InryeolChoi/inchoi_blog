@@ -314,7 +314,7 @@ func TestMetadataEditsHaveNoDuplicates(t *testing.T) {
 		seen[edit.NotionPageID] = edit.Title
 	}
 	if got, want := len(PostMetadataEdits),
-		len(linearAlgebraMetadataEdits)+len(multivariateCodeOrderEdits); got != want {
+		len(linearAlgebraMetadataEdits)+len(multivariateCodeOrderEdits)+len(optimizationPracticeOrderEdits); got != want {
 		t.Errorf("합친 표가 %d건이다, want %d", got, want)
 	}
 }
