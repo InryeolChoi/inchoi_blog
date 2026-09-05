@@ -354,3 +354,73 @@ func TestLoginIsCaseInsensitive(t *testing.T) {
 		t.Fatal("대소문자만 다른데 거절했다")
 	}
 }
+
+// TestLoginReturnsToOriginalPage — 로그인 전에 보고 있던 페이지에서 로그인
+// 링크를 눌렀다면, 로그인이 끝난 뒤 /admin이 아니라 **그 페이지로** 돌아가야
+// 한다.
+func TestLoginReturnsToOriginalPage(t *testing.T) {
+	h, _ := authHandler(t, fakeGitHub(t, testLogin))
+
+	start := httptest.NewRecorder()
+	h.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/admin/auth/start?next=/p/some-post", nil))
+	state := cookieByName(start.Result().Cookies(), stateCookie)
+	next := cookieByName(start.Result().Cookies(), nextCookie)
+	if state == nil || next == nil {
+		t.Fatal("auth/start가 state나 next 쿠키를 안 줬다")
+	}
+	if next.Value != "/p/some-post" {
+		t.Errorf("next 쿠키가 %q다. /p/some-post여야 한다", next.Value)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/admin/auth/callback?code=ok&state="+state.Value, nil)
+	r.AddCookie(state)
+	r.AddCookie(next)
+	cb := httptest.NewRecorder()
+	h.ServeHTTP(cb, r)
+
+	if cb.Code != http.StatusSeeOther {
+		t.Fatalf("콜백이 %d를 줬다 (303이어야 한다)", cb.Code)
+	}
+	if loc := cb.Header().Get("Location"); loc != "/p/some-post" {
+		t.Errorf("로그인 뒤 %q로 갔다. 원래 페이지(/p/some-post)로 가야 한다", loc)
+	}
+}
+
+// TestLoginWithoutNextGoesToAdmin — next가 없는 평범한 경우엔 예전처럼 /admin.
+func TestLoginWithoutNextGoesToAdmin(t *testing.T) {
+	h, _ := authHandler(t, fakeGitHub(t, testLogin))
+
+	start := httptest.NewRecorder()
+	h.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/admin/auth/start", nil))
+	state := cookieByName(start.Result().Cookies(), stateCookie)
+
+	r := httptest.NewRequest(http.MethodGet, "/admin/auth/callback?code=ok&state="+state.Value, nil)
+	r.AddCookie(state)
+	cb := httptest.NewRecorder()
+	h.ServeHTTP(cb, r)
+
+	if loc := cb.Header().Get("Location"); loc != "/admin" {
+		t.Errorf("next 없이 로그인했더니 %q로 갔다. /admin이어야 한다", loc)
+	}
+}
+
+// TestNextCannotEscapeTheSite — **open redirect를 열어주지 않는다.** next를
+// 검사 없이 믿으면 로그인 링크 하나가 남의 사이트로 튕기는 피싱 도구가 된다.
+func TestNextCannotEscapeTheSite(t *testing.T) {
+	cases := []string{
+		"//evil.com",
+		"https://evil.com",
+		"/\\evil.com",
+		"javascript:alert(1)",
+		"http://evil.com/../..",
+	}
+	for _, next := range cases {
+		if got := sanitizeNext(next); got != "" {
+			t.Errorf("sanitizeNext(%q) = %q, 비어 있어야 한다", next, got)
+		}
+	}
+	// 정상적인 우리 사이트 경로는 그대로 통과해야 한다.
+	if got := sanitizeNext("/p/선형대수"); got != "/p/선형대수" {
+		t.Errorf("정상 경로가 %q로 바뀌었다", got)
+	}
+}

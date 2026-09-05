@@ -214,6 +214,11 @@ type pageData struct {
 	// 보여줄지** 정할 수 있다. 둘을 하나로 묶으면 로그인하기 전에는 로그인
 	// 링크가 안 나오는 우스운 상태가 된다.
 	AdminOn bool
+	// LoginURL은 사이드바의 "로그인" 링크가 가리키는 주소다. **지금 보고 있는
+	// 페이지로 돌아오는 길을 함께 싣는다** — 안 그러면 로그인 뒤 언제나
+	// /admin으로 튕기고, 읽던 글로 돌아오려면 뒤로 가기를 눌러야 한다.
+	// render가 채운다.
+	LoginURL string
 }
 
 // TotalPostsText는 천 단위를 끊은 글 수다. 네 자리라 끊는 편이 읽기 쉽다.
@@ -285,6 +290,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		data.AdminOn = true
 		data.Editor = s.editorFor(r)
 	}
+	data.LoginURL = "/admin/login?next=" + url.QueryEscape(r.URL.RequestURI())
 	data.Nav = nav
 	// 최상위 분류의 글 수 합이 곧 전체다. 카테고리 없는 글은 현재 0건이라
 	// 따로 세지 않는다 — 생기면 여기에 안 잡힌다.

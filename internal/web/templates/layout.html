@@ -145,17 +145,23 @@
            로그인 링크가 안 나오는 우스운 상태가 된다. */}}
       {{if .AdminOn}}
         {{if .Editor}}
-      <a href="/admin" class="side-me" title="글 관리">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.1 2.3a1.7 1.7 0 0 1 2.4 2.4l-.9.9-2.4-2.4.9-.9zM10.3 4.1l2.4 2.4-6.5 6.5-3.1.7.7-3.1 6.5-6.5z"/></svg>
-        {{.Editor}}
-      </a>
-      {{/* 로그아웃은 POST다. GET이면 남의 페이지에 박아둔 <img> 하나로도
-           사람을 로그아웃시킬 수 있다. */}}
-      <form method="post" action="/admin/logout" class="side-out">
-        <button type="submit" data-i18n="logout">로그아웃</button>
-      </form>
+      {{/* **로그인 자리에 로그아웃, 그 밑에 admin이 선다.** 예전에는 계정
+           이름이 위, 로그아웃이 아래였는데, 로그인했을 때 제일 먼저 손이
+           가는 것은 "로그아웃"이지 관리 화면이 아니다. 둘을 한 칸에 묶어
+           세로로 쌓는다 — GitHub·Pages와 같은 가로줄에 있으면서도 이 둘은
+           한 덩어리로 읽혀야 한다. 로그아웃은 POST다. GET이면 남의 페이지에
+           박아둔 <img> 하나로도 사람을 로그아웃시킬 수 있다. */}}
+      <div class="side-account">
+        <form method="post" action="/admin/logout" class="side-out">
+          <button type="submit" data-i18n="logout">로그아웃</button>
+        </form>
+        <a href="/admin" class="side-me" title="{{.Editor}}">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.1 2.3a1.7 1.7 0 0 1 2.4 2.4l-.9.9-2.4-2.4.9-.9zM10.3 4.1l2.4 2.4-6.5 6.5-3.1.7.7-3.1 6.5-6.5z"/></svg>
+          admin
+        </a>
+      </div>
         {{else}}
-      <a href="/admin/login" data-i18n="login">로그인</a>
+      <a href="{{.LoginURL}}" data-i18n="login">로그인</a>
         {{end}}
       {{end}}
     </div>
@@ -766,6 +772,9 @@
   /* 사이드바 바닥의 글쓰기 입구. GitHub·Pages 링크와 같은 모양이라
      "여기서 나간다"와 "여기서 들어간다"가 한 줄에 나란히 선다. */
   .side-foot .side-me { color: var(--accent); border-color: var(--accent); }
+  /* 로그아웃과 admin은 한 덩어리라 세로로 쌓는다 — 옆의 GitHub·Pages는
+     여전히 가로로 흐르는 .side-foot의 자식이다. */
+  .side-account { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; }
   .side-out { margin: 0; display: inline-flex; }
   .side-out button {
     font: inherit; font-size: .78rem; cursor: pointer;

@@ -59,6 +59,10 @@ const (
 const (
 	sessionCookie = "blog_admin_session"
 	stateCookie   = "blog_admin_state"
+	// nextCookie는 로그인 뒤 돌아갈 주소를 GitHub에 갔다 오는 동안 들고
+	// 있는다. state와 같은 자리(같은 path·같은 수명)에 두는 이유는 둘 다
+	// "이 왕복 한 번만 사는 값"이라서다.
+	nextCookie = "blog_admin_next"
 	// state 쿠키는 /admin 안에서만 쓴다. 지울 때도 이 path를 그대로 줘야 한다.
 	stateCookiePath = "/admin"
 
@@ -319,23 +323,62 @@ func (a *authenticator) guard(next http.Handler) http.Handler {
 type loginData struct {
 	SiteCSS template.CSS
 	Error   string
+	// StartURL은 "GitHub으로 로그인" 버튼이 가리키는 주소다. next가 있으면
+	// 그 뒤로도 들고 가야 하므로 쿼리로 얹는다.
+	StartURL string
+}
+
+// sanitizeNext는 로그인 뒤 돌아갈 주소를 우리 사이트 안으로 제한한다.
+//
+// **그대로 받으면 안 된다.** `next`는 남이 만든 로그인 링크에도 실릴 수 있는
+// 값이라, 검사 없이 리다이렉트하면 로그인 뒤 남의 사이트로 튕기는
+// open redirect가 된다(피싱에 그대로 쓰인다). 우리 사이트의 절대 경로 하나만
+// 통과시킨다 — 스킴이 섞인 것(`javascript:`), 프로토콜 상대 주소(`//evil.com`),
+// 역슬래시로 브라우저를 속이는 것은 전부 막는다.
+func sanitizeNext(v string) string {
+	if v == "" || v[0] != '/' {
+		return ""
+	}
+	if strings.HasPrefix(v, "//") {
+		return ""
+	}
+	if strings.ContainsAny(v, "\\:") {
+		return ""
+	}
+	return v
+}
+
+// loginTarget은 next가 유효하면 그곳으로, 아니면 /admin으로 보낸다.
+func loginTarget(next string) string {
+	if n := sanitizeNext(next); n != "" {
+		return n
+	}
+	return "/admin"
 }
 
 func (a *authenticator) handleLoginPage(w http.ResponseWriter, r *http.Request) {
-	// 이미 들어와 있으면 로그인 화면을 다시 보여줄 이유가 없다.
+	next := r.URL.Query().Get("next")
+	// 이미 들어와 있으면 로그인 화면을 다시 보여줄 이유가 없다. **그 자리로
+	// 돌아온 next가 있으면 거기로 보낸다** — /admin으로 고정하면 원래 보던
+	// 글에서 로그인 링크를 눌렀을 때도 관리 화면으로 튕긴다.
 	if a.currentLogin(r) != "" {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		http.Redirect(w, r, loginTarget(next), http.StatusSeeOther)
 		return
 	}
-	a.renderLogin(w, http.StatusOK, "")
+	a.renderLogin(w, http.StatusOK, "", next)
 }
 
-func (a *authenticator) renderLogin(w http.ResponseWriter, code int, msg string) {
+func (a *authenticator) renderLogin(w http.ResponseWriter, code int, msg, next string) {
+	start := "/admin/auth/start"
+	if n := sanitizeNext(next); n != "" {
+		start += "?next=" + url.QueryEscape(n)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	w.WriteHeader(code)
-	if err := a.login.ExecuteTemplate(w, "login", loginData{SiteCSS: a.css, Error: msg}); err != nil {
+	data := loginData{SiteCSS: a.css, Error: msg, StartURL: start}
+	if err := a.login.ExecuteTemplate(w, "login", data); err != nil {
 		log.Printf("admin 로그인 화면 렌더 실패: %v", err)
 	}
 }
@@ -348,7 +391,7 @@ func (a *authenticator) handleStart(w http.ResponseWriter, r *http.Request) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		log.Printf("admin state 생성 실패: %v", err)
-		a.renderLogin(w, http.StatusInternalServerError, "로그인을 시작하지 못했다")
+		a.renderLogin(w, http.StatusInternalServerError, "로그인을 시작하지 못했다", "")
 		return
 	}
 	state := hex.EncodeToString(raw)
@@ -356,6 +399,18 @@ func (a *authenticator) handleStart(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookie,
 		Value:    state,
+		Path:     stateCookiePath,
+		HttpOnly: true,
+		Secure:   secure(r),
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(stateTTL),
+	})
+	// **next도 같이 들고 간다.** 로그인이 끝나면 여기 담아둔 곳으로 돌아온다
+	// (handleCallback). 항상 다시 심어서 — 유효하지 않으면 빈 값으로 —
+	// 이전 시도에서 남은 next가 이번 로그인에 새어 들어가지 않게 한다.
+	http.SetCookie(w, &http.Cookie{
+		Name:     nextCookie,
+		Value:    sanitizeNext(r.URL.Query().Get("next")),
 		Path:     stateCookiePath,
 		HttpOnly: true,
 		Secure:   secure(r),
@@ -376,9 +431,18 @@ func (a *authenticator) handleStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
+	// next는 한 번 쓰면 버린다 — state와 같은 왕복 한 번짜리 값이다. 성공하든
+	// 실패하든 여기서 회수해서, 실패했을 때 재시도 화면에 다시 실어준다.
+	next, _ := r.Cookie(nextCookie)
+	nextVal := ""
+	if next != nil {
+		nextVal = next.Value
+	}
+	clearCookie(w, r, nextCookie, stateCookiePath)
+
 	// GitHub이 거절당했다고 알려주는 경우(사용자가 취소 등).
 	if e := r.URL.Query().Get("error"); e != "" {
-		a.renderLogin(w, http.StatusForbidden, "GitHub이 거절했다: "+e)
+		a.renderLogin(w, http.StatusForbidden, "GitHub이 거절했다: "+e, nextVal)
 		return
 	}
 
@@ -388,26 +452,26 @@ func (a *authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 	clearCookie(w, r, stateCookie, stateCookiePath)
 	if err != nil || want.Value == "" || got == "" ||
 		subtle.ConstantTimeCompare([]byte(want.Value), []byte(got)) != 1 {
-		a.renderLogin(w, http.StatusBadRequest, "로그인 흐름이 어긋났다. 다시 시도해라.")
+		a.renderLogin(w, http.StatusBadRequest, "로그인 흐름이 어긋났다. 다시 시도해라.", nextVal)
 		return
 	}
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		a.renderLogin(w, http.StatusBadRequest, "GitHub이 코드를 주지 않았다")
+		a.renderLogin(w, http.StatusBadRequest, "GitHub이 코드를 주지 않았다", nextVal)
 		return
 	}
 
 	token, err := a.exchange(code)
 	if err != nil {
 		log.Printf("admin 토큰 교환 실패: %v", err)
-		a.renderLogin(w, http.StatusBadGateway, "GitHub과 이야기하지 못했다")
+		a.renderLogin(w, http.StatusBadGateway, "GitHub과 이야기하지 못했다", nextVal)
 		return
 	}
 	login, err := a.fetchLogin(token)
 	if err != nil {
 		log.Printf("admin 사용자 조회 실패: %v", err)
-		a.renderLogin(w, http.StatusBadGateway, "GitHub에서 계정을 확인하지 못했다")
+		a.renderLogin(w, http.StatusBadGateway, "GitHub에서 계정을 확인하지 못했다", nextVal)
 		return
 	}
 
@@ -415,13 +479,15 @@ func (a *authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 		// **누가 두드렸는지는 남긴다.** 화면에는 계정 이름을 도로 찍지 않는다 —
 		// 그대로 그리면 남이 지은 이름이 우리 화면에 나오는 자리가 된다.
 		log.Printf("admin 로그인 거부: %q는 허용 목록에 없다", login)
-		a.renderLogin(w, http.StatusForbidden, "이 계정으로는 들어올 수 없다.")
+		a.renderLogin(w, http.StatusForbidden, "이 계정으로는 들어올 수 없다.", nextVal)
 		return
 	}
 
 	a.setSession(w, r, login)
 	log.Printf("admin 로그인: %s", login)
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	// **원래 있던 곳으로 돌아간다.** 로그인 전에 보고 있던 페이지에서 로그인
+	// 링크를 눌렀다면 그 자리로, next가 없거나 우리 사이트 밖이면 /admin으로.
+	http.Redirect(w, r, loginTarget(nextVal), http.StatusSeeOther)
 }
 
 // handleLogout은 세션 쿠키를 지운다.
