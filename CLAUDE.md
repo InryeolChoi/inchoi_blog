@@ -432,7 +432,7 @@ categorize는 `original_path`가 알려주는 것만 안다. 노션에서 어디
 | `PostTitleEdits` | 작성일·순서는 유지하고 글 제목만 지정 | `notion_page_id` | import | 수리통계2 참고자료 4건의 `(1)` 제거 |
 | `StatusEdits` | **글의 status를 사람이 지정** | `notion_page_id` | **import** | 0건 (빅데이터 분석기사의 마디 둘은 커리어와 함께 뺐다) |
 | `DropCategories` | 카테고리 없애기 | `source_name` | 〃 | 21건 (`컴퓨터 시스템` 계열, `웹 프로그래밍`, 커리어 4갈래, 옛 백준 묶음 4갈래 포함) |
-| `DropPosts` | **글을 이관에서 뺌** | `notion_page_id` | **import** | 152건 (커리어 50 · 백준 35 · 알고리즘 이론 15 포함) |
+| `DropPosts` | **글을 이관에서 뺌** | `notion_page_id` | **import** | 191건 (커리어 50 · 백준 35 · 알고리즘 이론 15 · 운영체제 stub 9 등 포함) |
 | `DropImages` | **이미지를 DB에서 뺌** | `sha256` | **import** | 1건 (증명사진) |
 | `BodyEdits` | **본문에서 줄 삭제·교체** | `notion_page_id` | **import** | 삭제 8줄 + 교체 5줄 |
 | `BodyAppends` | **본문 끝에 지속적으로 덧붙임** | `notion_page_id` | **import** | 시험 해답 3글 7묶음 (확률과정론·수리통계1·수리통계2) |
@@ -2544,6 +2544,12 @@ CLAUDE.md의 "내부 링크" 절이 요구하던 것이다. relink가 모든 내
 편집기가 된다.** `/admin`으로 옮겨 가지 않으므로 읽던 맥락을 잃지 않는다
 (`internal/web/static/inline-edit.js`).
 
+**표지 글이 있는 카테고리 화면도 같은 자리를 낸다**(2026-09-06,
+`templates/category.html`). 표지 본문은 카테고리 최상단에 그대로 펼쳐지는
+글이라 post.html과 다를 이유가 없다 — `inline-edit.js`가 페이지의 첫
+`<article>`을 그대로 집으므로 코드를 더 안 늘려도 된다. 갈래 카드만 있는
+화면(`.Deck`)은 본문 자체가 없어 슬롯도 안 낸다.
+
 **web과 admin의 경계를 지키는 방법이 이 기능의 핵심이다.**
 
 - web은 "읽기 전용 공개 페이지"고 admin은 따로 있다. 세션이 무엇인지 web이
@@ -2899,6 +2905,40 @@ BLOG_GITHUB_CLIENT_ID=... BLOG_GITHUB_CLIENT_SECRET=... BLOG_ADMIN_LOGINS=Inryeo
   `PostSummariesBySlug`로 바꿔 status와 `original_created_at`을 함께 가져온다.
   글 1357편과 카테고리 87개를 전부 훑어, 날짜 없는 줄이 이름 없는 인라인
   데이터베이스를 가리키는 3곳(posts에 행이 없다)만 남은 것을 확인했다.
+
+**2026-09-06에 한 것**
+
+- **운영체제 Part 1·2·4의 빈 stub 아홉을 지웠다.** 전부 본문이 0바이트인
+  draft다(`1장/2장/4장 연습문제`, `운영체제와 서비스 (1)/(2)`,
+  `운영체제의 제작과 실행`, `쓰레드 : OS별 예시`, `7. 예시 : ARM`,
+  `6. 예시 : 인텔`). `DropPosts`로 뺐고, Part 1·2 표지 본문에 남아 있던
+  안내 링크 셋(`1장`·`2장`·`4장 연습문제`)도 `os_stub_edits.go`(`BodyEdits`)로
+  걷었다 — 남기면 그 slug가 posts에 없는 것이 되어 렌더러가 노션 인라인
+  데이터베이스로 착각하고 엉뚱한 목록을 편다. Part 1은 두 링크를 걷고 나니
+  `### 연습문제` 제목만 남아서 제목째 없앴다(가상화기술의 `## Cloud`와 같은
+  자리). 글 1261 → **1252편.** import → relink → categorize → regroup 두
+  바퀴로 수렴을 확인하고 `deploy/upload-db.sh`로 서버에 반영했다.
+- **사이드바의 GitHub·Pages·로그인/로그아웃·admin 배치를 다시 짰다.**
+  GitHub·Pages는 폭이 제각각인 알약이라 `.side-foot`에서 줄바꿈으로 흘러도
+  되지만, 로그인/로그아웃·admin은 매번 같은 자리에 같은 폭으로 서야 한다 —
+  같은 줄에 섞으면 폭이 들쭉날쭉해 계단처럼 보였다(실제로 그렇게 보였다).
+  `.side-account`를 `.side-foot` 바깥의 제 줄로 빼고 **로그아웃 버튼과 admin
+  링크 둘 다 폭을 100%로 채워** 나란히 줄을 맞춘다. 로그인 전 "로그인" 링크도
+  `.side-login`으로 따로 빼 같은 줄 규칙을 쓴다.
+- **로그인 상태를 "열렬히.뛰기" 로고의 색 지면으로 알린다**(`.signed-in`).
+  이 팔레트에서 강조는 색 글자가 아니라 색 블록이다(홈 표제지 둘째 줄과
+  같은 규칙) — 그래서 글자색을 바꾸지 않고 노랑 블록을 깐다. 점(`.dot`)은
+  이미 그 색이라 블록 위에서 사라지므로 그 안에서만 검정으로 되돌린다.
+  상단 바(`.brand`)와 사이드바(`.side-brand`) 양쪽에 같은 처리를 했다.
+- **카테고리 표지 글도 그 자리에서 고칠 수 있게 했다.** 지금까지 "고치기"는
+  `post.html`(개별 글 상세)에만 있었는데, 표지 글은 본문을 카테고리 화면
+  최상단에 그대로 펼치면서도 그 슬롯이 없었다. `category.html`의 `<h1>`
+  옆에 post.html과 같은 `edit-here-slot`을 낸다 — 뒷단은
+  `internal/web/static/inline-edit.js`를 그대로 재사용한다(첫 `<article>`을
+  집어서 고치므로 두 화면이 갈라질 일이 없다). **갈래 카드만 있는 화면
+  (`.Deck`)에는 본문 자체가 없으므로 버튼도 안 낸다** — 눌러도 고칠 게
+  없는 죽은 버튼을 만들지 않는다. `TestEditorAppearsOnCategoryCovers`·
+  `TestEditorIsAbsentWithoutACoverBody`가 지킨다.
 
 **2026-09-03에 한 것**
 
