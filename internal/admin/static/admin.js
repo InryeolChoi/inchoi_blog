@@ -104,7 +104,7 @@
     ticket();
     var m = /^\/admin\/edit\/(.+)$/.exec(path);
     if (m) return showEditor(decodeURIComponent(m[1]));
-    if (path === "/admin/new") return showEditor(null);
+    if (path === "/admin/new") return showEditor(null, prefillCategory());
     if (path === "/admin/data") return showStats();
     if (path === "/admin/settings") return showSettings();
     return showList();
@@ -527,7 +527,21 @@
     });
   }
 
-  function showEditor(slug) {
+  // prefillCategory는 공개 화면에서 넘겨준 분류다(`/admin/new?category=12`).
+  //
+  // 분류를 보다가 "새 글"을 누른 사람은 그 분류에 쓰려는 것이다. 안 받으면
+  // 방금 보던 것을 잊고 88개짜리 선택 상자를 처음부터 다시 고르게 된다.
+  //
+  // **숫자가 아니면 그냥 무시한다.** 주소는 누구나 손으로 고칠 수 있는데,
+  // 여기서 하는 일은 선택 상자의 초깃값을 정하는 것뿐이라 틀린 값은
+  // "아무것도 안 고른 상태"가 되면 그만이다. 진짜 검사는 저장할 때
+  // 서버가 한다(save.go가 없는 분류면 400을 준다).
+  function prefillCategory() {
+    var m = /[?&]category=(\d+)(?:&|$)/.exec(location.search);
+    return m ? Number(m[1]) : null;
+  }
+
+  function showEditor(slug, categoryId) {
     var mine = drawTicket;
     clear(root);
     root.appendChild(el("p", { class: "ad-empty", text: "불러오는 중…" }));
@@ -535,7 +549,10 @@
     if (slug === null) {
       return loadCategories().then(function (cs) {
         if (stale(mine)) return;
-        renderEditor({ slug: "", title: "", body: "", status: "draft", visibility: "public", sortOrder: 0 }, true, cs);
+        renderEditor({
+          slug: "", title: "", body: "", status: "draft", visibility: "public",
+          sortOrder: 0, categoryId: categoryId || null,
+        }, true, cs);
       });
     }
     Promise.all([

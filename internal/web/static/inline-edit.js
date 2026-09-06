@@ -50,10 +50,89 @@
     });
   }
 
+  // svg는 아이콘 하나를 만든다. path 문자열은 layout.html의 것과 같은 모양이다.
+  function svg(d) {
+    var n = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    n.setAttribute("viewBox", "0 0 16 16");
+    n.setAttribute("aria-hidden", "true");
+    var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    n.appendChild(p);
+    return n;
+  }
+
+  // **커튼 안의 두 버튼을 여기서 만든다.** 서버가 미리 찍지 않는 이유는
+  // 둘 다 JS 없이는 할 수 없는 일이어서다 — 미리 찍어두면 스크립트가 꺼진
+  // 브라우저에 눌러도 아무 일 없는 죽은 버튼이 남는다(복사 버튼과 같은 판단).
+  // 라벨을 따로 들고 있는다. **firstChild로 찾으면 안 된다** — 아이콘이
+  // 앞에 붙으면서 그게 SVG가 되고, 불러오는 동안 글자를 바꾸는 자리가
+  // 조용히 엉뚱한 요소를 가리킨다(실제로 그럴 뻔했다).
+  var label = el("span", { text: "고치기" });
   var button = el("button", { type: "button", class: "edit-here", onclick: open }, [
-    el("span", { text: "고치기" }),
+    svg("M12.1 2.3a1.7 1.7 0 0 1 2.4 2.4l-.9.9-2.4-2.4.9-.9zM10.3 4.1l2.4 2.4-6.5 6.5-3.1.7.7-3.1 6.5-6.5z"),
+    label,
   ]);
   mount.appendChild(button);
+  mount.appendChild(el("button", { type: "button", class: "del-here", onclick: remove }, [
+    svg("M6.5 1.5h3v1h3.5v1.5h-11V2.5H6.5v-1zM3.5 5h9l-.6 9.1a1 1 0 0 1-1 .9H5.1a1 1 0 0 1-1-.9L3.5 5z"),
+    el("span", { text: "지우기" }),
+  ]));
+
+  // closeMenu는 커튼을 닫는다. 무엇을 고르든 커튼은 제 일을 마친 것이라
+  // 열린 채로 두면 그 아래 편집기가 가려진다.
+  var menu = mount.closest ? mount.closest("details.edit-menu") : null;
+  function closeMenu() {
+    if (menu) menu.open = false;
+  }
+  // 편집기가 열려 있는 동안에는 `편집` 자체를 감춘다. 고치는 중에 또
+  // 열리면 같은 일을 두 번 시작하게 되고, 지우기는 지금 화면을 통째로
+  // 없애는 행동이라 더 그렇다.
+  function showMenu(on) {
+    if (menu) menu.hidden = !on;
+    else button.hidden = !on;
+  }
+
+  // ── 지우기 ────────────────────────────────────────────────────
+  //
+  // **admin의 흐름을 그대로 쓴다**(admin.js의 removeFromList). refs로 무엇을
+  // 잃는지 먼저 묻고, 자식이 있으면 아예 막고, 잃을 것이 있으면 확인을 받는다.
+  // 규칙을 두 곳에 따로 적으면 한쪽이 느슨해진다 — 되돌릴 수 없는 행동이라
+  // 느슨해지는 쪽이 그대로 사고다.
+  function remove() {
+    closeMenu();
+    api("GET", "/api/admin/posts/" + encodeURIComponent(slug) + "/refs").then(function (r) {
+      if (!r.ok) return window.alert(r.data.error || "무엇이 걸리는지 알아내지 못했다");
+      var refs = r.data;
+      // 자식이 있으면 못 지운다. force로도 안 된다 — 되돌릴 수 없이 사슬이 끊긴다.
+      if (refs.children && refs.children.length) {
+        return window.alert("하위 글 " + refs.children.length + "편이 매달려 있다: " +
+          refs.children.slice(0, 3).join(", ") +
+          (refs.children.length > 3 ? " 외" : "") +
+          "\n\n그것들을 먼저 옮기거나 지워라.");
+      }
+      var lose = [];
+      if (refs.notion) lose.push("노션에서 온 글이라 다음 재이관이 되살린다 (진짜로 빼려면 internal/curation의 DropPosts에 적어야 한다)");
+      if (refs.coverOf && refs.coverOf.length) lose.push("분류 " + refs.coverOf.join(", ") + "의 표지가 사라진다");
+      if (refs.linkedFrom && refs.linkedFrom.length) lose.push("이 글을 가리키던 " + refs.linkedFrom.length + "편의 링크를 글자로 푼다");
+
+      var msg = "\"" + (document.title || slug) + "\"을(를) 지운다.";
+      if (lose.length) msg += "\n\n" + lose.map(function (l, i) { return (i + 1) + ". " + l; }).join("\n");
+      msg += "\n\n되돌릴 수 없다. 지울까?";
+      if (!window.confirm(msg)) return;
+
+      // 지우기는 저장과 같은 rev 표를 요구한다. 지금 값을 한 번 더 받아온다 —
+      // 그 사이에 다른 탭이 고쳤으면 거절된다.
+      api("GET", "/api/admin/posts/" + encodeURIComponent(slug)).then(function (g) {
+        if (!g.ok) return window.alert(g.data.error || "글을 못 가져왔다");
+        api("DELETE", "/api/admin/posts/" + encodeURIComponent(slug),
+          { rev: g.data.rev || "", force: lose.length > 0 }).then(function (d) {
+          if (!d.ok) return window.alert(d.data.error || ("지우지 못했다 (HTTP " + d.status + ")"));
+          // 지운 글의 화면에 머물 수 없다 — 새로고침하면 404다.
+          location.href = "/";
+        });
+      });
+    });
+  }
 
   // 원래 화면을 그대로 들고 있다가 취소하면 되돌린다. 다시 그리면
   // 수식·코드 색칠·복사 버튼·애니메이션을 전부 다시 붙여야 하는데,
@@ -62,11 +141,12 @@
 
   function open() {
     if (saved) return;
+    closeMenu();
     button.disabled = true;
-    button.firstChild.textContent = "불러오는 중…";
+    label.textContent = "불러오는 중…";
     api("GET", "/api/admin/posts/" + encodeURIComponent(slug)).then(function (r) {
       button.disabled = false;
-      button.firstChild.textContent = "고치기";
+      label.textContent = "고치기";
       if (!r.ok) {
         // 401이면 세션이 풀린 것이다. 그 말을 그대로 보여준다 — "안 된다"만
         // 보여주면 다시 로그인하면 된다는 것을 알 수 없다.
@@ -81,7 +161,7 @@
 
   function show(post) {
     saved = article.cloneNode(true);
-    button.hidden = true;
+    showMenu(false);
 
     var area = el("textarea", { class: "edit-body mono", spellcheck: "false" });
     area.value = post.body || "";
@@ -165,7 +245,7 @@
       article.replaceWith(saved);
       article = saved;
       saved = null;
-      button.hidden = false;
+      showMenu(true);
     }
 
     function save() {

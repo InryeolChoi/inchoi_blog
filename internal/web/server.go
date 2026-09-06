@@ -209,6 +209,30 @@ type pageData struct {
 	// Editor는 지금 들어와 있는 계정 이름이다. 비어 있으면 **고치는 길이
 	// 화면에 아예 없다.** WithEditor를 안 준 서버에서는 언제나 비어 있다.
 	Editor string
+	// EditSlug는 **이 화면에서 고칠 수 있는 글**이다. 글 상세면 그 글이고,
+	// 표지가 펼쳐진 분류면 표지 글이다. 갈래 카드만 있는 화면처럼 본문이
+	// 없는 곳은 비어 있다 — 누를 대상이 없는 버튼을 만들지 않는다.
+	//
+	// **로그인 여부와 무관하게 핸들러가 채운다.** 여기서 정하는 것은 "무엇을
+	// 고칠 수 있나"이고 "고쳐도 되나"는 Editor가 정한다(render가 나중에
+	// 채운다). 두 질문을 한 칸에 밀어 넣으면 핸들러가 세션을 알아야 한다.
+	EditSlug string
+	// NewPostURL은 이 화면에서 글을 새로 쓰러 가는 길이다. 비어 있으면
+	// 그 길이 화면에 없다 — Editor와 newPostCat 둘 다 있을 때만 채워진다.
+	NewPostURL string
+	// newPostCat은 **새 글에 미리 골라 넣을 분류**다. 분류 화면에서만 채운다.
+	//
+	// # 왜 분류 화면에만 두나
+	//
+	// 이 버튼이 사이드바의 admin 링크보다 더 아는 것은 **이 분류 하나뿐이다.**
+	// 넘길 분류가 없으면 같은 곳으로 가는 길을 한 벌 더 그리는 것이라, 홈과
+	// 글 상세에는 두지 않는다. 글 상세에는 `편집`이 이미 그 화면에 맞는
+	// 행동을 들고 있다.
+	//
+	// **activeCat으로 가를 수 없다.** 글 상세도 그 글이 속한 분류를 펼치느라
+	// 그 칸을 채운다(사이드바가 거기 있어야 하므로). 두 화면을 가르는 것은
+	// "분류를 보고 있나"이지 "분류가 정해지나"가 아니다.
+	newPostCat int64
 	// AdminOn은 이 서버에 글쓰기 화면이 있는지다. Editor와 다른 질문이다 —
 	// "글쓰기 화면이 있다"와 "지금 들어와 있다"를 구별해야 **로그인 링크를
 	// 보여줄지** 정할 수 있다. 둘을 하나로 묶으면 로그인하기 전에는 로그인
@@ -290,6 +314,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		data.AdminOn = true
 		data.Editor = s.editorFor(r)
 	}
+	data.NewPostURL = newPostURL(data.Editor, data.newPostCat)
 	data.LoginURL = "/admin/login?next=" + url.QueryEscape(r.URL.RequestURI())
 	data.Nav = nav
 	// 최상위 분류의 글 수 합이 곧 전체다. 카테고리 없는 글은 현재 0건이라
@@ -511,6 +536,11 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		Posts:      posts,
 		PostTree:   pathTree(current, posts),
 		Post:       coverPost,
+		// 새 글은 **분류 화면에만** 있고, 이 분류를 미리 골라 넘긴다.
+		newPostCat: current.ID,
+		// 표지 본문이 실제로 펼쳐질 때만 고칠 수 있다. 갈래 카드가 있는
+		// 화면은 본문을 안 그리므로(category.html) 고칠 대상도 없다.
+		EditSlug:   coverEditSlug(coverPost, deck),
 		Body:       cover.HTML,
 		AfterPosts: cover.AfterPosts,
 		Links:      linksFor(current.Slug),
@@ -719,6 +749,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		Title:     post.Title,
 		Trail:     crumbList,
 		Post:      post,
+		EditSlug:  post.Slug,
 		Body:      rendered.HTML,
 		Outline:   rendered.Outline,
 		Branches:  branches,
@@ -842,4 +873,38 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(img.Data); err != nil {
 		fmt.Printf("이미지 쓰기 실패(%s): %v\n", sha, err)
 	}
+}
+
+// newPostURL은 새 글로 가는 길이다. **둘 다 있어야 낸다.**
+//
+//	editor == ""  → 로그인하지 않았다. 주소 자체를 안 만든다.
+//	cat    == 0   → 넘길 분류가 없다(홈·글 상세). 위 newPostCat 참고.
+//
+// # 왜 함수로 뺐나
+//
+// 이 판정은 **관문이 아니다.** 버튼을 안 그린다고 아무것도 못 하게 되지
+// 않고, 억지로 눌러봐야 /api/admin이 401을 준다 — 진짜 관문은 언제나
+// 서버의 세션 검사다(internal/admin의 guard).
+//
+// 그래도 따로 뺀 이유는 **테스트가 이 조건을 직접 겨냥할 수 있게** 하려는
+// 것이다. 화면(HTML)으로만 확인하면 pagetools의 `.Editor` 검사가 한 겹 더
+// 막아줘서, 여기서 로그인 여부를 빼먹어도 테스트가 통과한다. 실제로 그
+// 돌연변이가 안 잡혔다 — 사고는 아니었지만 **지켜지지 않는 조건이었다.**
+func newPostURL(editor string, cat int64) string {
+	if editor == "" || cat == 0 {
+		return ""
+	}
+	return "/admin/new?category=" + strconv.FormatInt(cat, 10)
+}
+
+// coverEditSlug는 카테고리 화면에서 고칠 수 있는 글이다.
+//
+// 표지 글이 있어도 **갈래 카드가 있는 화면에서는 본문을 안 그린다**
+// (category.html이 전부 `not .Deck`으로 가린다). 그 화면에 고치기를 내면
+// 누른 뒤에 고칠 본문이 없다.
+func coverEditSlug(cover *Post, deck []DeckCard) string {
+	if cover == nil || len(deck) > 0 {
+		return ""
+	}
+	return cover.Slug
 }

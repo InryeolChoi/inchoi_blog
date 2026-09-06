@@ -1,10 +1,14 @@
 {{define "content"}}
 <header class="page-head">
-  <h1>{{.Title}}</h1>
+  {{/* 제목과 버튼이 한 줄에 선다. 좁아지면 버튼이 제목 아래로 내려간다
+       (.head-row가 감싸고 flex-wrap이 한다) — 제목을 밀어내지 않는다. */}}
   {{/* 표지 글도 글이다 — 로그인이 확인되면 여기도 post.html과 같은 자리에서
        고칠 수 있어야 한다(inline-edit.js가 첫 <article>을 그대로 집는다).
-       갈래 카드만 있는 화면은 본문이 없으므로 버튼도 없다. */}}
-  {{if and .Editor .Post (not .Deck)}}<div class="edit-here-slot" data-inline-edit="{{.Post.Slug}}"></div>{{end}}
+       무엇을 고칠 수 있는지는 핸들러가 .EditSlug에 적어뒀다. */}}
+  <div class="head-row">
+    <h1>{{.Title}}</h1>
+    {{template "pagetools" .}}
+  </div>
 </header>
 
 {{/* 갈래가 몇 개 안 되고 성격이 뚜렷한 분류는 목록 대신 아이콘 카드로 편다.

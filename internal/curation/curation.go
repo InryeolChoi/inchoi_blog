@@ -91,15 +91,19 @@ var PostMoves = []PostMove{
 	{NotionPageID: "6f267d09-77fe-4cd9-aef5-2bdb47ba49de", ToSlug: "javascript", Title: "Javascript"},
 	{NotionPageID: "4d9af5a1-cd10-419b-8c89-17a8b40a93f7", ToSlug: "react", Title: "React"},
 
-	// 나머지 일곱은 제 분류가 없다. 성격대로 두 갈래에 직접 붙인다.
-	// 로그인·인증과 웹소켓은 서버가 하는 일이고, HTML & CSS는 화면 쪽이다.
+	// 나머지 일곱은 제 분류가 없다. 성격대로 붙인다.
+	// 로그인·인증과 웹소켓은 서버가 하는 일이다.
 	{NotionPageID: "544a27a7-2c8e-42ff-9b37-59f86ebbdc69", ToSlug: "서버-api", Title: "Rest 프레임워크"},
 	{NotionPageID: "9713e08a-f32b-4953-a827-9a55c241b667", ToSlug: "서버-api", Title: "쿠키와 세션"},
 	{NotionPageID: "b1d6e4c4-d5ef-4f95-abc4-9bd87d471f94", ToSlug: "서버-api", Title: "인증과 인가"},
 	{NotionPageID: "902c6a9a-059e-4fe8-ada0-e0b28152f780", ToSlug: "서버-api", Title: "OAuth 인증"},
 	{NotionPageID: "2c7583ba-e6c0-41b7-9c4e-5d827f2a587d", ToSlug: "서버-api", Title: "2FA 인증"},
 	{NotionPageID: "c329efdd-d626-43dc-a779-e292ecdec402", ToSlug: "서버-api", Title: "웹소켓이란?"},
-	{NotionPageID: "1e7119a0-53e2-4267-877b-b64f4fd434a3", ToSlug: "클라이언트-ui", Title: "HTML & CSS"},
+	// HTML & CSS는 `클라이언트 & UI`에 직접 붙어 있었다. 그런데 그 화면은
+	// 하위 분류 셋(Javascript·React·모바일)을 세워두고 **글은 이 한 편뿐**이라,
+	// 갈래 목록 아래에 홀로 남은 줄이 어디에도 안 속한 것처럼 보였다.
+	// 브라우저에서 도는 것을 다루는 갈래가 이미 Javascript라 거기로 내린다.
+	{NotionPageID: "1e7119a0-53e2-4267-877b-b64f4fd434a3", ToSlug: "javascript", Title: "HTML & CSS"},
 
 	// 자기소개 한 편은 `소개` 분류에 직접 붙인다.
 	//

@@ -115,3 +115,106 @@ func TestEditorDoesNotUnhideDrafts(t *testing.T) {
 		t.Errorf("로그인했더니 draft가 %d로 보인다. 404여야 한다", rec.Code)
 	}
 }
+
+// ── 새 글로 가는 길 ──────────────────────────────────────────────
+//
+// **분류 화면에만 둔다.** 이 버튼이 사이드바의 admin 링크보다 더 아는 것은
+// "이 분류" 하나뿐이라, 넘길 분류가 없는 곳(홈·글 상세)에서는 같은 곳으로
+// 가는 길을 한 벌 더 그리는 것이 된다.
+
+// 로그인하지 않았으면 **주소 자체를 안 만든다.** 화면이 권한을 판단하지
+// 않는다 — 버튼을 감추는 것이 아니라 서버가 길을 안 낸다.
+//
+// **여기는 관문이 두 겹이다.** server.go가 URL을 안 만들고, pagetools도
+// `.Editor`를 다시 본다. 그래서 서버 쪽 조건을 지워도 이 테스트는 통과한다 —
+// 템플릿이 막기 때문이다. 돌연변이로 확인한 사실이고, 구멍이 아니라 두 겹인
+// 것이다(트랜잭션의 "롤백을 아예 안 함"이 안 잡히는 것과 같은 성질).
+// **한 겹으로 줄이면 이 테스트가 그때부터 진짜로 지킨다.**
+func TestNewPostLinkIsAbsentForAnonymousReaders(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t), WithEditor(func(*http.Request) string { return "" }))
+	for _, path := range []string{"/", "/dev", "/dev/language", "/p/list-post"} {
+		if body := get(t, h, path).Body.String(); strings.Contains(body, "/admin/new") {
+			t.Errorf("%s: 로그인하지 않았는데 새 글 링크가 나갔다", path)
+		}
+	}
+}
+
+// 옵션을 아예 안 준 서버에서는 더더욱 없다. `-admin` 없이 뜬 배포가 그렇다.
+func TestNewPostLinkIsAbsentWithoutTheOption(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t))
+	if body := get(t, h, "/dev").Body.String(); strings.Contains(body, "/admin/new") {
+		t.Error("옵션을 안 줬는데 새 글 링크가 나갔다")
+	}
+}
+
+// 로그인하면 분류 화면에 나온다. **표지도 글도 없는 분류에도 나와야 한다** —
+// 거기가 원래 길이 통째로 없던 자리다.
+func TestNewPostLinkAppearsOnCategoryPages(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t), WithEditor(func(*http.Request) string { return "InryeolChoi" }))
+	for _, path := range []string{"/dev", "/dev/language"} {
+		body := get(t, h, path).Body.String()
+		if !strings.Contains(body, `class="new-here"`) {
+			t.Errorf("%s: 새 글 링크가 없다", path)
+		}
+		// 한 화면에 한 벌이다. 사이드바·상단 바에도 두면 같은 버튼이 두 번 나온다.
+		if n := strings.Count(body, `class="new-here"`); n != 1 {
+			t.Errorf("%s: 새 글 링크가 %d개다. 한 벌이어야 한다", path, n)
+		}
+	}
+}
+
+// **넘길 분류가 없는 화면에는 안 나온다.** 홈과 글 상세가 그렇다.
+// 글 상세는 activeCat이 차 있어도(사이드바를 펼치느라) 분류 화면이 아니다 —
+// 그 둘을 가르지 못하면 이 규칙이 조용히 무너진다.
+func TestNewPostLinkIsAbsentWhereThereIsNoCategoryToCarry(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t), WithEditor(func(*http.Request) string { return "InryeolChoi" }))
+	for _, path := range []string{"/", "/p/list-post"} {
+		if body := get(t, h, path).Body.String(); strings.Contains(body, "/admin/new") {
+			t.Errorf("%s: 넘길 분류가 없는데 새 글 링크가 나갔다", path)
+		}
+	}
+}
+
+// **분류를 미리 골라 넘긴다.** 안 그러면 방금 보던 것을 잊고 admin에서
+// 분류를 처음부터 다시 고르게 된다.
+func TestNewPostLinkCarriesTheCategory(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t), WithEditor(func(*http.Request) string { return "InryeolChoi" }))
+	body := get(t, h, "/dev").Body.String()
+	if !strings.Contains(body, "/admin/new?category=") {
+		t.Error("분류 화면인데 분류를 안 넘긴다")
+	}
+}
+
+// 글 상세에는 `편집`이 대신 있다. 새 글이 빠졌다고 손질할 길까지 사라지면 안 된다.
+func TestEditMenuStillStandsOnPosts(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t), WithEditor(func(*http.Request) string { return "InryeolChoi" }))
+	body := get(t, h, "/p/list-post").Body.String()
+	if !strings.Contains(body, `class="edit-menu"`) {
+		t.Error("글 상세에 편집 커튼이 없다")
+	}
+	if !strings.Contains(body, `data-inline-edit="list-post"`) {
+		t.Error("고칠 대상이 안 실렸다")
+	}
+}
+
+// **로그인해야 그 버튼이 나온다.** 이 조건을 화면(HTML)으로만 확인하면
+// pagetools의 `.Editor` 검사가 한 겹 더 막아줘서, 서버가 로그인 여부를
+// 빼먹어도 테스트가 통과한다. 실제로 그 돌연변이가 안 잡혔다.
+// 그래서 판정을 직접 겨냥한다.
+func TestNewPostURLNeedsBothLoginAndCategory(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		editor string
+		cat    int64
+		want   string
+	}{
+		{"로그인 + 분류", "InryeolChoi", 12, "/admin/new?category=12"},
+		{"로그인했지만 넘길 분류가 없다", "InryeolChoi", 0, ""},
+		{"분류는 있지만 로그인하지 않았다", "", 12, ""},
+		{"둘 다 없다", "", 0, ""},
+	} {
+		if got := newPostURL(c.editor, c.cat); got != c.want {
+			t.Errorf("%s: newPostURL(%q, %d) = %q, 원하는 값 %q", c.name, c.editor, c.cat, got, c.want)
+		}
+	}
+}
