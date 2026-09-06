@@ -84,6 +84,28 @@ func TestEditorIsDecidedPerRequest(t *testing.T) {
 	}
 }
 
+// **카테고리의 표지 글도 고칠 수 있어야 한다.** 표지는 본문을 카테고리
+// 화면에 그대로 펼치는데, 지금까지는 그 자리가 post.html이 아니라서
+// 로그인해도 고치기 버튼이 없었다. category.html도 같은 슬롯을 낸다.
+func TestEditorAppearsOnCategoryCovers(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t), WithEditor(func(*http.Request) string { return "InryeolChoi" }))
+	body := get(t, h, "/dev/language").Body.String()
+	if !strings.Contains(body, `data-inline-edit="cover-language"`) {
+		t.Error("표지 글의 고치기 자리가 없다")
+	}
+}
+
+// 표지가 없는 카테고리에는 고칠 본문이 없다. **스크립트 자체는 로그인
+// 세션마다 실리지만**(post.html도 마찬가지다), 자리(`data-inline-edit`)는
+// 안 나가야 한다 — 나가면 누른 버튼이 가리킬 글이 없다.
+func TestEditorIsAbsentWithoutACoverBody(t *testing.T) {
+	h := handlerFor(t, seedTestDB(t), WithEditor(func(*http.Request) string { return "InryeolChoi" }))
+	body := get(t, h, "/dev").Body.String()
+	if strings.Contains(body, "data-inline-edit=") {
+		t.Error("표지 본문이 없는 카테고리에 고치기 자리가 나갔다")
+	}
+}
+
 // 편집기가 열려도 **draft를 가리는 규칙은 그대로다.** 로그인은 "고칠 수
 // 있다"는 뜻이지 "공개 화면의 규칙이 달라진다"는 뜻이 아니다. 그 둘이 섞이면
 // 어느 화면이 무엇을 보여주는지 아무도 모르게 된다.

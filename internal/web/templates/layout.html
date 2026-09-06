@@ -105,13 +105,13 @@
     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/></svg>
     <span class="visually-hidden" data-i18n="openNav">분류 열기</span>
   </button>
-  <a class="brand" href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a>
+  <a class="brand{{if .Editor}} signed-in{{end}}" href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a>
 </header>
 <div class="scrim" id="scrim" hidden></div>
 
 <div class="shell">
   <aside class="side" id="side">
-    <p class="side-brand"><a href="/"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a></p>
+    <p class="side-brand"><a href="/" class="{{if .Editor}}signed-in{{end}}"><span data-i18n="brandHead">열렬히</span><span class="dot">.</span><span data-i18n="brandTail">뛰기</span></a></p>
     <p class="side-sub" data-i18n="notes" data-count="{{.TotalPostsText}}">노트 {{.TotalPostsText}}편</p>
 
     <nav aria-label="분류" data-i18n-aria-label="categories">
@@ -135,36 +135,41 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm5.9 7H11.6c-.1-1.8-.5-3.4-1.1-4.5A6.5 6.5 0 0 1 13.9 7zM8 1.5c.8 0 1.8 2 2 5.5H6c.2-3.5 1.2-5.5 2-5.5zM2.1 7a6.5 6.5 0 0 1 3.4-4.5C4.9 3.6 4.5 5.2 4.4 7H2.1zm0 2h2.3c.1 1.8.5 3.4 1.1 4.5A6.5 6.5 0 0 1 2.1 9zM8 14.5c-.8 0-1.8-2-2-5.5h4c-.2 3.5-1.2 5.5-2 5.5zm2.5-1a10.9 10.9 0 0 0 1.1-4.5h2.3a6.5 6.5 0 0 1-3.4 4.5z"/></svg>
         Pages
       </a>
-      {{/* **글쓰기로 들어가는 문은 여기 하나다.** 예전에는 /admin/login이라는
-           주소를 알아야만 들어갈 수 있었다. 그걸 감추는 것이 방어가 아니다 —
-           진짜 관문은 허용 목록이지 주소를 모르는 것이 아니다(auth.go의 allows).
-           밖에서 /admin이 이미 303을 주고 있으므로 감춰서 얻는 것도 없었다.
-
-           .AdminOn과 .Editor는 다른 질문이다. 앞은 "글쓰기 화면이 있나",
-           뒤는 "지금 들어와 있나"다. 하나로 묶으면 로그인하기 전에는
-           로그인 링크가 안 나오는 우스운 상태가 된다. */}}
-      {{if .AdminOn}}
-        {{if .Editor}}
-      {{/* **로그인 자리에 로그아웃, 그 밑에 admin이 선다.** 예전에는 계정
-           이름이 위, 로그아웃이 아래였는데, 로그인했을 때 제일 먼저 손이
-           가는 것은 "로그아웃"이지 관리 화면이 아니다. 둘을 한 칸에 묶어
-           세로로 쌓는다 — GitHub·Pages와 같은 가로줄에 있으면서도 이 둘은
-           한 덩어리로 읽혀야 한다. 로그아웃은 POST다. GET이면 남의 페이지에
-           박아둔 <img> 하나로도 사람을 로그아웃시킬 수 있다. */}}
-      <div class="side-account">
-        <form method="post" action="/admin/logout" class="side-out">
-          <button type="submit" data-i18n="logout">로그아웃</button>
-        </form>
-        <a href="/admin" class="side-me" title="{{.Editor}}">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.1 2.3a1.7 1.7 0 0 1 2.4 2.4l-.9.9-2.4-2.4.9-.9zM10.3 4.1l2.4 2.4-6.5 6.5-3.1.7.7-3.1 6.5-6.5z"/></svg>
-          admin
-        </a>
-      </div>
-        {{else}}
-      <a href="{{.LoginURL}}" data-i18n="login">로그인</a>
-        {{end}}
-      {{end}}
     </div>
+    {{/* **글쓰기로 들어가는 문은 여기 하나다.** 예전에는 /admin/login이라는
+         주소를 알아야만 들어갈 수 있었다. 그걸 감추는 것이 방어가 아니다 —
+         진짜 관문은 허용 목록이지 주소를 모르는 것이 아니다(auth.go의 allows).
+         밖에서 /admin이 이미 303을 주고 있으므로 감춰서 얻는 것도 없었다.
+
+         .AdminOn과 .Editor는 다른 질문이다. 앞은 "글쓰기 화면이 있나",
+         뒤는 "지금 들어와 있나"다. 하나로 묶으면 로그인하기 전에는
+         로그인 링크가 안 나오는 우스운 상태가 된다.
+
+         **`.side-foot` 바깥에 둔다.** GitHub·Pages는 폭이 제각각인 알약
+         묶음이라 줄바꿈으로 흘러도 되지만, 로그인/로그아웃·admin은 매번
+         같은 자리에 같은 폭으로 서야 한다 — 같은 줄에 섞이면 폭이 들쭉날쭉해
+         계단처럼 보인다(실제로 그렇게 보였다). */}}
+    {{if .AdminOn}}
+      {{if .Editor}}
+    {{/* **로그인 자리에 로그아웃, 그 밑에 admin이 선다.** 예전에는 계정
+         이름이 위, 로그아웃이 아래였는데, 로그인했을 때 제일 먼저 손이
+         가는 것은 "로그아웃"이지 관리 화면이 아니다. **두 줄 다 폭을
+         꽉 채운다** — 하나는 좁고 하나는 아이콘까지 있어 넓으면 그 차이가
+         계단처럼 보인다. 로그아웃은 POST다. GET이면 남의 페이지에
+         박아둔 <img> 하나로도 사람을 로그아웃시킬 수 있다. */}}
+    <div class="side-account">
+      <form method="post" action="/admin/logout" class="side-out">
+        <button type="submit" data-i18n="logout">로그아웃</button>
+      </form>
+      <a href="/admin" class="side-me" title="{{.Editor}}">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.1 2.3a1.7 1.7 0 0 1 2.4 2.4l-.9.9-2.4-2.4.9-.9zM10.3 4.1l2.4 2.4-6.5 6.5-3.1.7.7-3.1 6.5-6.5z"/></svg>
+        admin
+      </a>
+    </div>
+      {{else}}
+    <a class="side-login" href="{{.LoginURL}}" data-i18n="login">로그인</a>
+      {{end}}
+    {{end}}
   </aside>
 
   <main class="main" id="main">
@@ -471,6 +476,17 @@
   /* 점 하나에만 노랑을 쓴다. 글자 위 노랑은 안 읽히지만 마침표 한 점은
      기호라 읽을 것이 없다 — 브랜드에 색을 남기는 유일한 자리다. */
   .brand .dot { color: var(--rail); -webkit-text-stroke: .5px var(--ink); }
+  /* **로그인 상태는 브랜드의 색 지면으로 말한다.** 이 팔레트에서 강조는
+     색 글자가 아니라 색 블록이다(홈 표제지 둘째 줄과 같은 규칙) — 그래서
+     글자색을 바꾸지 않고 블록을 깐다. 점은 이미 그 색이라 블록 위에서
+     사라지므로 이 안에서만 글자와 같은 검정으로 돌린다. */
+  .brand.signed-in, .side-brand a.signed-in {
+    background: var(--rail); color: #121415;
+    padding: .08em .3em; margin: -.08em -.3em;
+  }
+  .brand.signed-in .dot, .side-brand a.signed-in .dot {
+    color: #121415; -webkit-text-stroke: 0;
+  }
 
   .scrim { position: fixed; inset: 0; z-index: 29; background: rgba(23, 37, 43, .38); }
   .scrim[hidden] { display: none; }
@@ -554,7 +570,7 @@
     padding: .25rem .55rem;
   }
   .side-foot a:hover { color: var(--accent); border-color: var(--rail); background: var(--hover-bg); }
-  .side-foot svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
+  .side-foot svg, .side-me svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
 
   /* ══ 본문 ═════════════════════════════════════════════════════════ */
 
@@ -769,21 +785,39 @@
   }
   .edit-preview > :first-child { margin-top: 0; }
 
-  /* 사이드바 바닥의 글쓰기 입구. GitHub·Pages 링크와 같은 모양이라
-     "여기서 나간다"와 "여기서 들어간다"가 한 줄에 나란히 선다. */
-  .side-foot .side-me { color: var(--accent); border-color: var(--accent); }
-  /* 로그아웃과 admin은 한 덩어리라 세로로 쌓는다 — 옆의 GitHub·Pages는
-     여전히 가로로 흐르는 .side-foot의 자식이다. */
-  .side-account { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; }
-  .side-out { margin: 0; display: inline-flex; }
+  /* 사이드바 바닥의 로그인 입구. GitHub·Pages 알약과 같은 모양이지만
+     `.side-foot` 바깥의 제 줄에 홀로 선다 — 알약 사이에 끼면 줄바꿈마다
+     자리가 달라진다. */
+  .side-login {
+    display: flex; align-items: center; gap: .35rem; margin-top: .5rem;
+    font-size: .78rem; color: var(--ink-dim); text-decoration: none;
+    background: var(--bg); border: 1px solid var(--line);
+    padding: .4rem .6rem;
+  }
+  .side-login:hover, .side-login:focus-visible {
+    color: var(--accent); border-color: var(--rail); background: var(--hover-bg);
+  }
+  /* 로그아웃과 admin은 한 덩어리다. **폭을 꽉 채워 나란히 줄을 맞춘다** —
+     하나는 글자만, 하나는 아이콘까지 있어 내용 폭 그대로 두면 계단처럼
+     보인다(실제로 그랬다). */
+  .side-account { display: flex; flex-direction: column; gap: .4rem; margin-top: .5rem; }
+  .side-out { margin: 0; display: flex; }
   .side-out button {
+    width: 100%; text-align: left;
     font: inherit; font-size: .78rem; cursor: pointer;
     color: var(--ink-dim); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 0; padding: .25rem .55rem;
+    border: 1px solid var(--line); border-radius: 0; padding: .4rem .6rem;
   }
   .side-out button:hover, .side-out button:focus-visible {
     color: var(--warn); border-color: var(--warn);
   }
+  .side-me {
+    display: flex; align-items: center; gap: .4rem;
+    font-size: .78rem; text-decoration: none;
+    color: var(--accent); background: var(--bg);
+    border: 1px solid var(--accent); padding: .4rem .6rem;
+  }
+  .side-me:hover, .side-me:focus-visible { background: var(--hover-bg); }
 
   /* ── 홈의 최근 글 ────────────────────────────────────────────────
      표제지가 주인공이라 목록은 조용해야 한다. 제목과 날짜 두 칸뿐이고

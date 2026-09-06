@@ -1441,6 +1441,20 @@ var DropPosts = []DropPost{
 	{NotionPageID: "5d7c0098-022c-444d-9d3d-e33727a9478c", Title: "중심극한정리 증명", Why: "`6. 분포의 활용 : 예시` 밑에 본문이 글자까지 같은 글이 있다"},
 	{NotionPageID: "81d8f957-a42e-4cb9-8aa3-8e3e86edaf92", Title: "카이제곱분포", Why: "`6. 분포의 활용 : 예시` 밑에 본문이 글자까지 같은 글이 있다"},
 	{NotionPageID: "7288abaa-f7df-485e-9215-49224c2e18f1", Title: "확률분포 정리", Why: "그 여덟 편만 나열하던 인덱스 글이다. 가리킬 글이 전부 없어졌다"},
+
+	// 운영체제의 빈 글 아홉(2026-09-06). 전부 본문이 0바이트인 draft다.
+	// `1장 연습문제`·`2장 연습문제`·`4장 연습문제`는 Part 1·2 표지가 링크로
+	// 안내하고 있어서 눌러도 빈 페이지였고, 나머지는 자식도 표지도 없는
+	// 낱개 stub이다. `os_stub_edits.go`가 표지의 안내 링크 셋을 함께 걷는다.
+	{NotionPageID: "1e5e9a22-76f7-4421-a4c4-bdacbefad57b", Title: "1장 연습문제", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "446f5151-2c25-450a-bcbd-62b08fb64bd4", Title: "2장 연습문제", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "55cb1dec-e3dd-46d4-9abf-7c91c650e5c3", Title: "운영체제와 서비스 (2)", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "9815cb37-76f9-4ed9-9618-c21c3563f542", Title: "운영체제와 서비스 (1)", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "b6dce69d-21aa-4168-8c6b-b203e475df75", Title: "운영체제의 제작과 실행", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "119a12c1-cd78-413f-a170-e4279357a2b3", Title: "쓰레드 : OS별 예시", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "1b0f487f-35fb-4818-bcc7-0abbabbc23ae", Title: "4장 연습문제", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "4d5f6a33-5685-4d7b-a9da-fcdca2fc91a0", Title: "7. 예시 : ARM", Why: "본문이 0바이트인 draft다"},
+	{NotionPageID: "b1accc3b-c214-4f1c-b177-8831dc21e880", Title: "6. 예시 : 인텔", Why: "본문이 0바이트인 draft다"},
 }
 
 // Dropped는 이 글을 이관에서 빼야 하는지다.
