@@ -1013,6 +1013,47 @@
   }
   .edit-preview > :first-child { margin-top: 0; }
 
+  /* ── 손가락으로 누르는 화면 ──────────────────────────────────
+     **터치 기기에서만 커진다**(`pointer: coarse`). 마우스는 픽셀 하나를
+     조준할 수 있지만 손가락은 못 한다 — Apple HIG가 44pt를 최소로 잡는
+     이유다. 데스크톱까지 키우면 조밀한 목록이 이유 없이 늘어진다.
+
+     **`min-height`다.** 고정 높이로 잡으면 글자가 두 줄이 될 때 넘친다.
+     생김새(테두리·색·글자 크기)는 그대로고 누를 자리만 넓힌다.
+
+     실측으로 나온 것들이다 — 아이폰 13(390×844)에서 44를 못 넘던 것이
+     전부 여기 있다. */
+  @media (pointer: coarse) {
+    /* 사이드바. 분류 링크가 서른 줄이라 여기가 제일 자주 눌린다. */
+    .nav-link { min-height: 44px; }
+    /* **아코디언 화살표가 제일 작았다(19×19).** 삼각형은 그대로 두고
+       누를 자리만 넓힌다 — 아이콘을 키우면 화살표가 목록을 압도한다. */
+    .nav-twist { min-width: 44px; min-height: 44px; justify-content: center; padding: 0; }
+    .nav-twist-empty { min-width: 44px; }
+    .side-grid > a, .side-grid button { min-height: 44px; }
+    .side-brand a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
+    .burger { min-width: 44px; min-height: 44px; justify-content: center; }
+
+    /* 제목 옆 손질 버튼과 커튼 안. */
+    .new-here, .edit-menu > summary { min-height: 44px; }
+    .edit-here, .del-here { min-height: 44px; }
+
+    /* 편집기. 여기서 오래 머무르므로 특히 중요하다. */
+    .edit-btn, .edit-tabs label { min-height: 44px; }
+    .edit-title, .edit-status, .edit-meta-in { min-height: 44px; }
+    .edit-meta > summary { min-height: 44px; display: flex; align-items: center; }
+    /* 글자 링크라 padding으로 넓힌다 — 상자를 씌우면 버튼처럼 보인다. */
+    .edit-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0 .4rem; }
+
+    /* 코드블록의 복사 버튼. **평소에도 또렷하게 둔다** — 모바일에는
+       hover가 없어서 흐리면 있는 줄도 모른다. */
+    .copy { min-width: 44px; min-height: 44px; opacity: .9; }
+
+    /* 본문 목차와 각 항목. */
+    nav.toc summary.toc-title { min-height: 44px; display: flex; align-items: center; }
+    nav.toc a { display: inline-flex; align-items: center; min-height: 40px; }
+  }
+
   /* ── 홈의 최근 글 ────────────────────────────────────────────────
      표제지가 주인공이라 목록은 조용해야 한다. 제목과 날짜 두 칸뿐이고
      테두리도 배경도 없다. */
