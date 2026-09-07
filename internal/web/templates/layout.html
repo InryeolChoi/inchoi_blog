@@ -18,7 +18,8 @@
     } catch (_) {}
   })();
 </script>
-<style>{{template "sitecss" .}}</style>
+<style>{{template "sitecss" .}}
+</style>
 {{/* CDN에서 받는 것은 **그 페이지에 필요할 때만** 받는다. 무엇이 필요한지는
      본문 HTML을 보고 정한다(internal/web/assets.go). 수식이 있는 글은 1408편 중
      297편뿐인데 예전에는 모든 페이지가 스타일시트와 스크립트를 네 개씩 받았다.
@@ -953,12 +954,19 @@
     color: var(--band-fg); background: var(--band-bg);
   }
   .edit-meta > summary::-webkit-details-marker { display: none; }
+  /* **`minmax(0, 1fr)`이어야 한다.** 그냥 `1fr`이면 최소 폭이 min-content라,
+     `<select>`가 제일 긴 옵션(`개발 > 클라이언트 & UI > Javascript`)만큼
+     칸을 밀어낸다 — 글자를 16px로 키우자 390px 화면이 48px 넘쳤다.
+     같은 이유로 label에도 `min-width: 0`이 필요하다(grid 항목의 기본
+     최소 폭도 auto다). */
   .edit-meta-grid {
     display: grid; gap: .5rem; padding: .6rem;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
-  @media (min-width: 40rem) { .edit-meta-grid { grid-template-columns: 1fr 1fr; } }
-  .edit-meta-grid label { display: flex; flex-direction: column; gap: .2rem; }
+  @media (min-width: 40rem) {
+    .edit-meta-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+  .edit-meta-grid label { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
   .edit-meta-grid span { font-size: .72rem; color: var(--ink-dim); }
   .edit-meta-in {
     font: inherit; font-size: .82rem; padding: .3rem;
@@ -1012,47 +1020,6 @@
     border: 1px solid var(--line); border-radius: 0; background: var(--surface);
   }
   .edit-preview > :first-child { margin-top: 0; }
-
-  /* ── 손가락으로 누르는 화면 ──────────────────────────────────
-     **터치 기기에서만 커진다**(`pointer: coarse`). 마우스는 픽셀 하나를
-     조준할 수 있지만 손가락은 못 한다 — Apple HIG가 44pt를 최소로 잡는
-     이유다. 데스크톱까지 키우면 조밀한 목록이 이유 없이 늘어진다.
-
-     **`min-height`다.** 고정 높이로 잡으면 글자가 두 줄이 될 때 넘친다.
-     생김새(테두리·색·글자 크기)는 그대로고 누를 자리만 넓힌다.
-
-     실측으로 나온 것들이다 — 아이폰 13(390×844)에서 44를 못 넘던 것이
-     전부 여기 있다. */
-  @media (pointer: coarse) {
-    /* 사이드바. 분류 링크가 서른 줄이라 여기가 제일 자주 눌린다. */
-    .nav-link { min-height: 44px; }
-    /* **아코디언 화살표가 제일 작았다(19×19).** 삼각형은 그대로 두고
-       누를 자리만 넓힌다 — 아이콘을 키우면 화살표가 목록을 압도한다. */
-    .nav-twist { min-width: 44px; min-height: 44px; justify-content: center; padding: 0; }
-    .nav-twist-empty { min-width: 44px; }
-    .side-grid > a, .side-grid button { min-height: 44px; }
-    .side-brand a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
-    .burger { min-width: 44px; min-height: 44px; justify-content: center; }
-
-    /* 제목 옆 손질 버튼과 커튼 안. */
-    .new-here, .edit-menu > summary { min-height: 44px; }
-    .edit-here, .del-here { min-height: 44px; }
-
-    /* 편집기. 여기서 오래 머무르므로 특히 중요하다. */
-    .edit-btn, .edit-tabs label { min-height: 44px; }
-    .edit-title, .edit-status, .edit-meta-in { min-height: 44px; }
-    .edit-meta > summary { min-height: 44px; display: flex; align-items: center; }
-    /* 글자 링크라 padding으로 넓힌다 — 상자를 씌우면 버튼처럼 보인다. */
-    .edit-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0 .4rem; }
-
-    /* 코드블록의 복사 버튼. **평소에도 또렷하게 둔다** — 모바일에는
-       hover가 없어서 흐리면 있는 줄도 모른다. */
-    .copy { min-width: 44px; min-height: 44px; opacity: .9; }
-
-    /* 본문 목차와 각 항목. */
-    nav.toc summary.toc-title { min-height: 44px; display: flex; align-items: center; }
-    nav.toc a { display: inline-flex; align-items: center; min-height: 40px; }
-  }
 
   /* ── 홈의 최근 글 ────────────────────────────────────────────────
      표제지가 주인공이라 목록은 조용해야 한다. 제목과 날짜 두 칸뿐이고
@@ -1588,6 +1555,63 @@
   :root[data-theme="dark"] .hljs-built_in,
   :root[data-theme="dark"] .hljs-type,
   :root[data-theme="dark"] .hljs-variable { color: #E8B77D !important; }
+  /* ══ 손가락 규칙은 맨 끝이다 ══════════════════════════════════
+     같은 특정성이면 **나중에 나온 것이 이긴다.** 위에서 정의한 뒤에
+     두면 `.pal-row`처럼 나중에 선언된 규칙이 이걸 되돌린다 —
+     실제로 팔레트 글자가 13.6px로 남아 iOS 확대를 못 막고 있었다. */
+  /* ── 손가락으로 누르는 화면 ──────────────────────────────────
+     **터치 기기에서만 커진다**(`pointer: coarse`). 마우스는 픽셀 하나를
+     조준할 수 있지만 손가락은 못 한다 — Apple HIG가 44pt를 최소로 잡는
+     이유다. 데스크톱까지 키우면 조밀한 목록이 이유 없이 늘어진다.
+
+     **`min-height`다.** 고정 높이로 잡으면 글자가 두 줄이 될 때 넘친다.
+     생김새(테두리·색·글자 크기)는 그대로고 누를 자리만 넓힌다.
+
+     실측으로 나온 것들이다 — 아이폰 13(390×844)에서 44를 못 넘던 것이
+     전부 여기 있다. */
+  @media (pointer: coarse) {
+    /* 사이드바. 분류 링크가 서른 줄이라 여기가 제일 자주 눌린다. */
+    .nav-link { min-height: 44px; }
+    /* **아코디언 화살표가 제일 작았다(19×19).** 삼각형은 그대로 두고
+       누를 자리만 넓힌다 — 아이콘을 키우면 화살표가 목록을 압도한다. */
+    .nav-twist { min-width: 44px; min-height: 44px; justify-content: center; padding: 0; }
+    .nav-twist-empty { min-width: 44px; }
+    .side-grid > a, .side-grid button { min-height: 44px; }
+    .side-brand a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
+    .burger { min-width: 44px; min-height: 44px; justify-content: center; }
+
+    /* 제목 옆 손질 버튼과 커튼 안. */
+    .new-here, .edit-menu > summary { min-height: 44px; }
+    .edit-here, .del-here { min-height: 44px; }
+
+    /* 편집기. 여기서 오래 머무르므로 특히 중요하다. */
+    .edit-btn, .edit-tabs label { min-height: 44px; }
+    .edit-title, .edit-status, .edit-meta-in { min-height: 44px; }
+    .edit-meta > summary { min-height: 44px; display: flex; align-items: center; }
+    /* 글자 링크라 padding으로 넓힌다 — 상자를 씌우면 버튼처럼 보인다. */
+    .edit-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0 .4rem; }
+
+    /* **입력칸 글자는 16px 아래로 내려가면 안 된다.** iOS 사파리는 그보다
+       작은 칸에 포커스하면 화면을 제멋대로 확대한다 — 폰에서 글을 쓰려고
+       탭하는 순간 레이아웃이 튀고, 그 뒤로는 확대된 채로 편집하게 된다.
+       (`maximum-scale=1`로 확대를 막는 길도 있지만 그건 두 손가락 확대까지
+       빼앗는다. 글자를 키우는 쪽이 맞다.)
+
+       **본문 textarea가 특히 중요하다** — 편집기에서 제일 오래 머무는 칸이다. */
+    .edit-body, .edit-title, .edit-status, .edit-meta-in { font-size: 16px; }
+
+    /* `/` 조각 팔레트도 손가락으로 고른다. */
+    .pal-row { min-height: 44px; align-items: center; font-size: 16px; }
+    .pal-hint { font-size: .8rem; }
+
+    /* 코드블록의 복사 버튼. **평소에도 또렷하게 둔다** — 모바일에는
+       hover가 없어서 흐리면 있는 줄도 모른다. */
+    .copy { min-width: 44px; min-height: 44px; opacity: .9; }
+
+    /* 본문 목차와 각 항목. */
+    nav.toc summary.toc-title { min-height: 44px; display: flex; align-items: center; }
+    nav.toc a { display: inline-flex; align-items: center; min-height: 40px; }
+  }
 {{end}}
 
 {{/* katex-cdn / hljs-cdn은 CDN에서 받는 것의 **정본**이다. layout은 그 페이지에
