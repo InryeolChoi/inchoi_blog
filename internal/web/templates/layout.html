@@ -937,89 +937,69 @@
   }
   /* 편집 중에는 본문 폭 제한(--measure)을 풀고 열을 둘로 나눈다. 좁은
      화면에서는 위아래로 쌓인다 — 375px에서 두 열은 어느 쪽도 못 읽는다. */
-  .edit-split { display: grid; gap: .8rem; grid-template-columns: 1fr; }
-  @media (min-width: 60rem) { .edit-split { grid-template-columns: 1fr 1fr; } }
-  .edit-body {
-    font-family: var(--mono); font-size: .85rem; line-height: 1.62;
-    min-height: 24rem; resize: vertical; padding: .7rem;
+  /* 편집 중에는 글 읽는 데 쓰는 것을 치운다. **목차는 저장된 본문에서 뽑은
+     것이라 고치는 동안 이미 낡았고**, 좁은 화면에서는 그것 때문에 정작
+     글 쓰는 칸까지 한참 스크롤해야 한다. 무엇을 치울지는 여기가 정한다 —
+     inline-edit.js는 `body.editing` 한 글자만 뒤집는다. */
+  body.editing nav.toc { display: none; }
+
+  /* ── 분류 · 계층 · 날짜 ────────────────────────────────────────
+     **접어둔다.** 본문이 주인공이라 네 칸이 늘 펼쳐져 있으면 시끄럽다.
+     <details>라 여는 일은 브라우저가 한다 — 목차와 같은 방식이다. */
+  .edit-meta { margin-bottom: .8rem; border: 1px solid var(--line); }
+  .edit-meta > summary {
+    padding: .38rem .6rem; cursor: pointer; list-style: none;
+    font: 700 .72rem var(--mono); letter-spacing: .06em;
+    color: var(--band-fg); background: var(--band-bg);
+  }
+  .edit-meta > summary::-webkit-details-marker { display: none; }
+  .edit-meta-grid {
+    display: grid; gap: .5rem; padding: .6rem;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 40rem) { .edit-meta-grid { grid-template-columns: 1fr 1fr; } }
+  .edit-meta-grid label { display: flex; flex-direction: column; gap: .2rem; }
+  .edit-meta-grid span { font-size: .72rem; color: var(--ink-dim); }
+  .edit-meta-in {
+    font: inherit; font-size: .82rem; padding: .3rem;
     color: var(--ink); background: var(--bg);
     border: 1px solid var(--line); border-radius: 0;
+    min-width: 0;
   }
-  .edit-body:focus-visible { outline: 2px solid var(--rail); outline-offset: 1px; }
-  .edit-preview {
-    padding: .7rem; overflow-x: auto;
-    border: 1px solid var(--line); border-radius: 0; background: var(--surface);
-  }
-  .edit-preview > :first-child { margin-top: 0; }
 
-  /* ── `편집` 커튼 ──────────────────────────────────────────────
-     <details>라 **스크립트가 없어도 열린다**(목차와 같은 방식). 여기서
-     CSS가 하는 일은 여는 모습을 커튼으로 만드는 것뿐이다. */
-  .edit-menu { position: relative; }
-  .edit-menu > summary {
-    display: inline-flex; align-items: center; gap: .35rem;
-    padding: .32rem .6rem; cursor: pointer; list-style: none;
+  /* ── 쓰기 / 미리보기 ──────────────────────────────────────────
+     넓으면 나란히, 좁으면 **탭으로 가른다.** 375px에서 둘을 위아래로
+     쌓으면 한 화면에 조금씩만 보여서 어느 쪽도 못 읽는다.
+
+     **가르는 일은 CSS가 한다**(라디오 + `:checked ~`). JS로 하면 상태를
+     따로 들고 있어야 하는데, 브라우저가 이미 라디오로 그걸 한다 —
+     HTML → CSS → 마지막에 JS 원칙 그대로다. */
+  .edit-split { display: grid; gap: .8rem; grid-template-columns: 1fr; }
+  /* 탭 버튼. 넓은 화면에서는 둘 다 보이므로 고를 것이 없다. */
+  .edit-tabs { display: flex; gap: .4rem; margin-bottom: .6rem; }
+  .edit-tabs input { position: absolute; opacity: 0; pointer-events: none; }
+  .edit-tabs label {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: .4rem; cursor: pointer;
     font-size: .78rem; line-height: 1;
-    color: var(--ink); background: var(--bg); border: 2px solid var(--ink);
-  }
-  .edit-menu > summary::-webkit-details-marker { display: none; }
-  .edit-menu > summary svg { width: 13px; height: 13px; fill: currentColor; flex: none; }
-  .edit-menu > summary:hover, .edit-menu > summary:focus-visible { background: var(--rail); color: #121415; }
-  /* 열려 있는 동안 눌린 것처럼 보인다 — 커튼이 어디서 나왔는지 알려준다. */
-  .edit-menu[open] > summary { background: var(--rail); color: #121415; }
-  /* **떠 있는 판이라 아래 본문을 밀지 않는다.** 밀면 커튼을 여닫을 때마다
-     글이 위아래로 뛴다. 오른쪽 끝에 맞춰 떨어진다. */
-  .edit-menu-panel {
-    position: absolute; z-index: 25; top: calc(100% + .3rem); right: 0;
-    min-width: 100%;
-    display: flex; flex-direction: column; gap: 1px;
-    padding: 1px;
-    background: var(--ink); border: 2px solid var(--ink);
-    box-shadow: var(--hard-shadow);
-    animation: curtain .16s ease-out;
-    transform-origin: top center;
-  }
-  /* 커튼: 위에서 아래로 내려온다. **transition이 아니라 animation이다** —
-     <details>는 닫혀 있는 동안 안쪽을 아예 안 그려서, 열리는 순간 요소가
-     새로 생긴다. 새로 생긴 요소에는 transition이 걸리지 않는다. */
-  @keyframes curtain {
-    from { clip-path: inset(0 0 100% 0); opacity: .4; }
-    to   { clip-path: inset(0 0 0 0);    opacity: 1; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .edit-menu-panel { animation: none; }
-  }
-
-  .edit-bar {
-    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
-    padding: .5rem 0 .7rem; border-bottom: 1px solid var(--line); margin-bottom: .8rem;
-  }
-  .edit-title {
-    font: inherit; font-weight: 600; flex: 1 1 12rem; min-width: 0;
-    padding: .35rem .5rem; color: var(--ink); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 0;
-  }
-  .edit-status { font: inherit; font-size: .82rem; padding: .3rem; }
-  .edit-spacer { flex: 1; }
-  .edit-note { font-size: .78rem; color: var(--ink-dim); }
-  .edit-error { color: var(--warn); }
-  .edit-more { font-size: .78rem; color: var(--ink-dim); }
-  .edit-btn {
-    font: inherit; font-size: .8rem; line-height: 1; cursor: pointer;
-    padding: .38rem .7rem; border-radius: 0;
     color: var(--ink-dim); background: var(--bg); border: 1px solid var(--line);
   }
-  /* 주 동작은 하늘색 블록. 그 위 글자는 언제나 검정이라 테마가 같다. */
-  .edit-btn.primary { color: #121415; background: var(--rail); border-color: var(--ink); font-weight: 700; }
-  .edit-warn {
-    margin: 0 0 .6rem; padding: .5rem .7rem; font-size: .8rem;
-    color: var(--ink-dim); background: var(--surface);
-    border: 1px solid var(--line); border-radius: 0;
+  .edit-tabs input:checked + label {
+    color: #121415; background: var(--rail); border-color: var(--ink); font-weight: 700;
   }
-  /* 편집 중에는 본문 폭 제한(--measure)을 풀고 열을 둘로 나눈다. 좁은
-     화면에서는 위아래로 쌓인다 — 375px에서 두 열은 어느 쪽도 못 읽는다. */
-  .edit-split { display: grid; gap: .8rem; grid-template-columns: 1fr; }
-  @media (min-width: 60rem) { .edit-split { grid-template-columns: 1fr 1fr; } }
+  .edit-tabs input:focus-visible + label { outline: 2px solid var(--ink); outline-offset: 1px; }
+  /* 고른 쪽만 보인다. **`:has()`라 JS가 상태를 안 든다** — 라디오가 이미
+     들고 있다. 안 되는 브라우저에서는 규칙이 통째로 무시돼서 둘 다 보이는데,
+     그게 정확히 예전 모습이라 **degrade가 곧 예전 동작**이다. */
+  .edit-panes:has(#pane-write:checked) .edit-preview,
+  .edit-panes:has(#pane-preview:checked) .edit-body { display: none; }
+  @media (min-width: 60rem) {
+    .edit-split { grid-template-columns: 1fr 1fr; }
+    /* 나란히 보이므로 고를 것이 없다. */
+    .edit-tabs { display: none; }
+    .edit-panes:has(#pane-write:checked) .edit-preview { display: block; }
+    .edit-panes:has(#pane-preview:checked) .edit-body { display: block; }
+  }
   .edit-body {
     font-family: var(--mono); font-size: .85rem; line-height: 1.62;
     min-height: 24rem; resize: vertical; padding: .7rem;

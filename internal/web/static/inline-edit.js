@@ -162,6 +162,13 @@
   function show(post) {
     saved = article.cloneNode(true);
     showMenu(false);
+    // **편집 중에는 목차를 감춘다.** 목차는 저장된 본문에서 뽑은 것이라
+    // 고치는 동안에는 이미 낡았고, 좁은 화면에서는 그것 때문에 정작 글
+    // 쓰는 칸까지 한참 스크롤해야 한다.
+    //
+    // **무엇을 감출지는 CSS가 정한다**(`body.editing`). 여기서는 표시만
+    // 뒤집는다 — 나중에 감출 것이 늘어도 이 파일은 안 고친다.
+    document.body.classList.add("editing");
 
     var area = el("textarea", { class: "edit-body mono", spellcheck: "false" });
     area.value = post.body || "";
@@ -185,20 +192,100 @@
         return o;
       }));
 
+    // ── 분류 · 계층 · 날짜 ────────────────────────────────────────
+    //
+    // 예전에는 이걸 `자세히 ↗`로 미뤘다. 그런데 **글을 쓰는 동안 알아야 할
+    // 것이 본문만은 아니다** — 어느 분류에 들어가는지, 어느 글 아래인지가
+    // 안 보이면 저장하고 나서야 엉뚱한 데 있는 걸 안다.
+    //
+    // **접어둔다.** 평소에는 본문이 주인공이라 네 칸이 늘 펼쳐져 있으면
+    // 시끄럽다. <details>라 여는 일은 브라우저가 한다.
+    //
+    // **분류 목록은 서버에 묻는다**(/api/admin/categories). admin 편집기와
+    // 같은 엔드포인트라 선택지가 갈릴 수 없다.
+    function metaPanel() {
+      var catSel = el("select", { class: "edit-meta-in" }, [
+        el("option", { value: "", text: "(분류 없음)" }),
+      ]);
+      var parentIn = el("input", { class: "edit-meta-in", type: "text",
+        value: post.parentSlug || "", placeholder: "부모 글의 slug" });
+      var orderIn = el("input", { class: "edit-meta-in", type: "number",
+        value: String(post.sortOrder || 0) });
+      var dateIn = el("input", { class: "edit-meta-in", type: "date",
+        value: (post.createdAt || "").slice(0, 10) });
+
+      // 선택지는 늦게 온다. 그동안에도 지금 값은 잃지 않는다 — 못 가져오면
+      // 옛 값 그대로 되돌려 보낸다(아래 read가 그 자리를 지킨다).
+      var loaded = false;
+      api("GET", "/api/admin/categories").then(function (r) {
+        if (!r.ok) return;
+        (r.data.categories || r.data || []).forEach(function (c) {
+          var o = el("option", { value: String(c.id), text: c.path || c.name });
+          if (post.categoryId && c.id === post.categoryId) o.selected = true;
+          catSel.appendChild(o);
+        });
+        loaded = true;
+      });
+
+      var box = el("details", { class: "edit-meta" }, [
+        el("summary", { text: "분류 · 계층 · 날짜" }),
+        el("div", { class: "edit-meta-grid" }, [
+          el("label", {}, [el("span", { text: "분류" }), catSel]),
+          el("label", {}, [el("span", { text: "부모 글" }), parentIn]),
+          el("label", {}, [el("span", { text: "형제 순서" }), orderIn]),
+          el("label", {}, [el("span", { text: "작성일" }), dateIn]),
+        ]),
+      ]);
+
+      return {
+        box: box,
+        // read는 저장에 실어 보낼 값이다. **PUT은 통째로 바꾸기라** 안 보낸
+        // 칸은 비워진다 — 목록을 못 가져왔으면 사람이 고른 적이 없으므로
+        // 옛 값을 그대로 돌려보낸다.
+        read: function () {
+          return {
+            categoryId: loaded ? (catSel.value ? Number(catSel.value) : null) : post.categoryId,
+            parentSlug: parentIn.value.trim(),
+            sortOrder: Number(orderIn.value) || 0,
+            originalCreatedAt: dateIn.value,
+          };
+        },
+        inputs: [catSel, parentIn, orderIn, dateIn],
+      };
+    }
+    var meta = metaPanel();
+
     var bar = el("div", { class: "edit-bar" }, [
       titleInput, statusSel, visSel, note,
       el("span", { class: "edit-spacer" }),
       el("a", { class: "edit-more", href: "/admin/edit/" + encodeURIComponent(slug),
         text: "자세히 ↗" }),
       el("button", { type: "button", class: "edit-btn", text: "취소", onclick: cancel }),
-      el("button", { type: "button", class: "edit-btn primary", text: "저장", onclick: save }),
+      el("button", { type: "button", class: "edit-btn primary", text: "저장",
+        title: "\u2318S / Ctrl+S", onclick: save }),
     ]);
 
     var preview = el("div", { class: "edit-preview" });
 
+    // 좁은 화면에서는 쓰기와 미리보기를 **탭으로 가른다.** 375px에서 둘을
+    // 위아래로 쌓으면 한 화면에 조금씩만 보여 어느 쪽도 못 읽는다.
+    //
+    // **고르는 일은 라디오와 CSS가 한다**(`:has()`). 여기서 하는 것은 마크업을
+    // 놓는 것뿐이라 JS가 상태를 따로 들지 않는다 — 사이드바 아코디언을
+    // 서버가 펼쳐 보내는 것과 같은 결이다.
+    var tabs = el("div", { class: "edit-tabs" }, [
+      el("input", { type: "radio", name: "edit-pane", id: "pane-write", checked: "checked" }),
+      el("label", { for: "pane-write", text: "쓰기" }),
+      el("input", { type: "radio", name: "edit-pane", id: "pane-preview" }),
+      el("label", { for: "pane-preview", text: "미리보기" }),
+    ]);
+
     article.textContent = "";
     article.appendChild(bar);
-    article.appendChild(el("div", { class: "edit-split" }, [area, preview]));
+    article.appendChild(meta.box);
+    article.appendChild(el("div", { class: "edit-panes" }, [
+      tabs, el("div", { class: "edit-split" }, [area, preview]),
+    ]));
 
     // 노션에서 온 글은 여기서 고쳐도 다음 재이관이 되돌린다. 저장이 되는데
     // 사라지는 것이 가장 나쁜 결과라 미리 말한다.
@@ -222,6 +309,59 @@
     });
     render();
 
+    // ── 잃지 않게 하는 것들 ───────────────────────────────────────
+    //
+    // # 나갈 때 경고
+    //
+    // 고친 것이 있는데 탭을 닫거나 링크를 누르면 **그대로 사라진다.** 저장이
+    // 붙은 뒤로는 이게 실제로 일어나는 사고다. 브라우저의 beforeunload는
+    // 문구를 우리가 못 정하지만(스팸을 막으려고 그렇게 정해져 있다) 멈춰
+    // 세우는 일은 한다.
+    //
+    // **고친 것이 없으면 안 묻는다.** 늘 물으면 그 물음이 곧 무시된다.
+    function dirty() {
+      var m = meta.read();
+      return area.value !== (post.body || "") ||
+        titleInput.value.trim() !== (post.title || "") ||
+        statusSel.value !== post.status ||
+        visSel.value !== (post.visibility || "public") ||
+        m.parentSlug !== (post.parentSlug || "") ||
+        m.sortOrder !== (post.sortOrder || 0) ||
+        m.originalCreatedAt !== (post.createdAt || "").slice(0, 10) ||
+        m.categoryId !== post.categoryId;
+    }
+    function guard(e) {
+      if (!dirty()) return;
+      e.preventDefault();
+      // 옛 브라우저는 returnValue를 봐야 멈춘다.
+      e.returnValue = "";
+      return "";
+    }
+    window.addEventListener("beforeunload", guard);
+
+    // # 단축키
+    //
+    // Cmd/Ctrl+S. 브라우저의 "페이지 저장"을 가로채는 것이라 preventDefault가
+    // 반드시 있어야 한다 — 없으면 HTML 파일을 내려받는 창이 뜬다.
+    //
+    // **문서 전체에 건다.** 제목 칸이나 메타 칸에 커서가 있어도 저장은 되어야
+    // 한다. 편집기를 닫을 때 떼는 것을 잊으면 유령 리스너가 남으므로
+    // cancel/save 양쪽에서 unbind를 부른다.
+    function keys(e) {
+      var mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        save();
+      }
+    }
+    document.addEventListener("keydown", keys);
+
+    function unbind() {
+      window.removeEventListener("beforeunload", guard);
+      document.removeEventListener("keydown", keys);
+      document.body.classList.remove("editing");
+    }
+
     function render() {
       api("POST", "/api/admin/preview", { markdown: area.value }).then(function (r) {
         if (!r.ok) {
@@ -241,7 +381,8 @@
     }
 
     function cancel() {
-      if (area.value !== (post.body || "") && !confirm("고친 것을 버릴까?")) return;
+      if (dirty() && !confirm("고친 것을 버릴까?")) return;
+      unbind();
       article.replaceWith(saved);
       article = saved;
       saved = null;
@@ -251,21 +392,23 @@
     function save() {
       note.className = "edit-note";
       note.textContent = "저장하는 중…";
+      var m = meta.read();
       api("PUT", "/api/admin/posts/" + encodeURIComponent(slug), {
         slug: post.slug, title: titleInput.value.trim(), body: area.value,
         status: statusSel.value, visibility: visSel.value, rev: post.rev || "",
-        // **여기서는 메타를 건드리지 않는다.** PUT은 통째로 바꾸기라 안 보낸
-        // 칸은 비워지므로, 지금 값을 그대로 되돌려 보낸다. 분류나 계층을
-        // 옮기는 것은 "자세히"로 가서 할 일이다.
-        categoryId: post.categoryId, parentSlug: post.parentSlug || "",
-        sortOrder: post.sortOrder || 0,
-        originalCreatedAt: (post.createdAt || "").slice(0, 10),
+        // **PUT은 통째로 바꾸기라 안 보낸 칸은 비워진다.** 그래서 메타도
+        // 빠짐없이 싣는다 — 사람이 안 건드렸으면 읽어온 값 그대로다.
+        categoryId: m.categoryId, parentSlug: m.parentSlug,
+        sortOrder: m.sortOrder, originalCreatedAt: m.originalCreatedAt,
       }).then(function (r) {
         if (!r.ok) {
           note.className = "edit-note edit-error";
           note.textContent = r.data.error || ("저장 실패 (HTTP " + r.status + ")");
           return;
         }
+        // **떠나기 전에 뗀다.** 안 떼면 방금 저장했는데도 beforeunload가
+        // "정말 나갈까"를 묻는다 — 저장이 됐는지 아닌지 알 수 없게 된다.
+        unbind();
         // slug가 바뀌면 이 주소는 더 이상 이 글이 아니다. 그리로 옮긴다.
         if (r.data.slug !== slug) {
           location.href = "/p/" + encodeURIComponent(r.data.slug);
