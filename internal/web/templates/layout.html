@@ -499,6 +499,9 @@
   }
   a:hover { text-decoration-thickness: 2px; }
   :focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; border-radius: 0; }
+  /* 서랍은 열릴 때 **스크립트가** 포커스를 받는 껍데기라 링을 그리지 않는다.
+     사람이 Tab으로 온 것이 아니므로 그릴 이유가 없다. */
+  .side:focus { outline: none; }
 
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -1577,7 +1580,18 @@
     .nav-twist { min-width: 44px; min-height: 44px; justify-content: center; padding: 0; }
     .nav-twist-empty { min-width: 44px; }
     .side-grid > a, .side-grid button { min-height: 44px; }
-    .side-brand a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
+    /* **브랜드는 키우지 않는다.** 로그인하면 노랑 블록이 곧 그 모양인데
+       (`.signed-in`은 형광펜처럼 글자에 딱 붙는다) `min-height`를 걸면
+       그 블록이 통째로 44px 상자가 되어 상단이 이상해진다.
+
+       **보이는 것은 그대로 두고 누를 자리만 넓힌다.** 투명한 가짜 요소를
+       글자 위에 겹쳐 44px을 만든다 — 손가락은 그걸 누르고 눈은 못 본다. */
+    .brand, .side-brand a { position: relative; }
+    .brand::after, .side-brand a::after {
+      content: ""; position: absolute;
+      left: -.4rem; right: -.4rem; top: 50%;
+      transform: translateY(-50%); height: 44px;
+    }
     .burger { min-width: 44px; min-height: 44px; justify-content: center; }
 
     /* 제목 옆 손질 버튼과 커튼 안. */

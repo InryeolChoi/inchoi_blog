@@ -46,8 +46,14 @@
     // 서랍이 열려 있는 동안 뒤쪽 본문이 같이 스크롤되지 않게 한다.
     document.body.style.overflow = open ? "hidden" : "";
     if (open) {
-      var first = side.querySelector("a, button");
-      if (first) first.focus();
+      // **서랍 자체에 포커스를 준다.** 예전에는 첫 링크(= 사이트 이름)에
+      // 줬는데, 그러면 로고에 포커스 링이 그려져서 **눌린 것처럼 보인다** —
+      // 로그인해서 로고가 노랑 블록일 때 특히 그렇다(실제로 그렇게 보였다).
+      //
+      // 대화상자를 열 때 그 껍데기에 포커스를 주는 것과 같은 패턴이다.
+      // 키보드 사용자는 여기서 Tab으로 목록에 들어간다.
+      side.setAttribute("tabindex", "-1");
+      side.focus();
     } else {
       burger.focus();
     }
