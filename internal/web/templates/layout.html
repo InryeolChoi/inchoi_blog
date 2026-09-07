@@ -129,17 +129,12 @@
       {{template "navtree" .Nav}}
     </nav>
 
-    <div class="side-foot">
-      <a href="https://github.com/InryeolChoi" rel="noreferrer">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.14.46.55.38A8 8 0 0 0 8 0z"/></svg>
-        GitHub
-      </a>
-      <a href="https://inryeolchoi.github.io" rel="noreferrer">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm5.9 7H11.6c-.1-1.8-.5-3.4-1.1-4.5A6.5 6.5 0 0 1 13.9 7zM8 1.5c.8 0 1.8 2 2 5.5H6c.2-3.5 1.2-5.5 2-5.5zM2.1 7a6.5 6.5 0 0 1 3.4-4.5C4.9 3.6 4.5 5.2 4.4 7H2.1zm0 2h2.3c.1 1.8.5 3.4 1.1 4.5A6.5 6.5 0 0 1 2.1 9zM8 14.5c-.8 0-1.8-2-2-5.5h4c-.2 3.5-1.2 5.5-2 5.5zm2.5-1a10.9 10.9 0 0 0 1.1-4.5h2.3a6.5 6.5 0 0 1-3.4 4.5z"/></svg>
-        Pages
-      </a>
-    </div>
-    {{/* **글쓰기로 들어가는 문은 여기 하나다.** 예전에는 /admin/login이라는
+    {{/* 사이드바 바닥의 네 칸. **하나의 그리드에 네 칸이 들어간다.**
+         예전에는 컨테이너가 둘이었다 — GitHub·Pages는 내용 폭 알약이고
+         로그아웃·admin은 반반이라, 같은 생김새인데 크기가 제각각이었다.
+         한 그리드에 넣으면 크기가 **구조적으로** 같아진다.
+
+         **글쓰기로 들어가는 문이 여기 있다.** 예전에는 /admin/login이라는
          주소를 알아야만 들어갈 수 있었다. 그걸 감추는 것이 방어가 아니다 —
          진짜 관문은 허용 목록이지 주소를 모르는 것이 아니다(auth.go의 allows).
          밖에서 /admin이 이미 303을 주고 있으므로 감춰서 얻는 것도 없었다.
@@ -148,23 +143,22 @@
          뒤는 "지금 들어와 있나"다. 하나로 묶으면 로그인하기 전에는
          로그인 링크가 안 나오는 우스운 상태가 된다.
 
-         **`.side-foot` 바깥에 둔다.** GitHub·Pages는 폭이 제각각인 알약
-         묶음이라 줄바꿈으로 흘러도 되지만, 로그인/로그아웃·admin은 매번
-         같은 자리에 같은 폭으로 서야 한다 — 같은 줄에 섞이면 폭이 들쭉날쭉해
-         계단처럼 보인다(실제로 그렇게 보였다). */}}
-    {{if .AdminOn}}
-      {{if .Editor}}
-    {{/* **로그아웃과 admin이 한 줄을 반씩 나눠 갖는다.** 예전에는 두 줄로
-         쌓아 폭을 꽉 채웠는데, 흐린 글자를 왼쪽에 붙인 전폭 상자가
-         **빈 입력창처럼 보였다.** 반씩 나누면 둘이 언제나 같은 폭이라
-         막으려던 계단도 안 생긴다. **둘 다 아이콘을 단다** — 바로 위
-         GitHub·Pages가 그렇고, 한쪽만 달면 그 차이가 뜻으로 읽힌다.
-
          로그아웃은 POST다. GET이면 남의 페이지에 박아둔 <img> 하나로도
-         사람을 로그아웃시킬 수 있다. */}}
-    {{/* 새 글은 여기 없다 — 제목 옆이다(아래 "pagetools"). 사이드바는 좁은
+         사람을 로그아웃시킬 수 있다.
+
+         새 글은 여기 없다 — 제목 옆이다("pagetools"). 사이드바는 좁은
          화면에서 서랍 안으로 들어가서, 햄버거를 눌러야 보이는 자리다. */}}
-    <div class="side-account">
+    <div class="side-grid">
+      <a href="https://github.com/InryeolChoi" rel="noreferrer">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.14.46.55.38A8 8 0 0 0 8 0z"/></svg>
+        <span>GitHub</span>
+      </a>
+      <a href="https://inryeolchoi.github.io" rel="noreferrer">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm5.9 7H11.6c-.1-1.8-.5-3.4-1.1-4.5A6.5 6.5 0 0 1 13.9 7zM8 1.5c.8 0 1.8 2 2 5.5H6c.2-3.5 1.2-5.5 2-5.5zM2.1 7a6.5 6.5 0 0 1 3.4-4.5C4.9 3.6 4.5 5.2 4.4 7H2.1zm0 2h2.3c.1 1.8.5 3.4 1.1 4.5A6.5 6.5 0 0 1 2.1 9zM8 14.5c-.8 0-1.8-2-2-5.5h4c-.2 3.5-1.2 5.5-2 5.5zm2.5-1a10.9 10.9 0 0 0 1.1-4.5h2.3a6.5 6.5 0 0 1-3.4 4.5z"/></svg>
+        <span>Pages</span>
+      </a>
+      {{if .AdminOn}}
+        {{if .Editor}}
       <form method="post" action="/admin/logout" class="side-out">
         <button type="submit">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 1.5H2.8c-.7 0-1.3.6-1.3 1.3v10.4c0 .7.6 1.3 1.3 1.3h3.7V13H3V3h3.5V1.5z"/><path d="m10.7 4.4-1.1 1.1 1.7 1.75H5.6v1.5h5.7L9.6 10.5l1.1 1.1L14.3 8l-3.6-3.6z"/></svg>
@@ -173,19 +167,18 @@
       </form>
       <a href="/admin" class="side-me" title="{{.Editor}}">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.1 2.3a1.7 1.7 0 0 1 2.4 2.4l-.9.9-2.4-2.4.9-.9zM10.3 4.1l2.4 2.4-6.5 6.5-3.1.7.7-3.1 6.5-6.5z"/></svg>
-        admin
+        <span>admin</span>
       </a>
-    </div>
-      {{else}}
-    {{/* 글자를 span으로 감싸는 이유는 로그아웃과 같다 — preferences.js의
-         사전이 `data-i18n` 요소의 textContent를 통째로 갈아치우므로
-         바깥에 달면 아이콘이 사라진다(브랜드의 가운뎃점이 그랬다). */}}
-    <a class="side-login" href="{{.LoginURL}}">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1.5h3.7c.7 0 1.3.6 1.3 1.3v10.4c0 .7-.6 1.3-1.3 1.3H9.5V13H13V3H9.5V1.5z"/><path d="m5.3 4.4 1.1 1.1L4.7 7.25h5.7v1.5H4.7l1.7 1.75-1.1 1.1L1.7 8l3.6-3.6z"/></svg>
-      <span data-i18n="login">로그인</span>
-    </a>
+        {{else}}
+      {{/* 로그인 전에는 칸이 셋이라 2x2에 빈자리가 하나 남는다. 두 칸을
+           걸쳐 채운다 — 빈 칸은 "여기 뭔가 있어야 하는데 없다"로 읽힌다. */}}
+      <a class="side-login" href="{{.LoginURL}}">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1.5h3.7c.7 0 1.3.6 1.3 1.3v10.4c0 .7-.6 1.3-1.3 1.3H9.5V13H13V3H9.5V1.5z"/><path d="m5.3 4.4 1.1 1.1L4.7 7.25h5.7v1.5H4.7l1.7 1.75-1.1 1.1L1.7 8l3.6-3.6z"/></svg>
+        <span data-i18n="login">로그인</span>
+      </a>
+        {{end}}
       {{end}}
-    {{end}}
+    </div>
   </aside>
 
   <main class="main" id="main">
@@ -623,20 +616,51 @@
   .nav-list .nav-list .nav-link { font-size: .88rem; color: var(--ink-dim); }
   .nav-list .nav-list .nav-link[aria-current="page"] { color: var(--active-fg); }
 
-  /* 사이드바 하단 바깥 링크 + 계정 줄. **알약의 정의는 여기 하나다** —
-     바깥 링크와 로그인/로그아웃·admin이 각자 제 모양을 들고 있으면
-     언젠가 갈라진다(실제로 갈라져서 계정 줄만 입력창처럼 보였다). */
-  .side-foot { margin-top: 1.4rem; padding: .85rem .4rem 0; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .4rem; }
-  .side-foot a, .side-login, .side-out button, .side-me {
-    display: inline-flex; align-items: center; gap: .35rem;
-    font: inherit; font-size: .78rem; color: var(--ink-dim); text-decoration: none;
-    background: var(--bg); border: 1px solid var(--line); border-radius: 0;
-    padding: .25rem .55rem;
+  /* ── 사이드바 바닥의 네 칸 ────────────────────────────────────
+     GitHub · Pages · 로그아웃 · admin이 **2x2 그리드 한 벌**이다.
+
+     **크기를 구조로 맞춘다.** 예전에는 컨테이너가 둘이라 GitHub·Pages는
+     내용 폭으로, 로그아웃·admin은 반반으로 정해졌다 — 같은 생김새인데
+     크기가 제각각이었다. 한 그리드에 넣으면 `1fr 1fr`이 네 칸을 똑같이
+     자르므로 어긋날 자리가 없다.
+
+     칸 안은 **가운데 정렬**이다. 흐린 글자를 왼쪽에 붙이면 상자가 빈
+     입력창처럼 보인다(실제로 그랬다). */
+  .side-grid {
+    margin-top: 1.4rem; padding: .85rem .4rem 0;
+    border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: .4rem;
   }
-  .side-foot a:hover, .side-login:hover, .side-login:focus-visible {
+  /* 네 칸의 생김새는 여기 한 곳이 정한다. 정의가 갈라지면 또 제각각이 된다.
+     `min-height`가 있어야 글자 길이가 달라도 높이가 같다. */
+  .side-grid > a, .side-grid button {
+    display: flex; align-items: center; justify-content: center; gap: .35rem;
+    min-height: 2.15rem; padding: .3rem .45rem;
+    font: inherit; font-size: .78rem; line-height: 1;
+    color: var(--ink-dim); text-decoration: none; text-align: center;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 0;
+    cursor: pointer;
+  }
+  .side-grid svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
+  .side-grid > a:hover, .side-grid > a:focus-visible {
     color: var(--accent); border-color: var(--rail); background: var(--hover-bg);
   }
-  .side-foot svg, .side-login svg, .side-out svg, .side-me svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
+  /* form은 칸이 아니라 **칸을 채우는 껍데기**다. 그리드가 form을 자르고
+     버튼이 그 안을 꽉 채운다 — 그래야 버튼도 다른 셋과 같은 크기다. */
+  .side-out { margin: 0; display: flex; }
+  .side-out button { flex: 1; }
+  .side-out button:hover, .side-out button:focus-visible {
+    color: var(--warn); border-color: var(--warn); background: var(--bg);
+  }
+  /* admin은 이 묶음의 주된 행동이라 **잉크 농도로** 앞선다. 노랑을 쓰지
+     않는 이유는 사이드바에서 그 색이 이미 "지금 여기"를 뜻하기 때문이다.
+
+     **`.side-grid > `를 붙여야 한다.** 위 `.side-grid > a`가 (0,2,1)이라
+     맨 `.side-me`(0,1,0)로는 색이 안 먹는다 — 규칙은 있는데 화면은 그대로라
+     조용히 틀리는 자리다(실제로 그랬다). */
+  .side-grid > .side-me { color: var(--accent); border-color: var(--accent); }
+  /* 로그인 전에는 칸이 셋이라 두 칸을 걸친다. */
+  .side-grid > .side-login { grid-column: 1 / -1; }
 
   /* ══ 본문 ═════════════════════════════════════════════════════════ */
 
@@ -928,30 +952,86 @@
   }
   .edit-preview > :first-child { margin-top: 0; }
 
-  /* 계정 줄은 GitHub·Pages와 **같은 알약**이다. 정의가 위 `.side-foot a`와
-     한 규칙에 묶여 있어서 갈라질 수 없다 — 사이드바 바닥에 생김새가 다른
-     조각이 섞이면 그 차이를 읽는 사람이 뜻으로 읽는다.
+  /* ── `편집` 커튼 ──────────────────────────────────────────────
+     <details>라 **스크립트가 없어도 열린다**(목차와 같은 방식). 여기서
+     CSS가 하는 일은 여는 모습을 커튼으로 만드는 것뿐이다. */
+  .edit-menu { position: relative; }
+  .edit-menu > summary {
+    display: inline-flex; align-items: center; gap: .35rem;
+    padding: .32rem .6rem; cursor: pointer; list-style: none;
+    font-size: .78rem; line-height: 1;
+    color: var(--ink); background: var(--bg); border: 2px solid var(--ink);
+  }
+  .edit-menu > summary::-webkit-details-marker { display: none; }
+  .edit-menu > summary svg { width: 13px; height: 13px; fill: currentColor; flex: none; }
+  .edit-menu > summary:hover, .edit-menu > summary:focus-visible { background: var(--rail); color: #121415; }
+  /* 열려 있는 동안 눌린 것처럼 보인다 — 커튼이 어디서 나왔는지 알려준다. */
+  .edit-menu[open] > summary { background: var(--rail); color: #121415; }
+  /* **떠 있는 판이라 아래 본문을 밀지 않는다.** 밀면 커튼을 여닫을 때마다
+     글이 위아래로 뛴다. 오른쪽 끝에 맞춰 떨어진다. */
+  .edit-menu-panel {
+    position: absolute; z-index: 25; top: calc(100% + .3rem); right: 0;
+    min-width: 100%;
+    display: flex; flex-direction: column; gap: 1px;
+    padding: 1px;
+    background: var(--ink); border: 2px solid var(--ink);
+    box-shadow: var(--hard-shadow);
+    animation: curtain .16s ease-out;
+    transform-origin: top center;
+  }
+  /* 커튼: 위에서 아래로 내려온다. **transition이 아니라 animation이다** —
+     <details>는 닫혀 있는 동안 안쪽을 아예 안 그려서, 열리는 순간 요소가
+     새로 생긴다. 새로 생긴 요소에는 transition이 걸리지 않는다. */
+  @keyframes curtain {
+    from { clip-path: inset(0 0 100% 0); opacity: .4; }
+    to   { clip-path: inset(0 0 0 0);    opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .edit-menu-panel { animation: none; }
+  }
 
-     **폭을 100%로 채우지 않는다.** 예전에는 계단을 막으려고 두 줄을 꽉
-     채웠는데, 흐린 글자를 왼쪽에 붙인 전폭 상자는 **빈 입력창으로 보인다**
-     (실제로 그렇게 보였다). 계단은 폭을 채워서가 아니라 **한 줄에 반씩
-     나눠서** 막는다 — 둘이 언제나 정확히 같은 폭이라 어긋날 자리가 없다. */
-  .side-account { display: flex; gap: .4rem; margin-top: .4rem; }
-  .side-out { margin: 0; display: flex; flex: 1 1 0; }
-  .side-out button, .side-me { flex: 1 1 0; justify-content: center; cursor: pointer; }
-  .side-out button:hover, .side-out button:focus-visible {
-    color: var(--warn); border-color: var(--warn); background: var(--bg);
+  .edit-bar {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    padding: .5rem 0 .7rem; border-bottom: 1px solid var(--line); margin-bottom: .8rem;
   }
-  /* admin은 이 줄의 주된 행동이라 **테두리 두께가 아니라 잉크 농도로** 앞선다.
-     노랑을 쓰지 않는 이유는 사이드바에서 그 색이 이미 "지금 여기"를 뜻하기
-     때문이다 — 들어가는 문에 그 색을 쓰면 두 뜻이 겹친다. */
-  .side-me { color: var(--accent); border-color: var(--accent); }
-  .side-me:hover, .side-me:focus-visible {
-    border-color: var(--rail); background: var(--hover-bg);
+  .edit-title {
+    font: inherit; font-weight: 600; flex: 1 1 12rem; min-width: 0;
+    padding: .35rem .5rem; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 0;
   }
-  /* 로그인 전에는 알약 하나뿐이라 반씩 나눌 것이 없다. 제 줄에서 내용
-     폭으로 선다 — 혼자 전폭을 채우면 그것도 입력창처럼 보인다. */
-  .side-login { margin-top: .4rem; }
+  .edit-status { font: inherit; font-size: .82rem; padding: .3rem; }
+  .edit-spacer { flex: 1; }
+  .edit-note { font-size: .78rem; color: var(--ink-dim); }
+  .edit-error { color: var(--warn); }
+  .edit-more { font-size: .78rem; color: var(--ink-dim); }
+  .edit-btn {
+    font: inherit; font-size: .8rem; line-height: 1; cursor: pointer;
+    padding: .38rem .7rem; border-radius: 0;
+    color: var(--ink-dim); background: var(--bg); border: 1px solid var(--line);
+  }
+  /* 주 동작은 하늘색 블록. 그 위 글자는 언제나 검정이라 테마가 같다. */
+  .edit-btn.primary { color: #121415; background: var(--rail); border-color: var(--ink); font-weight: 700; }
+  .edit-warn {
+    margin: 0 0 .6rem; padding: .5rem .7rem; font-size: .8rem;
+    color: var(--ink-dim); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 0;
+  }
+  /* 편집 중에는 본문 폭 제한(--measure)을 풀고 열을 둘로 나눈다. 좁은
+     화면에서는 위아래로 쌓인다 — 375px에서 두 열은 어느 쪽도 못 읽는다. */
+  .edit-split { display: grid; gap: .8rem; grid-template-columns: 1fr; }
+  @media (min-width: 60rem) { .edit-split { grid-template-columns: 1fr 1fr; } }
+  .edit-body {
+    font-family: var(--mono); font-size: .85rem; line-height: 1.62;
+    min-height: 24rem; resize: vertical; padding: .7rem;
+    color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 0;
+  }
+  .edit-body:focus-visible { outline: 2px solid var(--rail); outline-offset: 1px; }
+  .edit-preview {
+    padding: .7rem; overflow-x: auto;
+    border: 1px solid var(--line); border-radius: 0; background: var(--surface);
+  }
+  .edit-preview > :first-child { margin-top: 0; }
 
   /* ── 홈의 최근 글 ────────────────────────────────────────────────
      표제지가 주인공이라 목록은 조용해야 한다. 제목과 날짜 두 칸뿐이고
