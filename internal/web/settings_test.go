@@ -72,3 +72,68 @@ func TestHomeStillWorksWithSettings(t *testing.T) {
 		t.Fatalf("홈 상태 코드 %d", rec.Code)
 	}
 }
+
+// **홈에 자유 본문을 쓴다**(2026-09-09). 예전에는 문구 네 줄만 고칠 수 있어서,
+// 그 밖의 것을 넣으려면 템플릿을 고쳐 배포해야 했다 — 홈에 무엇을 둘지는
+// 사람이 정할 일이지 코드가 정할 일이 아니다.
+func TestHomeBodyIsMarkdownLikeAnyPost(t *testing.T) {
+	sqlDB := testDB(t)
+	exec := execer(t, sqlDB)
+	exec(`INSERT INTO settings (key, value) VALUES ('home.body',
+	      '## 여기서 쓴 절
+
+- 목록도 된다
+
+식 $x^2$ 도 된다.')`)
+
+	srv, err := New(sqlDB)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	page := get(t, srv.Handler(), "/").Body.String()
+	body := mainOf(t, page)
+	// **글과 같은 렌더러로 그린다.** `##`이 h3이 되는 것이 그 증거다
+	// (markdown.headingShift) — 흉내였다면 h2가 나왔을 것이다.
+	if !strings.Contains(body, "<h3") {
+		t.Errorf("홈 본문이 안 그려졌다:\n%s", body)
+	}
+	if !strings.Contains(body, "<li>목록도 된다</li>") {
+		t.Errorf("목록이 마크다운으로 안 그려졌다:\n%s", body)
+	}
+	if !strings.Contains(body, `class="math math-inline"`) {
+		t.Errorf("수식이 안 잡혔다:\n%s", body)
+	}
+	// 수식이 있으면 KaTeX도 함께 실려야 한다 — 글과 같은 판정이다.
+	if !strings.Contains(page, "npm/katex@") {
+		t.Errorf("홈 본문에 수식이 있는데 KaTeX가 안 실렸다")
+	}
+}
+
+// 최근 글 수는 사람이 정한다. **0은 "안 보인다"라는 뜻이 있는 값**이라
+// 빈 값(안 정함)과 구별해야 한다 — 문구들과 반대다.
+func TestHomeRecentCountIsSettable(t *testing.T) {
+	sqlDB := testDB(t)
+	exec := execer(t, sqlDB)
+	now := "datetime('now')"
+	exec(`INSERT INTO categories (id, name, slug, sort_order) VALUES (1, '개발', 'dev', 0)`)
+	for i := 1; i <= 3; i++ {
+		exec(`INSERT INTO posts (slug, title, body, status, source, category_id, sort_order,
+		                         original_created_at, created_at, updated_at)
+		      VALUES (?, ?, '본문', 'unlisted', 'notion', 1, 0, ?, `+now+`, `+now+`)`,
+			"p"+itoa(i), "글 "+itoa(i), "2026-01-0"+itoa(i))
+	}
+
+	srv, err := New(sqlDB)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	h := srv.Handler()
+	if body := mainOf(t, get(t, h, "/").Body.String()); !strings.Contains(body, "최근에 쓴 글") {
+		t.Errorf("기본값으로는 최근 글이 나와야 한다:\n%s", body)
+	}
+
+	exec(`INSERT INTO settings (key, value) VALUES ('home.recent', '0')`)
+	if body := mainOf(t, get(t, h, "/").Body.String()); strings.Contains(body, "최근에 쓴 글") {
+		t.Errorf("0으로 정했는데 최근 글 절이 남았다:\n%s", body)
+	}
+}

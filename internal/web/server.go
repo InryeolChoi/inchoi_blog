@@ -340,7 +340,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	// 않도록 여기 한 곳에서 한다 — 사이드바를 여기서 채우는 것과 같은 이유다.
 	// 카테고리 표지의 참고 절을 목록 뒤로 떼어놓아도 그 안의 수식·코드·유튜브에
 	// 필요한 자산을 빠뜨리면 안 된다.
-	assetBody := template.HTML(string(data.Body) + string(data.AfterPosts))
+	// **홈의 자유 본문도 함께 센다.** 그것도 사람이 쓴 마크다운이라 수식과
+	// 코드가 들어갈 수 있는데, 빠뜨리면 홈에서만 수식이 원문 LaTeX로 남는다 —
+	// 표지의 참고 절을 빠뜨리면 안 되는 것과 같은 자리다.
+	assetBody := template.HTML(string(data.Body) + string(data.AfterPosts) + string(data.Home.Body))
 	data.Assets = needsFor(assetBody)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
@@ -450,17 +453,29 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	recent, err := st.RecentPosts(recentLimit)
+	// 표제지 문구와 자유 본문은 DB가 정본이다(migrations/008). 저장된 값이
+	// 없으면 코드의 기본값이라, 아무도 안 고친 사이트도 문장이 있다.
+	home, bodySrc, err := st.homeText()
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	// 표제지 문구는 DB가 정본이다(migrations/008). 저장된 값이 없으면
-	// 코드의 기본값이라, 아무도 안 고친 사이트도 문장이 있다.
-	home, err := st.homeText()
-	if err != nil {
-		s.fail(w, r, err)
-		return
+	// **글과 같은 렌더러로 그린다.** 여기서 다르게 그리면 홈에 쓴 것과 글에
+	// 쓴 것이 다르게 보인다 — 미리보기가 공개 쪽 렌더러를 그대로 쓰는 것과
+	// 같은 규칙이다.
+	if strings.TrimSpace(bodySrc) != "" {
+		if home.Body, err = s.md.Render(bodySrc); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	// 최근 글 수도 사람이 정한다. 0이면 그 절을 아예 안 그린다.
+	var recent []PostSummary
+	if home.RecentLimit > 0 {
+		if recent, err = st.RecentPosts(home.RecentLimit); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	s.render(w, r, "home.html", pageData{
 		Title:      "열렬히.뛰기",

@@ -719,6 +719,11 @@
     padding: 0 .14em; box-decoration-break: clone; -webkit-box-decoration-break: clone;
   }
   .home-lead { margin: 1.2rem 0 0; max-width: 36rem; color: var(--ink-dim); font-size: .97rem; }
+  /* 표제지 아래 자유 본문. **글 본문과 같은 규칙을 쓴다**(article) —
+     홈에 쓴 것과 글에 쓴 것이 다르게 보이면 안 된다. 표제지와 붙지
+     않도록 위 여백만 둔다. */
+  .home-body { margin-top: 2.4rem; }
+  .home-body > :first-child { margin-top: 0; }
 
   /* ── 404 · 500 ──────────────────────────────────────────────── */
   /* 없는 길을 알려주는 화면이 사이트에서 가장 화려하면 안 된다. 홈 표제지와

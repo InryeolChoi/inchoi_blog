@@ -84,6 +84,7 @@
   //   /admin                  목록
   //   /admin/edit/{slug}      기존 글 편집
   //   /admin/new              새 글
+  //   /admin/home             홈 화면 편집
   //   /admin/data             데이터 보기
 
   function go(path) {
@@ -116,6 +117,7 @@
     var m = /^\/admin\/edit\/(.+)$/.exec(path);
     if (m) return showEditor(decodeURIComponent(m[1]));
     if (path === "/admin/new") return showEditor(null, prefillCategory());
+    if (path === "/admin/home") return showHome();
     if (path === "/admin/data") return showStats();
     if (path === "/admin/settings") return showSettings();
     return showList();
@@ -127,7 +129,8 @@
   // 못 떠도 세 링크는 그대로 눌린다. 새 글과 편집 화면은 `전체 글`에 딸린
   // 자리라 그쪽을 켠다 — 어디에도 안 걸린 화면을 만들지 않는다.
   function markMenu(path) {
-    var here = path === "/admin/data" || path === "/admin/settings" ? path : "/admin";
+    var here = path === "/admin/home" || path === "/admin/data" || path === "/admin/settings"
+      ? path : "/admin";
     Array.prototype.forEach.call(document.querySelectorAll(".ad-menu a"), function (a) {
       var on = a.dataset.menu === here;
       a.classList.toggle("ad-on", on);
@@ -349,6 +352,145 @@
       });
   }
 
+  // ---------------------------------------------------------------- 홈 화면
+  //
+  // **홈도 글처럼 쓴다.** 예전에는 문구 네 줄만 고칠 수 있었고 그것도
+  // 환경설정 구석에 있었다 — 홈에 무엇을 둘지는 사람이 정할 일인데, 그
+  // 밖의 것을 넣으려면 템플릿을 고쳐 배포해야 했다.
+  //
+  // 이제 표제지 아래에 **마크다운 본문**을 자유롭게 쓴다. 글과 같은 렌더러로
+  // 그리므로 수식도 코드도 목록도 글에서 되는 것은 여기서도 된다.
+
+  function showHome() {
+    var mine = drawTicket;
+    clear(root);
+    root.appendChild(el("div", { class: "ad-listhead" }, [el("h1", { text: "홈 화면" })]));
+    var wait = el("p", { class: "ad-dim", text: "불러오는 중…" });
+    root.appendChild(wait);
+
+    api("GET", "/api/admin/settings").then(function (r) {
+      if (stale(mine)) return;
+      wait.remove();
+      if (!r.ok) {
+        root.appendChild(el("p", { class: "ad-error",
+          text: (r.data && r.data.error) || "설정을 읽지 못했다" }));
+        return;
+      }
+      var vals = r.data.values || {}, defs = r.data.defaults || {};
+      var inputs = {};
+
+      // **비우면 기본 문구로 돌아간다.** 그래서 자리표시자에 그 기본값을
+      // 회색으로 깔아 둔다 — 비웠을 때 무엇이 나오는지 보이지 않으면
+      // 지우기가 무섭다.
+      function box(key, tag, cls, rows) {
+        var node = el(tag, { class: cls, placeholder: defs[key] || "" });
+        node.value = vals[key] || "";
+        if (rows) node.rows = rows;
+        inputs[key] = node;
+        return node;
+      }
+      // **`.ad-body`는 글 편집기의 본문 칸이라 26rem으로 서 있다.** 리드
+      // 한두 줄에 그 높이를 주면 폼이 통째로 그 칸이 된다 — 짧은 칸은
+      // 따로 둔다(`.ad-line`).
+      function field(key, label, tag, rows) {
+        var cls = tag === "textarea" ? "ad-line" : "ad-input";
+        return el("label", { class: "ad-field wide" },
+          [el("span", { text: label }), box(key, tag, cls, rows)]);
+      }
+
+      var hero = el("section", { class: "ad-card" }, [
+        el("h2", { text: "표제지" }),
+        el("p", { class: "ad-dim", text: "첫 화면 맨 위의 네 줄이다. 비우면 기본 문구로 돌아간다." }),
+        el("div", { class: "ad-fields" }, [
+          field("home.kicker", "눈썹줄", "input"),
+          field("home.title_top", "제목 첫 줄", "input"),
+          field("home.title_mark", "제목 둘째 줄 (형광 블록)", "input"),
+          field("home.lead", "리드 문장", "textarea", 2),
+        ]),
+      ]);
+
+      // 자유 본문. **글과 같은 미리보기다**(POST /api/admin/preview) —
+      // 여기서 다르게 그리면 홈에 쓴 것과 글에 쓴 것이 다르게 보인다.
+      //
+      // **`.ad-field.wide`로 감싸지 않는다.** 그건 `grid-column: 1 / -1`이라
+      // 두 칸짜리 격자 안에 두면 원문이 두 칸을 다 먹고 미리보기가 아래로
+      // 밀린다 — 실제로 그렇게 나왔다.
+      var body = box("home.body", "textarea", "ad-body", 12);
+      var preview = el("article", { class: "ad-preview-body" });
+      var bodyCard = el("section", { class: "ad-card" }, [
+        el("h2", { text: "본문" }),
+        el("p", { class: "ad-dim",
+          text: "표제지 아래에 자유롭게 쓴다. 글과 같은 마크다운이라 수식·코드·목록이 그대로 된다. 비우면 아무것도 안 나온다." }),
+        el("div", { class: "ad-split" }, [body, preview]),
+      ]);
+
+      var timer = null;
+      function draw() {
+        api("POST", "/api/admin/preview", { markdown: inputs["home.body"].value }).then(function (pr) {
+          if (!pr.ok) {
+            preview.textContent = (pr.data && pr.data.error) || "미리보기 실패";
+            return;
+          }
+          preview.innerHTML = pr.data.html;
+          // **공개 화면이 쓰는 것과 같은 함수들이다.** 여기서 다르게 그리면
+          // 미리보기가 아니게 된다.
+          if (window.blogRenderMath) window.blogRenderMath();
+          if (window.blogHighlight) window.blogHighlight();
+          if (window.blogCopyButtons) window.blogCopyButtons();
+          if (window.blogRenderMermaid) window.blogRenderMermaid();
+          if (window.blogMountAnims) window.blogMountAnims();
+        });
+      }
+      inputs["home.body"].addEventListener("input", function () {
+        clearTimeout(timer);
+        timer = setTimeout(draw, 120);
+      });
+      if (window.blogPalette) window.blogPalette.attach(inputs["home.body"]);
+      if (window.blogMathLive) window.blogMathLive.attach(inputs["home.body"]);
+      draw();
+
+      // 최근 글. **0은 "안 보인다"라는 뜻이 있는 값**이라 빈 값(안 정함)과
+      // 구별해야 한다 — 위의 문구들과 반대다.
+      var recent = el("input", { class: "ad-input", type: "number", min: "0", max: "20" });
+      recent.value = vals["home.recent"] !== undefined ? vals["home.recent"] : (defs["home.recent"] || "6");
+      inputs["home.recent"] = recent;
+      var recentCard = el("section", { class: "ad-card" }, [
+        el("h2", { text: "최근에 쓴 글" }),
+        el("p", { class: "ad-dim", text: "본문 아래에 최근 글을 몇 편 세울지. 0이면 그 절이 아예 안 나온다." }),
+        el("div", { class: "ad-fields" }, [
+          el("label", { class: "ad-field" }, [el("span", { text: "개수" }), recent]),
+        ]),
+      ]);
+
+      var note = el("span", { class: "ad-status" });
+      var save = el("button", { type: "button", class: "ad-btn primary", text: "홈 저장",
+        onclick: function () {
+          var values = {};
+          Object.keys(inputs).forEach(function (k) { values[k] = inputs[k].value; });
+          note.className = "ad-status";
+          note.textContent = "저장하는 중…";
+          api("PUT", "/api/admin/settings", { values: values }).then(function (r2) {
+            if (!r2.ok) {
+              note.className = "ad-status ad-error";
+              note.textContent = (r2.data && r2.data.error) || "저장하지 못했다";
+              return;
+            }
+            // **성공도 삼키지 않는다.** 눌렀는데 아무 표시가 없으면 저장이
+            // 됐는지 알 수 없다.
+            note.textContent = "저장했다.";
+          });
+        } });
+
+      root.appendChild(hero);
+      root.appendChild(bodyCard);
+      root.appendChild(recentCard);
+      root.appendChild(el("div", { class: "ad-homesave" }, [
+        save, note,
+        el("a", { class: "ad-act", href: "/", target: "_blank", rel: "noreferrer", text: "홈 보기 ↗" }),
+      ]));
+    });
+  }
+
   // ---------------------------------------------------------------- 환경설정
   //
   // **여기 있는 것은 이 브라우저의 설정뿐이다.** 서버에 저장하지 않고
@@ -357,6 +499,9 @@
   //
   // **없는 것을 있는 척하지 않는다.** 글쓰기 기본값이나 계정 설정 같은 것은
   // 아직 저장할 자리가 없어서 여기 두지 않는다.
+  //
+  // 홈 문구는 2026-09-09에 제 화면으로 나갔다(`/admin/home`). 서버에 저장하는
+  // 것이 이 화면의 성격과 달랐고, 무엇보다 **구석에 있어서 있는 줄을 몰랐다.**
 
   function showSettings() {
     var mine = drawTicket;
@@ -397,71 +542,6 @@
       el("p", { class: "ad-dim", text: "이 브라우저에만 저장한다. 공개 화면과 같은 설정이다." }),
       el("div", { class: "ad-segs" }, buttons),
     ]));
-
-    // ── 홈 표제지 문구 ────────────────────────────────────────────
-    //
-    // **여기만 서버에 저장한다**(migrations/008). 문장 하나를 고치려고 코드를
-    // 배포하는 것은 "글은 웹 UI에서 직접 쓰고 고친다"와 어긋난다.
-    //
-    // **비우면 기본 문구로 돌아간다.** 그래서 자리표시자에 그 기본값을 회색으로
-    // 깔아 둔다 — 비웠을 때 무엇이 나오는지 보이지 않으면 지우기가 무섭다.
-    var homeCard = el("section", { class: "ad-card" }, [
-      el("h2", { text: "홈 문구" }),
-      el("p", { class: "ad-dim", text: "첫 화면 표제지다. 비우면 기본 문구로 돌아간다." }),
-      el("p", { class: "ad-dim", text: "불러오는 중…" }),
-    ]);
-    root.appendChild(homeCard);
-
-    api("GET", "/api/admin/settings").then(function (r) {
-      if (stale(mine)) return;
-      clear(homeCard);
-      if (!r.ok) {
-        homeCard.appendChild(el("h2", { text: "홈 문구" }));
-        homeCard.appendChild(el("p", { class: "ad-error", text: (r.data && r.data.error) || "설정을 읽지 못했다" }));
-        return;
-      }
-      var vals = r.data.values || {}, defs = r.data.defaults || {};
-      var fields = [
-        ["home.kicker", "눈썹줄", "input"],
-        ["home.title_top", "제목 첫 줄", "input"],
-        ["home.title_mark", "제목 둘째 줄 (형광 블록)", "input"],
-        ["home.lead", "리드 문장", "textarea"],
-      ];
-      var inputs = {};
-      var rows = fields.map(function (f) {
-        var node = el(f[2], {
-          class: f[2] === "textarea" ? "ad-body" : "ad-input",
-          placeholder: defs[f[0]] || "",
-        });
-        node.value = vals[f[0]] || "";
-        if (f[2] === "textarea") node.rows = 3;
-        inputs[f[0]] = node;
-        return el("label", { class: "ad-field wide" }, [el("span", { text: f[1] }), node]);
-      });
-      var note = el("span", { class: "ad-status" });
-      var save = el("button", { type: "button", class: "ad-btn primary", text: "문구 저장",
-        onclick: function () {
-          var values = {};
-          Object.keys(inputs).forEach(function (k) { values[k] = inputs[k].value; });
-          note.className = "ad-status";
-          note.textContent = "저장하는 중…";
-          api("PUT", "/api/admin/settings", { values: values }).then(function (r2) {
-            if (!r2.ok) {
-              note.className = "ad-status ad-error";
-              note.textContent = (r2.data && r2.data.error) || "저장하지 못했다";
-              return;
-            }
-            // **성공도 삼키지 않는다.** 눌렀는데 아무 표시가 없으면 저장이
-            // 됐는지 알 수 없다 — 실패를 숨기지 않는 것과 같은 규칙이다.
-            note.textContent = "저장했다. 홈에서 확인해 보라.";
-          });
-        } });
-
-      homeCard.appendChild(el("h2", { text: "홈 문구" }));
-      homeCard.appendChild(el("p", { class: "ad-dim", text: "첫 화면 표제지다. 비우면 기본 문구로 돌아간다." }));
-      homeCard.appendChild(el("div", { class: "ad-fields" }, rows));
-      homeCard.appendChild(el("div", { class: "ad-homesave" }, [save, note]));
-    });
 
     root.appendChild(el("section", { class: "ad-card" }, [
       el("h2", { text: "계정" }),
