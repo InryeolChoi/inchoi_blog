@@ -71,9 +71,15 @@ func SiblingOrder(db *sql.DB, slug string) (SiblingList, error) {
 	if cat.CoverPostSlug == slug {
 		return SiblingList{Reason: "이 글은 이 분류의 표지다. 본문이 목록 위에 통째로 펼쳐지므로 목록에 서지 않는다."}, nil
 	}
+	// **날짜순으로 세우는 분류는 순서를 따로 정할 수 없다**(recentfirst.go).
+	// 여기서 옮겨봐야 다음에 쓴 글이 그 앞에 서므로, 되지도 않는 일을
+	// 되는 것처럼 보여주지 않는다.
+	if recentFirstCategory(cat.Slug) {
+		return SiblingList{Reason: "이 분류는 최근에 쓴 글이 늘 맨 앞에 서도록 날짜순으로 세운다. 그래서 순서를 따로 정할 수 없다."}, nil
+	}
 	_, basePath := crumbs(post.Trail)
 
-	posts, err := st.PostsInCategory(cat.ID)
+	posts, err := st.PostsInCategory(*cat)
 	if err != nil {
 		return SiblingList{}, err
 	}

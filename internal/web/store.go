@@ -302,7 +302,11 @@ func scanPostSummaries(rows *sql.Rows) ([]PostSummary, error) {
 // parent_id로 계층을 되살려 중첩된 형태로 돌려준다. 노션 계층이 카테고리 3단계보다
 // 깊었던 글들은 같은 카테고리 안에서 서로 부모-자식이라, 그냥 나열하면 한 층으로
 // 평평해진다.
-func (s *store) PostsInCategory(categoryID int64) ([]PostSummary, error) {
+// **분류를 통째로 받는다.** 어떤 순서로 세울지가 분류에 따라 다른데
+// (recentfirst.go), id만 받으면 그 판정을 부르는 쪽마다 따로 해야 한다 —
+// 화면과 편집기의 `형제 순서` 패널이 서로 다른 차례를 보게 되는 자리다.
+func (s *store) PostsInCategory(cat Category) ([]PostSummary, error) {
+	categoryID := cat.ID
 	rows, err := s.db.Query(`
 		SELECT `+postColumns+`
 		FROM posts p
@@ -318,7 +322,13 @@ func (s *store) PostsInCategory(categoryID int64) ([]PostSummary, error) {
 		return nil, err
 	}
 	sortPosts(flat)
-	return nestPosts(flat), nil
+	nested := nestPosts(flat)
+	// 일지처럼 쌓이는 분류는 최근 글이 맨 앞이다. 읽는 차례가 곧 쓴 차례의
+	// 역순인 자리라, 새 글이 아래로 밀리면 매번 끝까지 내려가야 한다.
+	if recentFirstCategory(cat.Slug) {
+		sortNewestFirst(nested)
+	}
+	return nested, nil
 }
 
 // recentLimit은 홈에 세울 최근 글 수다. 홈은 표제지가 주인공이라 목록이

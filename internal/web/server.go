@@ -492,7 +492,7 @@ func (s *Server) handleCategory(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	posts, err := st.PostsInCategory(current.ID)
+	posts, err := st.PostsInCategory(current)
 	if err != nil {
 		s.fail(w, r, err)
 		return
