@@ -38,6 +38,13 @@ type bodyFix struct {
 	// Shown은 본문 링크와 펼친 목록에 나온 글의 slug다. 카테고리 페이지의
 	// 목차와 아래 목록이 겹치는지 볼 때 쓴다.
 	Shown map[string]bool
+	// Lists는 **펼친 인라인 데이터베이스의 행**이다(이름 → 화면 순서 그대로).
+	//
+	// 그 상자 안의 차례도 목록과 **같은 규칙**이 정하므로(InlineDBGroups가
+	// 마지막에 sortPosts를 부른다), 편집기의 `형제 순서` 패널이 여기서
+	// 순서를 옮길 수 있다(siblings.go). 표지 글이 안내하는 글은 카테고리
+	// 목록에서 빠지는데, 그렇다고 순서를 정할 수 없는 것은 아니다.
+	Lists map[string][]PostSummary
 }
 
 // resolveBody는 렌더링 직전에 본문을 손본다. 원본 문자열은 건드리지 않는다.
@@ -127,6 +134,10 @@ func (s *store) resolveBody(body, originalPath string) (string, bodyFix, error) 
 					fix.Shown = map[string]bool{}
 				}
 				collectSlugs(rows, fix.Shown)
+				if fix.Lists == nil {
+					fix.Lists = map[string][]PostSummary{}
+				}
+				fix.Lists[linkText] = rows
 				continue
 			}
 		}

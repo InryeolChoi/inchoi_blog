@@ -284,3 +284,70 @@ func TestMenuPathsServeTheShell(t *testing.T) {
 		}
 	}
 }
+
+// 홈 표제지 문구를 여기서 고칠 수 있는지 본다(migrations/008).
+//
+// **DB가 정본이라는 전제를 홈에도 적용한 것이다.** 문장 하나를 고치려고 코드를
+// 고쳐 배포하는 것은 "글은 웹 UI에서 직접 쓰고 고친다"와 어긋난다.
+func TestSettingsHoldTheHomeCopy(t *testing.T) {
+	sqlDB := testDB(t)
+	s, err := New(sqlDB, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+
+	// 처음에는 저장된 값이 없다. **기본값은 DB에 미리 안 넣는다** — 행이
+	// 없다는 것이 곧 "아무도 안 고쳤다"라서, 그동안은 코드에서 문장을
+	// 다듬을 수 있다.
+	rec := do(t, h, http.MethodGet, "/api/admin/settings", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Values   map[string]string `json:"values"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	decode(t, rec, &got)
+	if len(got.Values) != 0 {
+		t.Errorf("처음부터 저장된 값이 있다: %v", got.Values)
+	}
+	if got.Defaults["home.kicker"] == "" {
+		t.Error("기본값을 안 줬다. 화면이 자리표시자로 쓸 것이 없다")
+	}
+
+	rec = do(t, h, http.MethodPut, "/api/admin/settings",
+		`{"values":{"home.kicker":"내가 적은 눈썹줄"}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	var value string
+	if err := sqlDB.QueryRow(`SELECT value FROM settings WHERE key = 'home.kicker'`).
+		Scan(&value); err != nil {
+		t.Fatal(err)
+	}
+	if value != "내가 적은 눈썹줄" {
+		t.Errorf("저장된 값이 %q다", value)
+	}
+
+	// **빈 값은 지운다.** 행이 없다는 것이 곧 "기본값을 쓴다"라서, 빈
+	// 문자열을 남겨두면 "비웠다"와 "안 정했다"가 표에서 구별되지 않는다.
+	rec = do(t, h, http.MethodPut, "/api/admin/settings", `{"values":{"home.kicker":"  "}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	var n int
+	if err := sqlDB.QueryRow(`SELECT count(*) FROM settings`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("비웠는데 행이 %d개 남았다", n)
+	}
+
+	// **모르는 키는 거절한다.** 받아주면 이 표가 아무나 아무거나 쌓는 자리가
+	// 되고, 화면에 안 나오는 행이 남아서 무엇이 쓰이는지 알 수 없게 된다.
+	rec = do(t, h, http.MethodPut, "/api/admin/settings", `{"values":{"뭔가":"값"}}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("모르는 키에 상태 코드 %d다. 400이어야 한다", rec.Code)
+	}
+}

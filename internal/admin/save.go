@@ -52,6 +52,19 @@ type saveReq struct {
 	// 알아볼 수 있는 값이어야 잘못 붙였을 때 눈에 띈다.
 	ParentSlug string `json:"parentSlug"`
 	SortOrder  int    `json:"sortOrder"`
+	// SortOrderManual은 **이 순서를 사람이 정했다**는 표시다(migrations/005).
+	// 이게 없으면 공개 화면이 sort_order를 안 본다 — 이관이 채운 값은
+	// created_time 순위라 못 믿기 때문이다(web.sortPosts).
+	//
+	// **저장할 때마다 켜면 안 된다.** 편집기는 이 칸을 언제나 함께 보내므로,
+	// 오타 하나 고쳐 저장한 글이 전부 목록 맨 앞으로 튀어나온다. 사람이 그
+	// 자리에서 실제로 켠 요청만 켠다.
+	SortOrderManual bool `json:"sortOrderManual"`
+
+	// SiblingOrder는 `형제 순서` 패널에서 옮긴 결과다. **목록 전체**의 slug를
+	// 화면 순서대로 담는다(siblings.go의 applyOrder 참고). 비어 있으면 패널을
+	// 안 쓴 것이라 위의 SortOrder/SortOrderManual만 쓴다.
+	SiblingOrder []string `json:"siblingOrder"`
 
 	// OriginalCreatedAt은 목록에 찍히는 날짜다. ""면 비운다.
 	// "2026-08-31" 또는 RFC3339를 받는다.
@@ -253,11 +266,11 @@ func (s *store) savePost(curSlug string, req saveReq, create bool, now time.Time
 		var res sql.Result
 		res, err = tx.Exec(`
 			INSERT INTO posts (slug, title, body, status, visibility, source, notion_page_id,
-			                   category_id, parent_id, sort_order,
+			                   category_id, parent_id, sort_order, sort_order_manual,
 			                   original_created_at, published_at, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, 'native', NULL, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES (?, ?, ?, ?, ?, 'native', NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			req.Slug, req.Title, req.Body, req.Status, req.Visibility,
-			req.CategoryID, parentID, req.SortOrder,
+			req.CategoryID, parentID, req.SortOrder, req.SortOrderManual,
 			origCreated, published, now, now)
 		if err != nil {
 			if isUniqueSlug(err) {
@@ -271,11 +284,11 @@ func (s *store) savePost(curSlug string, req saveReq, create bool, now time.Time
 	} else {
 		_, err = tx.Exec(`
 			UPDATE posts SET slug = ?, title = ?, body = ?, status = ?, visibility = ?,
-			                 category_id = ?, parent_id = ?, sort_order = ?,
+			                 category_id = ?, parent_id = ?, sort_order = ?, sort_order_manual = ?,
 			                 original_created_at = ?, published_at = ?, updated_at = ?
 			WHERE id = ?`,
 			req.Slug, req.Title, req.Body, req.Status, req.Visibility,
-			req.CategoryID, parentID, req.SortOrder,
+			req.CategoryID, parentID, req.SortOrder, req.SortOrderManual,
 			origCreated, published, now, id)
 		if err != nil {
 			if isUniqueSlug(err) {
@@ -291,6 +304,13 @@ func (s *store) savePost(curSlug string, req saveReq, create bool, now time.Time
 				return nil, err
 			}
 		}
+	}
+
+	// 순서는 맨 마지막이다. **패널을 썼으면 거기서 정한 차례가 숫자 칸을
+	// 이긴다** — 같은 것을 두 자리에서 정하는데 나중에 쓴 쪽이 사람이 실제로
+	// 보고 옮긴 쪽이다.
+	if err = applyOrder(tx, oldSlug, req.Slug, req.SiblingOrder, now); err != nil {
+		return nil, err
 	}
 
 	if err = tx.Commit(); err != nil {

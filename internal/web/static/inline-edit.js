@@ -211,6 +211,13 @@
         value: post.parentSlug || "", placeholder: "부모 글의 slug" });
       var orderIn = el("input", { class: "edit-meta-in", type: "number",
         value: String(post.sortOrder || 0) });
+      // **순서를 적는 것만으로는 화면이 안 바뀐다.** 공개 목록은 sort_order를
+      // 안 믿는다 — 이관이 채운 값이 분 단위 created_time 순위라 시리즈가
+      // 엇갈리기 때문이다(web.sortPosts). 사람이 정한 순서만 예외로 따르므로
+      // (migrations/005의 sort_order_manual) 그 표시를 여기서 켠다.
+      var manualIn = el("input", { class: "edit-meta-chk", type: "checkbox",
+        title: "켜면 목록이 제목 번호 대신 이 순서를 따른다. 순서를 정한 글은 맨 앞에 선다" });
+      manualIn.checked = !!post.sortOrderManual;
       var dateIn = el("input", { class: "edit-meta-in", type: "date",
         value: (post.createdAt || "").slice(0, 10) });
 
@@ -227,13 +234,101 @@
         loaded = true;
       });
 
-      var box = el("details", { class: "edit-meta" }, [
-        el("summary", { text: "분류 · 계층 · 날짜" }),
+      // ── 순서를 목록에서 옮긴다 ──────────────────────────────────
+      //
+      // 숫자를 손으로 적는 것보다 **보이는 목록에서 옮기는 쪽**이 맞다.
+      // 목록은 서버가 준다(GET .../siblings) — 화면에 서는 순서를 아는 것은
+      // 공개 쪽이고, 여기서 다시 세면 두 답이 언젠가 갈라진다.
+      //
+      // **못 정하는 자리가 있다**(draft, 표지 글, 갈래 카드만 있는 분류…).
+      // 그때는 서버가 이유를 글로 주고, 화면은 그 말을 적은 뒤 숫자 칸으로
+      // 돌아간다 — 아무 말 없이 안 되는 것이 제일 나쁘다.
+      var numberRow = el("label", {}, [el("span", { text: "형제 순서" }),
+        el("div", { class: "edit-order" }, [orderIn,
+          el("label", { class: "edit-order-manual" },
+            [manualIn, el("span", { text: "화면에 적용" })])])]);
+      var orderBox = el("div", { class: "edit-siblings" });
+      var order = null;   // 화면 순서대로의 slug 배열. 목록을 못 받으면 null
+
+      function drawOrder(items) {
+        orderBox.textContent = "";
+        var list = el("ol", { class: "edit-sibs" });
+        items.forEach(function (it, i) {
+          var row = el("li", { class: it.current ? "is-me" : "" },
+            [el("span", { class: "edit-sib-t", text: it.title })]);
+          if (it.current) {
+            // **disabled는 el()이 아니라 여기서 켠다.** 그 헬퍼는 값을
+            // 그대로 setAttribute하므로 null을 주면 "null"이 들어가 오히려
+            // 늘 비활성이 된다.
+            var up = el("button", { type: "button", class: "edit-sib-mv",
+              title: "위로", "aria-label": "위로",
+              onclick: function () { move(-1); } }, [svg("M4 10l4-4 4 4")]);
+            var dn = el("button", { type: "button", class: "edit-sib-mv",
+              title: "아래로", "aria-label": "아래로",
+              onclick: function () { move(1); } }, [svg("M4 6l4 4 4-4")]);
+            up.disabled = i === 0;
+            dn.disabled = i === items.length - 1;
+            row.appendChild(up);
+            row.appendChild(dn);
+          }
+          list.appendChild(row);
+        });
+        orderBox.appendChild(el("p", { class: "edit-sibs-cap",
+          text: "이 분류 화면에 서는 차례다. 저장하면 이대로 보인다." }));
+        orderBox.appendChild(list);
+        current = items;
+      }
+
+      var current = null;
+      var firstOrder = "";
+      function move(by) {
+        var i = current.findIndex(function (it) { return it.current; });
+        var j = i + by;
+        if (j < 0 || j >= current.length) return;
+        var moved = current.slice();
+        moved.splice(j, 0, moved.splice(i, 1)[0]);
+        order = moved.map(function (it) { return it.slug; });
+        drawOrder(moved);
+      }
+
+      // **한 번만 받는다.** 패널을 열었다 닫았다 할 때마다 부르면 옮겨둔 것이
+      // 되돌아간다.
+      var asked = false;
+      function askOrder() {
+        if (asked || !slug) return;
+        asked = true;
+        orderBox.textContent = "목록을 가져오는 중…";
+        api("GET", "/api/admin/posts/" + encodeURIComponent(slug) + "/siblings")
+          .then(function (r) {
+            if (!r.ok) { orderBox.textContent = "목록을 가져오지 못했다."; return; }
+            var d = r.data || {};
+            if (d.reason || !(d.items || []).length) {
+              orderBox.textContent = "";
+              orderBox.appendChild(el("p", { class: "edit-sibs-why",
+                text: d.reason || "이 글이 서는 목록을 찾지 못했다." }));
+              numberRow.hidden = false;
+              return;
+            }
+            order = d.items.map(function (it) { return it.slug; });
+            firstOrder = order.join("\n");
+            drawOrder(d.items);
+          });
+      }
+
+      // 목록이 있으면 숫자 칸은 안 보인다 — 같은 것을 두 자리에서 정하면
+      // 어느 쪽이 이기는지 화면만 보고는 알 수 없다.
+      numberRow.hidden = true;
+
+      var box = el("details", { class: "edit-meta", ontoggle: function () {
+        if (box.open) askOrder();
+      } }, [
+        el("summary", { text: "분류 · 계층 · 순서 · 날짜" }),
         el("div", { class: "edit-meta-grid" }, [
           el("label", {}, [el("span", { text: "분류" }), catSel]),
           el("label", {}, [el("span", { text: "부모 글" }), parentIn]),
-          el("label", {}, [el("span", { text: "형제 순서" }), orderIn]),
+          numberRow,
           el("label", {}, [el("span", { text: "작성일" }), dateIn]),
+          orderBox,
         ]),
       ]);
 
@@ -247,10 +342,15 @@
             categoryId: loaded ? (catSel.value ? Number(catSel.value) : null) : post.categoryId,
             parentSlug: parentIn.value.trim(),
             sortOrder: Number(orderIn.value) || 0,
+            sortOrderManual: manualIn.checked,
+            siblingOrder: order || [],
             originalCreatedAt: dateIn.value,
           };
         },
-        inputs: [catSel, parentIn, orderIn, dateIn],
+        // orderChanged는 사람이 목록에서 실제로 옮겼는지다. 받아온 그대로면
+        // 안 옮긴 것이라, 나가려는 사람을 붙잡지 않는다.
+        orderChanged: function () { return order !== null && order.join("\n") !== firstOrder; },
+        inputs: [catSel, parentIn, orderIn, manualIn, dateIn],
       };
     }
     var meta = metaPanel();
@@ -327,6 +427,8 @@
         visSel.value !== (post.visibility || "public") ||
         m.parentSlug !== (post.parentSlug || "") ||
         m.sortOrder !== (post.sortOrder || 0) ||
+        m.sortOrderManual !== !!post.sortOrderManual ||
+        meta.orderChanged() ||
         m.originalCreatedAt !== (post.createdAt || "").slice(0, 10) ||
         m.categoryId !== post.categoryId;
     }
@@ -399,7 +501,8 @@
         // **PUT은 통째로 바꾸기라 안 보낸 칸은 비워진다.** 그래서 메타도
         // 빠짐없이 싣는다 — 사람이 안 건드렸으면 읽어온 값 그대로다.
         categoryId: m.categoryId, parentSlug: m.parentSlug,
-        sortOrder: m.sortOrder, originalCreatedAt: m.originalCreatedAt,
+        sortOrder: m.sortOrder, sortOrderManual: m.sortOrderManual,
+        siblingOrder: m.siblingOrder, originalCreatedAt: m.originalCreatedAt,
       }).then(function (r) {
         if (!r.ok) {
           note.className = "edit-note edit-error";

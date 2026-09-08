@@ -34,6 +34,17 @@
     return node;
   }
 
+  // icon은 아이콘 하나를 만든다. 순서를 옮기는 화살표가 쓴다.
+  function icon(d) {
+    var n = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    n.setAttribute("viewBox", "0 0 16 16");
+    n.setAttribute("aria-hidden", "true");
+    var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    n.appendChild(p);
+    return n;
+  }
+
   function clear(node) {
     while (node.firstChild) node.removeChild(node.firstChild);
   }
@@ -348,6 +359,7 @@
   // 아직 저장할 자리가 없어서 여기 두지 않는다.
 
   function showSettings() {
+    var mine = drawTicket;
     clear(root);
     root.appendChild(el("div", { class: "ad-listhead" }, [el("h1", { text: "환경설정" })]));
 
@@ -385,6 +397,71 @@
       el("p", { class: "ad-dim", text: "이 브라우저에만 저장한다. 공개 화면과 같은 설정이다." }),
       el("div", { class: "ad-segs" }, buttons),
     ]));
+
+    // ── 홈 표제지 문구 ────────────────────────────────────────────
+    //
+    // **여기만 서버에 저장한다**(migrations/008). 문장 하나를 고치려고 코드를
+    // 배포하는 것은 "글은 웹 UI에서 직접 쓰고 고친다"와 어긋난다.
+    //
+    // **비우면 기본 문구로 돌아간다.** 그래서 자리표시자에 그 기본값을 회색으로
+    // 깔아 둔다 — 비웠을 때 무엇이 나오는지 보이지 않으면 지우기가 무섭다.
+    var homeCard = el("section", { class: "ad-card" }, [
+      el("h2", { text: "홈 문구" }),
+      el("p", { class: "ad-dim", text: "첫 화면 표제지다. 비우면 기본 문구로 돌아간다." }),
+      el("p", { class: "ad-dim", text: "불러오는 중…" }),
+    ]);
+    root.appendChild(homeCard);
+
+    api("GET", "/api/admin/settings").then(function (r) {
+      if (stale(mine)) return;
+      clear(homeCard);
+      if (!r.ok) {
+        homeCard.appendChild(el("h2", { text: "홈 문구" }));
+        homeCard.appendChild(el("p", { class: "ad-error", text: (r.data && r.data.error) || "설정을 읽지 못했다" }));
+        return;
+      }
+      var vals = r.data.values || {}, defs = r.data.defaults || {};
+      var fields = [
+        ["home.kicker", "눈썹줄", "input"],
+        ["home.title_top", "제목 첫 줄", "input"],
+        ["home.title_mark", "제목 둘째 줄 (형광 블록)", "input"],
+        ["home.lead", "리드 문장", "textarea"],
+      ];
+      var inputs = {};
+      var rows = fields.map(function (f) {
+        var node = el(f[2], {
+          class: f[2] === "textarea" ? "ad-body" : "ad-input",
+          placeholder: defs[f[0]] || "",
+        });
+        node.value = vals[f[0]] || "";
+        if (f[2] === "textarea") node.rows = 3;
+        inputs[f[0]] = node;
+        return el("label", { class: "ad-field wide" }, [el("span", { text: f[1] }), node]);
+      });
+      var note = el("span", { class: "ad-status" });
+      var save = el("button", { type: "button", class: "ad-btn primary", text: "문구 저장",
+        onclick: function () {
+          var values = {};
+          Object.keys(inputs).forEach(function (k) { values[k] = inputs[k].value; });
+          note.className = "ad-status";
+          note.textContent = "저장하는 중…";
+          api("PUT", "/api/admin/settings", { values: values }).then(function (r2) {
+            if (!r2.ok) {
+              note.className = "ad-status ad-error";
+              note.textContent = (r2.data && r2.data.error) || "저장하지 못했다";
+              return;
+            }
+            // **성공도 삼키지 않는다.** 눌렀는데 아무 표시가 없으면 저장이
+            // 됐는지 알 수 없다 — 실패를 숨기지 않는 것과 같은 규칙이다.
+            note.textContent = "저장했다. 홈에서 확인해 보라.";
+          });
+        } });
+
+      homeCard.appendChild(el("h2", { text: "홈 문구" }));
+      homeCard.appendChild(el("p", { class: "ad-dim", text: "첫 화면 표제지다. 비우면 기본 문구로 돌아간다." }));
+      homeCard.appendChild(el("div", { class: "ad-fields" }, rows));
+      homeCard.appendChild(el("div", { class: "ad-homesave" }, [save, note]));
+    });
 
     root.appendChild(el("section", { class: "ad-card" }, [
       el("h2", { text: "계정" }),
@@ -631,9 +708,88 @@
       class: "ad-input", type: "number", id: "ad-sort", min: "0",
       value: String(post.sortOrder || 0),
     });
+    // **순서를 적는 것만으로는 화면이 안 바뀐다.** 공개 목록은 sort_order를
+    // 안 믿는다 — 이관이 채운 값이 분 단위 created_time 순위라 시리즈가
+    // 엇갈리기 때문이다(web.sortPosts). 사람이 정한 순서만 예외로 따르므로
+    // (migrations/005의 sort_order_manual) 그 표시를 여기서 켠다.
+    var manualInput = el("input", {
+      class: "ad-check", type: "checkbox", id: "ad-sort-manual",
+      title: "켜면 목록이 제목 번호 대신 이 순서를 따른다. 순서를 정한 글은 맨 앞에 선다",
+    });
+    manualInput.checked = !!post.sortOrderManual;
     var dateInput = el("input", {
       class: "ad-input", type: "date", id: "ad-date", value: dateValue(post.createdAt),
     });
+
+    // ── 순서를 목록에서 옮긴다 ────────────────────────────────────
+    //
+    // 글 화면의 바로 고치기와 **같은 엔드포인트, 같은 규칙**이다
+    // (internal/web/static/inline-edit.js). 목록을 아는 것은 공개 쪽이고
+    // (web.SiblingOrder), 편집기가 제 눈으로 다시 세면 두 답이 갈라진다.
+    var numberField = el("label", { class: "ad-field" }, [el("span", { text: "형제 순서" }),
+      el("div", { class: "ad-order" }, [sortInput,
+        el("label", { class: "ad-order-manual" },
+          [manualInput, el("span", { text: "화면에 적용" })])])]);
+    var orderBox = el("div", { class: "ad-siblings" });
+    var order = null, firstOrder = "", siblings = null, askedOrder = false;
+    numberField.hidden = true;
+
+    function drawOrder(items) {
+      orderBox.textContent = "";
+      var list = el("ol", { class: "ad-sibs" });
+      items.forEach(function (it, i) {
+        var row = el("li", { class: it.current ? "is-me" : "" },
+          [el("span", { class: "ad-sib-t", text: it.title })]);
+        if (it.current) {
+          var up = el("button", { type: "button", class: "ad-sib-mv", title: "위로",
+            "aria-label": "위로", onclick: function () { moveOrder(-1); } }, [icon("M4 10l4-4 4 4")]);
+          var dn = el("button", { type: "button", class: "ad-sib-mv", title: "아래로",
+            "aria-label": "아래로", onclick: function () { moveOrder(1); } }, [icon("M4 6l4 4 4-4")]);
+          up.disabled = i === 0;
+          dn.disabled = i === items.length - 1;
+          row.appendChild(up);
+          row.appendChild(dn);
+        }
+        list.appendChild(row);
+      });
+      orderBox.appendChild(el("p", { class: "ad-sibs-cap",
+        text: "이 분류 화면에 서는 차례다. 저장하면 이대로 보인다." }));
+      orderBox.appendChild(list);
+      siblings = items;
+    }
+
+    function moveOrder(by) {
+      var i = -1;
+      siblings.forEach(function (it, k) { if (it.current) i = k; });
+      var j = i + by;
+      if (j < 0 || j >= siblings.length) return;
+      var moved = siblings.slice();
+      moved.splice(j, 0, moved.splice(i, 1)[0]);
+      order = moved.map(function (it) { return it.slug; });
+      drawOrder(moved);
+    }
+
+    // **한 번만 받는다.** 패널을 여닫을 때마다 부르면 옮겨둔 것이 되돌아간다.
+    function askOrder() {
+      if (askedOrder || !post.slug) return;
+      askedOrder = true;
+      orderBox.textContent = "목록을 가져오는 중…";
+      api("GET", "/api/admin/posts/" + encodeURIComponent(post.slug) + "/siblings")
+        .then(function (r) {
+          if (!r.ok) { orderBox.textContent = "목록을 가져오지 못했다."; return; }
+          var d = r.data || {};
+          if (d.reason || !(d.items || []).length) {
+            orderBox.textContent = "";
+            orderBox.appendChild(el("p", { class: "ad-sibs-why",
+              text: d.reason || "이 글이 서는 목록을 찾지 못했다." }));
+            numberField.hidden = false;
+            return;
+          }
+          order = d.items.map(function (it) { return it.slug; });
+          firstOrder = order.join("\n");
+          drawOrder(d.items);
+        });
+    }
 
     var bodyAreaRef = el("textarea", {
       class: "ad-body mono", id: "ad-body", spellcheck: "false",
@@ -683,13 +839,16 @@
           el("label", { class: "ad-field" }, [el("span", { text: "공개 범위" }), visSelect]),
           el("label", { class: "ad-field wide" }, [el("span", { text: "slug" }), slugInput]),
         ]),
-        el("details", { class: "ad-meta" }, [
-          el("summary", { text: "분류 · 계층 · 날짜" }),
+        el("details", { class: "ad-meta", ontoggle: function (e) {
+          if (e.target.open) askOrder();
+        } }, [
+          el("summary", { text: "분류 · 계층 · 순서 · 날짜" }),
           el("div", { class: "ad-fields" }, [
             el("label", { class: "ad-field wide" }, [el("span", { text: "분류" }), catSelect]),
             el("label", { class: "ad-field wide" }, [el("span", { text: "부모 글" }), parentInput]),
-            el("label", { class: "ad-field" }, [el("span", { text: "형제 순서" }), sortInput]),
+            numberField,
             el("label", { class: "ad-field" }, [el("span", { text: "작성일" }), dateInput]),
+            orderBox,
           ]),
           el("p", { class: "ad-note" }, [
             post.publishedAt
@@ -777,6 +936,8 @@
         categoryId: catSelect.value ? Number(catSelect.value) : null,
         parentSlug: parentInput.value.trim(),
         sortOrder: Number(sortInput.value) || 0,
+        sortOrderManual: manualInput.checked,
+        siblingOrder: order || [],
         originalCreatedAt: dateInput.value || "",
       };
       status.className = "ad-status";

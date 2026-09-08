@@ -970,6 +970,10 @@
     .edit-meta-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   }
   .edit-meta-grid label { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+  /* **`display`를 준 요소에는 `hidden`이 안 먹는다.** 기본 시트의
+     `[hidden] { display: none }`과 특정성이 같아 나중에 선언된 위 규칙이
+     이긴다 — 감췄다고 믿은 칸이 그대로 보인다(실제로 그랬다). */
+  .edit-meta-grid label[hidden] { display: none; }
   .edit-meta-grid span { font-size: .72rem; color: var(--ink-dim); }
   .edit-meta-in {
     font: inherit; font-size: .82rem; padding: .3rem;
@@ -977,6 +981,49 @@
     border: 1px solid var(--line); border-radius: 0;
     min-width: 0;
   }
+  /* 순서 숫자와 `화면에 적용`은 한 쌍이다. **숫자만으로는 화면이 안 바뀌므로**
+     (공개 목록이 sort_order를 안 믿는다 — web.sortPosts) 떼어 놓으면 안 듣는
+     칸으로 보인다. 한 줄에 붙여 둘이 같이 하는 일임을 보인다. */
+  .edit-order { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+  .edit-order .edit-meta-in { flex: 1; min-width: 0; }
+  .edit-meta-grid label.edit-order-manual {
+    flex: none; flex-direction: row; align-items: center; gap: .2rem;
+    white-space: nowrap; cursor: pointer;
+  }
+  .edit-meta-chk { flex: none; margin: 0; accent-color: var(--rail); }
+
+  /* ── 형제 순서 목록 ────────────────────────────────────────────
+     **분류 화면이 그리는 그 목록이다**(web.SiblingOrder). 숫자를 적는 대신
+     보이는 차례에서 옮긴다. 상자 모양은 인라인 데이터베이스를 펼친 것과
+     같은 계열이다 — 둘 다 "여기 이런 목록이 있다"를 말하는 자리다. */
+  .edit-siblings { grid-column: 1 / -1; min-width: 0; font-size: .8rem; }
+  .edit-sibs-cap, .edit-sibs-why {
+    margin: 0 0 .35rem; font-size: .72rem; color: var(--ink-dim);
+  }
+  .edit-sibs {
+    list-style: none; margin: 0; padding: 0;
+    border: 1px solid var(--line);
+  }
+  .edit-sibs li {
+    display: flex; align-items: center; gap: .3rem;
+    padding: .3rem .45rem; border-top: 1px solid var(--line);
+  }
+  .edit-sibs li:first-child { border-top: 0; }
+  .edit-sib-t {
+    flex: 1; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* 지금 고치는 글은 **반전 블록**이다. 사이드바의 현재 위치와 같은 신호라,
+     목록 어디쯤인지가 한눈에 보인다. */
+  .edit-sibs li.is-me { background: var(--rail); color: #121415; font-weight: 600; }
+  .edit-sib-mv {
+    flex: none; display: flex; align-items: center; justify-content: center;
+    width: 1.7rem; height: 1.7rem; padding: 0;
+    color: inherit; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 0; cursor: pointer;
+  }
+  .edit-sib-mv svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .edit-sib-mv[disabled] { opacity: .3; cursor: default; }
 
   /* ── 쓰기 / 미리보기 ──────────────────────────────────────────
      넓으면 나란히, 좁으면 **탭으로 가른다.** 375px에서 둘을 위아래로
@@ -1601,6 +1648,11 @@
     /* 편집기. 여기서 오래 머무르므로 특히 중요하다. */
     .edit-btn, .edit-tabs label { min-height: 44px; }
     .edit-title, .edit-status, .edit-meta-in { min-height: 44px; }
+    /* 체크박스 자체는 안 키운다 — 그러면 네모가 글자를 압도한다. 라벨까지가
+       누르는 자리라 그 라벨의 높이만 넓힌다. */
+    .edit-meta-grid label.edit-order-manual { min-height: 44px; }
+    .edit-sib-mv { width: 44px; height: 44px; }
+    .edit-sibs li { min-height: 44px; }
     .edit-meta > summary { min-height: 44px; display: flex; align-items: center; }
     /* 글자 링크라 padding으로 넓힌다 — 상자를 씌우면 버튼처럼 보인다. */
     .edit-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0 .4rem; }

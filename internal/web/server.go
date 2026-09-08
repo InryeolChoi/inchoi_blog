@@ -165,6 +165,8 @@ type Crumb struct {
 // pageData는 모든 템플릿이 공통으로 받는 것이다.
 type pageData struct {
 	Title string
+	// Home은 홈 표제지의 문구다. 홈에서만 채운다(settings.go).
+	Home HomeText
 	Trail []Crumb
 	// BasePath는 현재 카테고리의 경로다. 하위 링크를 이 뒤에 붙인다.
 	BasePath   string
@@ -441,10 +443,18 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// 표제지 문구는 DB가 정본이다(migrations/008). 저장된 값이 없으면
+	// 코드의 기본값이라, 아무도 안 고친 사이트도 문장이 있다.
+	home, err := st.homeText()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	s.render(w, r, "home.html", pageData{
 		Title:      "열렬히.뛰기",
 		Categories: categories,
 		Posts:      recent,
+		Home:       home,
 		HomeActive: true,
 	})
 }

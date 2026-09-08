@@ -3,10 +3,18 @@
      배경도 테두리도 없이 활자만으로 세운다. 분야로 가는 길은 모든 페이지에 있는
      사이드바가 이미 들고 있어서, 홈이 같은 트리를 한 벌 더 그릴 이유가 없다.
      이 페이지 전용 JavaScript도 CSS 애니메이션도 없다. */}}
+{{/* 문구는 DB가 정본이다(migrations/008, internal/web/settings.go). admin의
+     환경설정 화면에서 고친다 — 문장 하나를 고치려고 코드를 배포하는 것은
+     "글은 웹 UI에서 직접 쓰고 고친다"와 어긋난다.
+
+     **사람이 고쳤으면 눈썹줄에 `data-i18n`을 안 붙인다.** 그 속성이 있으면
+     preferences.js의 고정 사전이 언어를 바꿀 때 textContent를 통째로
+     갈아치워서, 방금 적은 문장이 조용히 사라진다. 기본 문구일 때만 사전을
+     쓴다. */}}
 <section class="home-hero" aria-labelledby="home-title">
-  <p class="home-eyebrow" data-i18n="homeKicker">기술 블로그 겸 학습 아카이브</p>
-  <h1 id="home-title">배운 것을 연결하고,<br><span>만든 것으로 남깁니다.</span></h1>
-  <p class="home-lead">개발, 컴퓨터과학, 데이터와 수학을 오가며 쌓은 기록입니다. 정답보다 이해의 과정과, 다시 찾아갈 길을 남깁니다.</p>
+  <p class="home-eyebrow"{{if not .Home.Custom}} data-i18n="homeKicker"{{end}}>{{.Home.Kicker}}</p>
+  <h1 id="home-title">{{.Home.TitleTop}}{{with .Home.TitleMark}}<br><span>{{.}}</span>{{end}}</h1>
+  <p class="home-lead">{{.Home.Lead}}</p>
 </section>
 
 {{/* 최근에 쓴 글.

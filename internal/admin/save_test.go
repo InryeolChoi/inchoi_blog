@@ -448,3 +448,159 @@ func TestVisibilityDefaultsToPublicAndRejectsJunk(t *testing.T) {
 		t.Fatalf("오타를 %d로 받았다. 400이어야 한다: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// 화면 순서를 사람이 정할 수 있는지 본다.
+//
+// **`sort_order`만으로는 화면이 안 바뀐다.** 공개 목록은 그 값을 안 믿는다 —
+// 이관이 채운 값이 분 단위 created_time 순위라 시리즈가 엇갈리기 때문이다
+// (web.sortPosts). 사람이 정한 순서만 예외로 따르고, 그 표시가
+// `sort_order_manual`이다(migrations/005). 편집기가 그 칸을 안 쓰면
+// 순서 칸이 저장은 되는데 화면은 그대로인, 안 듣는 칸이 된다.
+func TestSaveCarriesWhoDecidedTheOrder(t *testing.T) {
+	sqlDB := testDB(t)
+	s, err := New(sqlDB, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+
+	manual := func(slug string) (int, bool) {
+		t.Helper()
+		var order int
+		var flag bool
+		if err := sqlDB.QueryRow(
+			`SELECT sort_order, sort_order_manual FROM posts WHERE slug = ?`, slug).
+			Scan(&order, &flag); err != nil {
+			t.Fatal(err)
+		}
+		return order, flag
+	}
+
+	rec := save(t, h, http.MethodPost, "/api/admin/posts", saveReq{
+		Title: "순서를 정한 글", Body: "본문", Status: "draft",
+		SortOrder: 3, SortOrderManual: true,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	var made PostDetail
+	decode(t, rec, &made)
+	if order, flag := manual(made.Slug); order != 3 || !flag {
+		t.Errorf("sort_order=%d manual=%v다. 3/true여야 화면이 이 순서를 따른다", order, flag)
+	}
+	// 되받은 값도 같아야 한다. 다시 열었을 때 체크가 풀려 있으면 다음 저장이
+	// 조용히 꺼버린다.
+	if !made.SortOrderManual {
+		t.Error("응답이 sortOrderManual을 안 실었다. 편집기가 그 칸을 다시 못 그린다")
+	}
+	if got := getDetail(t, h, made.Slug); !got.SortOrderManual {
+		t.Error("다시 조회하니 sortOrderManual이 꺼져 있다")
+	}
+
+	// **끄는 쪽도 사람이 정한다.** 저장할 때마다 켜면 오타 하나 고친 글이
+	// 전부 목록 맨 앞으로 튀어나온다.
+	got := getDetail(t, h, made.Slug)
+	rec = save(t, h, http.MethodPut, "/api/admin/posts/"+made.Slug, saveReq{
+		Title: got.Title, Body: got.Body, Status: got.Status, Rev: got.Rev,
+		Slug: got.Slug, SortOrder: 3, SortOrderManual: false,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	if order, flag := manual(made.Slug); order != 3 || flag {
+		t.Errorf("sort_order=%d manual=%v다. 껐으면 꺼져야 한다", order, flag)
+	}
+}
+
+// 목록에서 옮긴 순서를 그대로 쓰는지 본다.
+//
+// **목록 전원에게 쓴다.** 한 편만 표시해서는 옮긴 대로 안 선다 — 화면은 사람이
+// 정한 글을 맨 앞에 세우고 나머지는 제목으로 다시 세우므로(web.sortPosts),
+// 목록이 통째로 사람 것이어야 적어둔 차례가 곧 화면의 차례가 된다.
+func TestSaveAppliesTheOrderYouDragged(t *testing.T) {
+	sqlDB := testDB(t)
+	s, err := New(sqlDB, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+
+	// 같은 분류에 한 편 더 둔다. 목록이 둘이어야 순서에 뜻이 생긴다.
+	if _, err := sqlDB.Exec(`INSERT INTO posts (id, slug, title, body, status, source,
+	        notion_page_id, category_id, sort_order, created_at, updated_at)
+	      VALUES (3, 'other-post', '다른 글', '본문', 'unlisted', 'notion',
+	              'aaaaaaaa-0000-0000-0000-000000000003', 1, 0, datetime('now'), datetime('now'))`); err != nil {
+		t.Fatal(err)
+	}
+
+	got := getDetail(t, h, "live-post")
+	rec := save(t, h, http.MethodPut, "/api/admin/posts/live-post", saveReq{
+		Title: got.Title, Body: got.Body, Status: got.Status, Rev: got.Rev, Slug: got.Slug,
+		SiblingOrder: []string{"other-post", "live-post"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+
+	order := func(slug string) (int, bool) {
+		t.Helper()
+		var n int
+		var flag bool
+		if err := sqlDB.QueryRow(
+			`SELECT sort_order, sort_order_manual FROM posts WHERE slug = ?`, slug).
+			Scan(&n, &flag); err != nil {
+			t.Fatal(err)
+		}
+		return n, flag
+	}
+	if n, flag := order("other-post"); n != 0 || !flag {
+		t.Errorf("other-post가 %d/%v다. 0/true여야 옮긴 대로 선다", n, flag)
+	}
+	if n, flag := order("live-post"); n != 1 || !flag {
+		t.Errorf("live-post가 %d/%v다. 1/true여야 옮긴 대로 선다", n, flag)
+	}
+}
+
+// **지금 고치는 글이 없는 목록은 거절한다.** 있으면 이 요청은 남의 목록을
+// 재배열하는 것이고, 그건 이 패널이 하는 일이 아니다.
+func TestSaveRefusesAnOrderThatIsNotMine(t *testing.T) {
+	h := testHandler(t)
+	got := getDetail(t, h, "live-post")
+	rec := save(t, h, http.MethodPut, "/api/admin/posts/live-post", saveReq{
+		Title: got.Title, Body: got.Body, Status: got.Status, Rev: got.Rev, Slug: got.Slug,
+		SiblingOrder: []string{"draft-post"},
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("상태 코드 %d다. 400이어야 한다: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// slug를 바꾸면서 순서도 옮기면, 패널이 들고 있던 이름은 **옛 slug**다.
+// 그걸 그대로 쓰면 방금 이름을 바꿨다는 이유로 저장 전체가 실패한다.
+func TestSaveKeepsTheOrderWhenTheSlugChanges(t *testing.T) {
+	sqlDB := testDB(t)
+	s, err := New(sqlDB, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+
+	got := getDetail(t, h, "live-post")
+	rec := save(t, h, http.MethodPut, "/api/admin/posts/live-post", saveReq{
+		Title: got.Title, Body: got.Body, Status: got.Status, Rev: got.Rev,
+		Slug: "renamed-post", SiblingOrder: []string{"live-post"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("상태 코드 %d: %s", rec.Code, rec.Body.String())
+	}
+	var n int
+	var flag bool
+	if err := sqlDB.QueryRow(
+		`SELECT sort_order, sort_order_manual FROM posts WHERE slug = 'renamed-post'`).
+		Scan(&n, &flag); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 || !flag {
+		t.Errorf("이름을 바꾼 글이 %d/%v다. 0/true여야 한다", n, flag)
+	}
+}

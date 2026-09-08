@@ -114,6 +114,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/posts", s.handleList)
 	mux.HandleFunc("GET /api/admin/posts/{slug}", s.handleGet)
 	mux.HandleFunc("GET /api/admin/categories", s.handleCategories)
+	// 사이트 문구. 지금은 홈 표제지뿐이다(settings.go).
+	mux.HandleFunc("GET /api/admin/settings", s.handleSettings)
+	mux.HandleFunc("PUT /api/admin/settings", s.handleSaveSettings)
 	// 데이터 보기. 이 아카이브가 지금 어떤 상태인지 한 화면에서 본다(stats.go).
 	mux.HandleFunc("GET /api/admin/stats", s.handleStats)
 	mux.HandleFunc("POST /api/admin/preview", s.handlePreview)
@@ -122,6 +125,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/images", s.handleUpload)
 	// 지우기 전에 무엇이 걸리는지 먼저 묻는 자리다. 무엇을 잃는지 모른 채
 	// 확인 창의 "예"를 누르게 하지 않는다.
+	// 이 글이 화면에서 어느 목록에 서는지. `형제 순서` 패널이 쓴다(siblings.go).
+	mux.HandleFunc("GET /api/admin/posts/{slug}/siblings", s.handleSiblings)
 	mux.HandleFunc("GET /api/admin/posts/{slug}/refs", s.handleRefs)
 	mux.HandleFunc("DELETE /api/admin/posts/{slug}", s.handleDelete)
 

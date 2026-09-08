@@ -64,6 +64,11 @@ type PostDetail struct {
 	ParentSlug  string `json:"parentSlug"`
 	ParentTitle string `json:"parentTitle"`
 	SortOrder   int    `json:"sortOrder"`
+	// SortOrderManual은 **이 순서를 사람이 정했는지**다(migrations/005).
+	// 거짓이면 공개 화면이 sort_order를 안 본다 — 이관이 채운 값은
+	// created_time 순위라 못 믿기 때문이다(web.sortPosts). 그래서 편집기에서
+	// 순서를 적는 것만으로는 화면이 안 바뀌고, 이 칸까지 켜야 바뀐다.
+	SortOrderManual bool `json:"sortOrderManual"`
 
 	PublishedAt *time.Time `json:"publishedAt"`
 }
@@ -156,7 +161,7 @@ func (s *store) postBySlug(slug string) (*PostDetail, error) {
 		       p.updated_at, p.original_created_at, p.body,
 		       cast(p.updated_at AS TEXT),
 		       p.source, p.notion_page_id,
-		       p.category_id, p.parent_id, p.sort_order, p.published_at,
+		       p.category_id, p.parent_id, p.sort_order, p.sort_order_manual, p.published_at,
 		       coalesce(pp.slug, ''), coalesce(pp.title, '')
 		FROM posts p
 		LEFT JOIN categories c ON c.id = p.category_id
@@ -165,7 +170,7 @@ func (s *store) postBySlug(slug string) (*PostDetail, error) {
 		Scan(&p.ID, &p.Slug, &p.Title, &p.Status, &p.Visibility,
 			&p.Category, &p.BodyBytes, &updated, &created, &p.Body,
 			&p.Rev, &p.Source, &notionID,
-			&categoryID, &parentID, &p.SortOrder, &published,
+			&categoryID, &parentID, &p.SortOrder, &p.SortOrderManual, &published,
 			&p.ParentSlug, &p.ParentTitle)
 	if err == sql.ErrNoRows {
 		return nil, nil
