@@ -8,8 +8,13 @@ import "html/template"
 // `import -db`가 다음 이관에서 덮어써서 사라진다 — 갈래 카드(deck.go)를 코드에
 // 두는 이유와 같다.
 //
-// 지금은 `소개` 하나다. 자기소개를 읽은 사람이 다음으로 갈 곳은 이 아카이브의
-// 다른 분류가 아니라 개인 페이지라서, 본문 바로 아래에 그 길을 둔다.
+// **지금은 하나도 없다**(2026-09-08). `소개` 밑에 개인 페이지
+// (inryeolchoi.github.io) 카드를 두고 있었는데, 사람이 그 자리를 없애기로
+// 했다 — 사이드바 바닥의 Pages 링크가 이미 같은 곳으로 가고, 소개 본문
+// 바로 아래에 또 두면 같은 길이 두 벌이다.
+//
+// **표는 남긴다.** 카드를 다시 세울 자리는 여기이고, 없앤 이유가 "이 장치가
+// 틀렸다"가 아니라 "지금 걸어둘 링크가 없다"이기 때문이다.
 
 // SiteLink는 카테고리 화면에 그릴 바깥 링크 한 줄이다.
 // 본문 안의 외부 링크 카드(markdown/extlink.go)와 같은 모양을 쓴다.
@@ -31,15 +36,7 @@ var globeIcon = template.HTML(`<svg viewBox="0 0 16 16" aria-hidden="true">` +
 	`</svg>`)
 
 // categoryLinks는 카테고리 slug → 그 화면에 붙일 바깥 링크다.
-var categoryLinks = map[string][]SiteLink{
-	"intro": {{
-		Title: "최인렬의 개인 페이지",
-		Host:  "inryeolchoi.github.io",
-		URL:   "https://inryeolchoi.github.io",
-		I18n:  "personalSite",
-		Icon:  globeIcon,
-	}},
-}
+var categoryLinks = map[string][]SiteLink{}
 
 // linksFor는 그 분류에 붙일 바깥 링크를 돌려준다. 없으면 nil이라 템플릿이
 // 아무것도 그리지 않는다.
