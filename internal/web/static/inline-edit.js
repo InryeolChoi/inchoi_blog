@@ -402,10 +402,32 @@
       });
     }
 
+    // **커서가 수식 안에 들어가면 그 자리 위에 그린 수식이 뜬다**
+    // (static/math-live.js). 서버에 안 물으므로 치는 즉시 바뀐다 —
+    // 오른쪽 미리보기까지 눈을 옮기지 않아도 되는 유일한 자리다.
+    if (window.blogMathLive) window.blogMathLive.attach(area);
+
+    // 미리보기는 입력이 멈춘 뒤에 한 번만 보낸다. 키를 칠 때마다 보내면 긴
+    // 글에서 요청이 밀린다. **120ms다** — 사람이 한 글자를 더 치는 데 걸리는
+    // 시간보다 짧아서 "쓰자마자 보인다"에 가깝고, 그보다 줄이면 왕복이
+    // 겹치기 시작한다.
     var timer = null;
     area.addEventListener("input", function () {
       clearTimeout(timer);
-      timer = setTimeout(render, 250);
+      timer = setTimeout(render, 120);
+    });
+    // **미리보기가 같은 자리를 보게 따라 스크롤한다.** 긴 글에서 아래를 고치는데
+    // 오른쪽이 맨 위에 있으면 방금 친 것을 눈으로 못 찾는다. 두 칸의 높이가
+    // 달라서 줄을 정확히 맞출 수는 없으므로 **비율로 맞춘다** — 없는 정확도를
+    // 지어내지 않는다.
+    var syncing = false;
+    area.addEventListener("scroll", function () {
+      if (syncing) return;
+      var max = area.scrollHeight - area.clientHeight;
+      if (max <= 0) return;
+      syncing = true;
+      preview.scrollTop = (area.scrollTop / max) * (preview.scrollHeight - preview.clientHeight);
+      requestAnimationFrame(function () { syncing = false; });
     });
     render();
 
@@ -459,6 +481,7 @@
     document.addEventListener("keydown", keys);
 
     function unbind() {
+      if (window.blogMathLive) window.blogMathLive.hide();
       window.removeEventListener("beforeunload", guard);
       document.removeEventListener("keydown", keys);
       document.body.classList.remove("editing");

@@ -26,13 +26,19 @@
 
      CDN에 무결성 해시를 걸어둔다. 파일이 바뀌면 브라우저가 실행을 거부한다.
      버전을 올릴 때 해시도 같이 바꿔야 한다 — 안 그러면 조용히 안 뜬다. */}}
-{{if .Assets.Math}}
+{{if or .Assets.Math .CanEdit}}
 {{/* 수식은 브라우저에서 그린다. 변환기와 goldmark 확장은 원문 LaTeX를
-     .math 안에 넣어두기만 한다(internal/markdown/math.go). */}}
+     .math 안에 넣어두기만 한다(internal/markdown/math.go).
+
+     **고칠 수 있는 화면에서는 수식이 없어도 받는다.** 편집기는 작업 도구라
+     무엇을 칠지 미리 알 수 없다 — admin이 늘 받는 것과 같은 판단이고,
+     이게 없으면 수식 하나 없던 글에 수식을 쓸 때 미리보기도 커서 위의
+     수식 상자도 아무것도 안 그린다. **읽는 사람에게는 안 나간다**
+     (CanEdit은 로그인이 확인된 요청에서만 참이다). */}}
 {{template "katex-cdn" .}}
 <script defer src="/static/math.js"></script>
 {{end}}
-{{if .Assets.Code}}
+{{if or .Assets.Code .CanEdit}}
 {{/* 코드 하이라이팅. 본문의 <pre><code class="language-xxx">를 색칠한다.
      common 묶음이 40여 개 언어를 담고 있어 python·c·r·bash·java 등 큰 것들을
      덮는다. 거기 없는 것만 그 언어가 실제로 나올 때 따로 받는다. */}}
@@ -72,6 +78,9 @@
      안 준 서버(.Editor가 늘 빈 값)에서는 이 두 줄이 아예 안 실린다.
      팔레트를 함께 싣는 이유는 admin 편집기와 같은 조각 목록을 쓰기 위해서다. */}}
 <script defer src="/static/palette.js"></script>
+{{/* 커서가 수식 안에 들어가면 그 자리 위에 그린 수식을 띄운다. palette.js의
+     캐럿 좌표를 쓰므로 그 뒤에 온다. */}}
+<script defer src="/static/math-live.js"></script>
 <script defer src="/static/inline-edit.js"></script>
 {{end}}
 {{if .Assets.Anim}}
@@ -898,7 +907,7 @@
     display: flex; flex-direction: column; gap: 1px;
     padding: 1px;
     background: var(--ink); border: 2px solid var(--ink);
-    box-shadow: var(--hard-shadow);
+    box-shadow: 4px 4px 0 var(--hard-shadow);
     animation: curtain .16s ease-out;
     transform-origin: top center;
   }
@@ -991,6 +1000,27 @@
     white-space: nowrap; cursor: pointer;
   }
   .edit-meta-chk { flex: none; margin: 0; accent-color: var(--rail); }
+
+  /* ── 커서 위의 수식 상자 ───────────────────────────────────────
+     **수식만 따로 띄우는 이유**는 글자로 봐서는 맞게 썼는지 알 수 없어서다.
+     오른쪽 미리보기까지 눈을 옮겨 찾는 사이에 어디를 고치고 있었는지 놓친다.
+     떠 있는 것이라 본문 위에 겹치므로, 판 어긋남 그림자로 지면과 떼어 둔다. */
+  .math-live {
+    position: fixed; z-index: 40; max-width: min(90vw, 30rem);
+    padding: .5rem .7rem;
+    color: var(--ink); background: var(--bg);
+    border: 1px solid var(--ink); border-radius: 0;
+    box-shadow: 4px 4px 0 var(--hard-shadow);
+    font-size: 1rem; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .math-live[hidden] { display: none; }
+  /* 안 되는 동안에는 안 된다고 적는다. 조용히 옛 그림을 남겨두면 다 고친 줄
+     알고 넘어간다 — 되는 순간 그림으로 바뀌는 것이 곧 "이제 맞다"는 신호다. */
+  .math-live.is-bad {
+    color: var(--warn); border-color: var(--warn);
+    font: .78rem/1.5 var(--mono); white-space: pre-wrap;
+  }
 
   /* ── 형제 순서 목록 ────────────────────────────────────────────
      **분류 화면이 그리는 그 목록이다**(web.SiblingOrder). 숫자를 적는 대신

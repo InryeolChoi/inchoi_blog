@@ -876,12 +876,30 @@
 
     // 미리보기. 입력이 멈춘 뒤에 한 번만 보낸다 — 키를 칠 때마다 보내면
     // 긴 글에서 요청이 밀린다.
+    // **120ms다.** 사람이 한 글자를 더 치는 데 걸리는 시간보다 짧아서
+    // "쓰자마자 보인다"에 가깝고, 그보다 줄이면 왕복이 겹치기 시작한다.
     var timer = null;
     function schedulePreview() {
       clearTimeout(timer);
-      timer = setTimeout(renderPreview, 250);
+      timer = setTimeout(renderPreview, 120);
     }
     bodyAreaRef.addEventListener("input", schedulePreview);
+
+    // 커서가 수식 안에 들어가면 그 자리 위에 그린 수식이 뜬다
+    // (internal/web/static/math-live.js). 글 화면의 바로 고치기와 같은 파일이다.
+    if (window.blogMathLive) window.blogMathLive.attach(bodyAreaRef);
+
+    // 미리보기가 같은 자리를 보게 따라 스크롤한다. 두 칸의 높이가 달라 줄을
+    // 정확히 맞출 수는 없으므로 비율로 맞춘다.
+    var syncing = false;
+    bodyAreaRef.addEventListener("scroll", function () {
+      if (syncing) return;
+      var max = bodyAreaRef.scrollHeight - bodyAreaRef.clientHeight;
+      if (max <= 0) return;
+      syncing = true;
+      preview.scrollTop = (bodyAreaRef.scrollTop / max) * (preview.scrollHeight - preview.clientHeight);
+      requestAnimationFrame(function () { syncing = false; });
+    });
 
     // `/`를 치면 조각 팔레트가 뜬다. **서버에 묻지 않으므로 지연이 없다.**
     // "이미지 올리기"만은 조각이 아니라 파일 고르는 창을 여는 항목이라,

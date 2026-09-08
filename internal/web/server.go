@@ -167,6 +167,14 @@ type pageData struct {
 	Title string
 	// Home은 홈 표제지의 문구다. 홈에서만 채운다(settings.go).
 	Home HomeText
+	// CanEdit은 **이 화면에서 실제로 편집기가 열리는지**다. 로그인이 확인됐고
+	// (Editor) 고칠 대상이 있을 때(EditSlug) 참이다.
+	//
+	// 두 칸을 따로 두는 이유: Editor는 "누가 들어와 있나", EditSlug는 "무엇을
+	// 고칠 수 있나"라 질문이 다르다. 자산을 실을지는 그 둘이 함께여야 정해진다 —
+	// 갈래 카드만 있는 분류처럼 고칠 본문이 없는 화면에 편집기용 CDN을 실을
+	// 이유가 없다.
+	CanEdit bool
 	Trail []Crumb
 	// BasePath는 현재 카테고리의 경로다. 하위 링크를 이 뒤에 붙인다.
 	BasePath   string
@@ -317,6 +325,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		data.Editor = s.editorFor(r)
 	}
 	data.NewPostURL = newPostURL(data.Editor, data.newPostCat)
+	// 편집기가 실제로 열리는 화면에서만 그 도구를 싣는다. 읽는 사람에게는
+	// 예전과 한 바이트도 다르지 않다.
+	data.CanEdit = data.Editor != "" && data.EditSlug != ""
+
 	data.LoginURL = "/admin/login?next=" + url.QueryEscape(r.URL.RequestURI())
 	data.Nav = nav
 	// 최상위 분류의 글 수 합이 곧 전체다. 카테고리 없는 글은 현재 0건이라

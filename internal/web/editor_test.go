@@ -218,3 +218,33 @@ func TestNewPostURLNeedsBothLoginAndCategory(t *testing.T) {
 		}
 	}
 }
+
+// 고칠 수 있는 화면에서는 **수식이 없어도** KaTeX를 받는다.
+//
+// 편집기는 작업 도구라 무엇을 칠지 미리 알 수 없다 — admin이 늘 받는 것과 같은
+// 판단이다. 이게 없으면 수식 하나 없던 글에 수식을 쓸 때 미리보기도, 커서 위의
+// 수식 상자도 아무것도 안 그린다.
+//
+// **읽는 사람에게는 안 나간다.** 그게 이 테스트의 나머지 절반이다 — 자산을
+// 페이지별로 가른 이유가 통째로 무의미해지면 안 된다.
+func TestEditableScreensLoadTheMathTools(t *testing.T) {
+	sqlDB := seedTestDB(t)
+	editor := handlerFor(t, sqlDB, WithEditor(func(*http.Request) string { return "InryeolChoi" }))
+	reader := handlerFor(t, sqlDB)
+
+	// 본문에 수식이 없는 글이다.
+	const path = "/p/category-post"
+	page := get(t, editor, path).Body.String()
+	if !strings.Contains(page, "npm/katex@") {
+		t.Errorf("고칠 수 있는 화면인데 KaTeX가 안 실렸다:\n%s", page)
+	}
+	if !strings.Contains(page, `src="/static/math-live.js"`) {
+		t.Errorf("커서 위 수식 상자 스크립트가 안 실렸다:\n%s", page)
+	}
+	if got := get(t, reader, path).Body.String(); strings.Contains(got, "npm/katex@") {
+		t.Errorf("읽는 사람에게도 KaTeX가 나갔다. 페이지별로 가른 것이 무의미해진다")
+	}
+	if got := get(t, reader, path).Body.String(); strings.Contains(got, "math-live.js") {
+		t.Errorf("읽는 사람에게 편집 도구가 나갔다")
+	}
+}

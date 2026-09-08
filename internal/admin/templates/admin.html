@@ -56,6 +56,9 @@
      **internal/web/static에 둔다.** admin 편집기와 공개 글 화면의 바로
      고치기가 같은 팔레트를 쓴다 — 두 벌로 두면 반드시 갈라진다. */}}
 <script defer src="/static/palette.js"></script>
+{{/* 커서가 수식 안에 들어가면 그 자리 위에 그린 수식을 띄운다. palette.js의
+     캐럿 좌표를 쓰므로 그 뒤에 온다. 글 화면의 바로 고치기와 같은 파일이다. */}}
+<script defer src="/static/math-live.js"></script>
 <script defer src="/admin/static/admin.js"></script>
 </head>
 <body class="admin">

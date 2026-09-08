@@ -232,5 +232,8 @@
     return { close: close };
   }
 
-  window.blogPalette = { attach: attach, items: ITEMS };
+  // **caretXY를 함께 내보낸다.** 커서 자리에 무언가를 띄우는 일이 둘이 됐고
+  // (팔레트, 수식 상자) 거울 div를 두 벌 두면 글꼴이나 여백을 고칠 때 한쪽만
+  // 고쳐진다.
+  window.blogPalette = { attach: attach, items: ITEMS, caretXY: caretXY };
 })();
