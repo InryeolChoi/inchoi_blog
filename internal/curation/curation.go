@@ -399,14 +399,18 @@ var linearAlgebraMetadataEdits = []PostMetadataEdit{
 //
 // 다섯 편 모두 노션 `created_time`이 분 단위로 겹쳐서(`sortorder`가 못 가르는
 // 자리) 이름 자연 정렬로 세워졌었다 — 라그랑주 → 선형계획법 → 심플렉스
-// 알고리즘 → 심플렉스와 n분위수 → 쌍대정리: 선형. 사람이 `선형계획법`을
-// 맨 앞으로 올리기로 정했다. 나머지 넷의 상대 순서는 그대로 둔다.
+// 알고리즘 → 심플렉스와 n분위수 → 쌍대정리: 선형.
+//
+// **2026-09-08에 배우는 차례로 다시 세웠다.** 선형계획법(문제) → 심플렉스
+// 알고리즘(푸는 법) → 쌍대정리(그 이론) → 심플렉스와 n분위수(응용) →
+// 라그랑주 승수법(제약이 등식인 다른 갈래)이다. 그전에는 `선형계획법`만
+// 맨 앞으로 올리고 나머지 넷은 가나다순 그대로였다.
 var optimizationPracticeOrderEdits = []PostMetadataEdit{
 	{NotionPageID: "ad882859-b0f2-41d9-9552-c7c14cf0b559", OriginalTitle: "선형계획법", Title: "선형계획법", SortOrder: 0},
-	{NotionPageID: "404c96b3-e53c-4edb-88ee-8ef0f717ce79", OriginalTitle: "라그랑주 승수법", Title: "라그랑주 승수법", SortOrder: 1},
-	{NotionPageID: "ff7a1343-68d1-4465-9df0-ea48a0a2565b", OriginalTitle: "심플렉스 알고리즘", Title: "심플렉스 알고리즘", SortOrder: 2},
-	{NotionPageID: "e96b9abf-d1de-4790-8656-7ba4a57c4d89", OriginalTitle: "쌍대정리: 선형", Title: "쌍대정리: 선형", SortOrder: 3},
-	{NotionPageID: "eedb3add-e5e1-4b8a-a1d3-41bc80e00162", OriginalTitle: "심플렉스와 n분위수", Title: "심플렉스와 n분위수", SortOrder: 4},
+	{NotionPageID: "ff7a1343-68d1-4465-9df0-ea48a0a2565b", OriginalTitle: "심플렉스 알고리즘", Title: "심플렉스 알고리즘", SortOrder: 1},
+	{NotionPageID: "e96b9abf-d1de-4790-8656-7ba4a57c4d89", OriginalTitle: "쌍대정리: 선형", Title: "쌍대정리: 선형", SortOrder: 2},
+	{NotionPageID: "eedb3add-e5e1-4b8a-a1d3-41bc80e00162", OriginalTitle: "심플렉스와 n분위수", Title: "심플렉스와 n분위수", SortOrder: 3},
+	{NotionPageID: "404c96b3-e53c-4edb-88ee-8ef0f717ce79", OriginalTitle: "라그랑주 승수법", Title: "라그랑주 승수법", SortOrder: 4},
 }
 
 // graphAlgorithmOrderEdits는 `알고리즘 : 그래프 (심화)` 일곱 편의 **화면

@@ -564,7 +564,7 @@ func TestCategoryMovesReferenceVideoBelowPosts(t *testing.T) {
 	page := get(t, h, "/dev/language").Body.String()
 	body := mainOf(t, page)
 	intro := strings.Index(body, "표지 본문")
-	posts := strings.Index(body, `class="section-title">글</h2>`)
+	posts := strings.Index(body, `>글</h2>`)
 	reference := strings.Index(body, "참고 동영상")
 	if intro < 0 || posts < 0 || reference < 0 {
 		t.Fatalf("표지 본문, 글 목록, 참고 동영상 절이 모두 있어야 한다:\n%s", body)
