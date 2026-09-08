@@ -170,8 +170,6 @@
     // 뒤집는다 — 나중에 감출 것이 늘어도 이 파일은 안 고친다.
     document.body.classList.add("editing");
 
-    var area = el("textarea", { class: "edit-body mono", spellcheck: "false" });
-    area.value = post.body || "";
     var note = el("span", { class: "edit-note" });
     var titleInput = el("input", { class: "edit-title", type: "text", value: post.title || "" });
 
@@ -365,27 +363,139 @@
         title: "\u2318S / Ctrl+S", onclick: save }),
     ]);
 
-    var preview = el("div", { class: "edit-preview" });
-
-    // 좁은 화면에서는 쓰기와 미리보기를 **탭으로 가른다.** 375px에서 둘을
-    // 위아래로 쌓으면 한 화면에 조금씩만 보여 어느 쪽도 못 읽는다.
+    // ── 블록 문서 ────────────────────────────────────────────────
     //
-    // **고르는 일은 라디오와 CSS가 한다**(`:has()`). 여기서 하는 것은 마크업을
-    // 놓는 것뿐이라 JS가 상태를 따로 들지 않는다 — 사이드바 아코디언을
-    // 서버가 펼쳐 보내는 것과 같은 결이다.
-    var tabs = el("div", { class: "edit-tabs" }, [
-      el("input", { type: "radio", name: "edit-pane", id: "pane-write", checked: "checked" }),
-      el("label", { for: "pane-write", text: "쓰기" }),
-      el("input", { type: "radio", name: "edit-pane", id: "pane-preview" }),
-      el("label", { for: "pane-preview", text: "미리보기" }),
-    ]);
+    // **평소에는 완성된 화면만 보인다.** 문단을 누르면 그 문단만 원문이 되고,
+    // 벗어나면 곧바로 다시 그려진다. 노션이 실제로 하는 것이 이 방식이고,
+    // 두 칸으로 나뉘어 눈이 오가던 것을 없앤다.
+    //
+    // **그리는 것은 서버다**(POST /api/admin/blocks). 브라우저에서 흉내 내면
+    // 편집기에서 본 것과 발행 뒤 화면이 갈리는데, 그건 이 방식을 고른 이유
+    // 자체를 없앤다.
+    var doc = el("div", { class: "edit-doc" });
+    var blocks = [];     // [{src, html}] — 화면 순서 그대로
+    var openAt = -1;     // 지금 원문으로 열어둔 블록. 없으면 -1
+    var busy = false;    // 서버가 다시 그리는 중
+
+    // bodyText는 저장할 본문이다. 블록을 빈 줄로 이어 붙인다.
+    //
+    // **끝에 줄바꿈 하나를 둔다.** 이관이 넣은 본문이 전부 그렇게 끝나므로,
+    // 안 두면 글을 열었다 저장하기만 해도 마지막 줄이 달라진다 — 화면은
+    // 그대로지만 "안 고쳤는데 바뀐 글"이 생긴다.
+    function bodyText() {
+      return blocks.map(function (b) { return b.src; }).join("\n\n") + "\n";
+    }
+
+    // paint는 문서를 다시 그린다. **여는 블록 하나만 textarea다.**
+    function paint(focusAt, caret) {
+      doc.textContent = "";
+      blocks.forEach(function (b, i) {
+        if (i === openAt) {
+          doc.appendChild(openBlock(b, i, caret));
+          return;
+        }
+        var node = el("div", { class: "eblk" });
+        node.innerHTML = b.html;
+        node.addEventListener("mousedown", function (e) {
+          // 편집 중에는 링크를 따라가지 않는다. 지금 하려는 일은 읽기가
+          // 아니라 고치기다 — 링크로 가려면 저장하거나 취소하면 된다.
+          e.preventDefault();
+          edit(i);
+        });
+        doc.appendChild(node);
+      });
+      // 맨 아래의 빈 자리. **여기를 눌러 문단을 더한다** — 빈 문서에서도
+      // 쓸 자리가 있어야 하고, 글 끝에 무언가를 덧붙이는 것이 가장 흔한 일이다.
+      var tail = el("div", { class: "eblk-add", text: "+ 여기에 이어 쓰기" });
+      tail.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        blocks.push({ src: "", html: "" });
+        edit(blocks.length - 1);
+      });
+      doc.appendChild(tail);
+      // 다시 그린 자리에 수식·색칠·복사 버튼을 붙인다. **공개 화면이 쓰는
+      // 것과 같은 함수들이다** — 여기서 다르게 그리면 미리보기가 아니게 된다.
+      if (window.blogRenderMath) window.blogRenderMath();
+      if (window.blogHighlight) window.blogHighlight();
+      if (window.blogCopyButtons) window.blogCopyButtons();
+      if (window.blogRenderMermaid) window.blogRenderMermaid();
+      if (window.blogMountAnims) window.blogMountAnims();
+      if (focusAt) focusAt();
+    }
+
+    function openBlock(b, i, caret) {
+      var box = el("textarea", { class: "eblk-src mono", spellcheck: "false" });
+      box.value = b.src;
+      var wrap = el("div", { class: "eblk on" }, [box]);
+      function grow() {
+        box.style.height = "auto";
+        box.style.height = box.scrollHeight + "px";
+      }
+      box.addEventListener("input", function () {
+        blocks[i].src = box.value;
+        grow();
+      });
+      // Escape는 닫는다. 마우스를 안 쓰고도 빠져나올 길이 있어야 한다.
+      box.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          box.blur();
+        }
+      });
+      box.addEventListener("blur", function () { closeBlock(i, box.value); });
+      if (window.blogPalette) {
+        window.blogPalette.attach(box, null, function () {
+          note.textContent = "이미지는 /admin 편집기에서 올린다";
+        });
+      }
+      // 커서가 수식 안에 들어가면 그 자리 위에 그린 수식이 뜬다
+      // (static/math-live.js). 이 방식에서 특히 값이 크다 — 옆에 미리보기가
+      // 없으니 수식만은 다른 길로 보여줘야 한다.
+      if (window.blogMathLive) window.blogMathLive.attach(box);
+      setTimeout(function () {
+        grow();
+        box.focus();
+        var at = caret === undefined ? box.value.length : caret;
+        box.setSelectionRange(at, at);
+      }, 0);
+      return wrap;
+    }
+
+    function edit(i) {
+      openAt = i;
+      paint();
+    }
+
+    // closeBlock은 고친 문단을 다시 그린다.
+    //
+    // **하나가 여럿으로 갈릴 수 있다.** 사람이 빈 줄을 넣으면 거기서 문단이
+    // 나뉘는 것이 마크다운의 규칙이라, 서버가 돌려준 개수를 그대로 받는다.
+    // 비면 그 문단을 지운다 — 내용을 다 지웠으면 없애는 것이 맞다.
+    function closeBlock(i, src) {
+      if (openAt !== i) return;
+      openAt = -1;
+      if (busy) return;
+      busy = true;
+      api("POST", "/api/admin/blocks", { markdown: src }).then(function (r) {
+        busy = false;
+        if (!r.ok) {
+          // 못 그렸으면 원문을 그대로 둔다. 반쯤 그린 것을 남기지 않는다.
+          note.className = "edit-note edit-error";
+          note.textContent = r.data.error || "그리지 못했다";
+          blocks[i] = { src: src, html: "<pre>" + src.replace(/[&<>]/g, "?") + "</pre>" };
+          paint();
+          return;
+        }
+        var got = r.data.blocks || [];
+        blocks.splice.apply(blocks, [i, 1].concat(got));
+        paint();
+      });
+    }
 
     article.textContent = "";
     article.appendChild(bar);
     article.appendChild(meta.box);
-    article.appendChild(el("div", { class: "edit-panes" }, [
-      tabs, el("div", { class: "edit-split" }, [area, preview]),
-    ]));
+    article.appendChild(doc);
 
     // 노션에서 온 글은 여기서 고쳐도 다음 재이관이 되돌린다. 저장이 되는데
     // 사라지는 것이 가장 나쁜 결과라 미리 말한다.
@@ -396,40 +506,18 @@
           : "노션에서 온 글이다. 본문은 다음 import -db가 변환 결과로 덮는다." }), bar);
     }
 
-    if (window.blogPalette) {
-      window.blogPalette.attach(area, null, function () {
-        note.textContent = "이미지는 /admin 편집기에서 올린다";
-      });
-    }
-
-    // **커서가 수식 안에 들어가면 그 자리 위에 그린 수식이 뜬다**
-    // (static/math-live.js). 서버에 안 물으므로 치는 즉시 바뀐다 —
-    // 오른쪽 미리보기까지 눈을 옮기지 않아도 되는 유일한 자리다.
-    if (window.blogMathLive) window.blogMathLive.attach(area);
-
-    // 미리보기는 입력이 멈춘 뒤에 한 번만 보낸다. 키를 칠 때마다 보내면 긴
-    // 글에서 요청이 밀린다. **120ms다** — 사람이 한 글자를 더 치는 데 걸리는
-    // 시간보다 짧아서 "쓰자마자 보인다"에 가깝고, 그보다 줄이면 왕복이
-    // 겹치기 시작한다.
-    var timer = null;
-    area.addEventListener("input", function () {
-      clearTimeout(timer);
-      timer = setTimeout(render, 120);
+    // 문서를 처음 한 번 받아 그린다. 서버가 자르고 서버가 그린다.
+    doc.appendChild(el("p", { class: "edit-note", text: "문단을 나누는 중…" }));
+    api("POST", "/api/admin/blocks", { markdown: post.body || "" }).then(function (r) {
+      if (!r.ok) {
+        doc.textContent = "";
+        doc.appendChild(el("p", { class: "edit-error",
+          text: r.data.error || "문단을 나누지 못했다" }));
+        return;
+      }
+      blocks = r.data.blocks || [];
+      paint();
     });
-    // **미리보기가 같은 자리를 보게 따라 스크롤한다.** 긴 글에서 아래를 고치는데
-    // 오른쪽이 맨 위에 있으면 방금 친 것을 눈으로 못 찾는다. 두 칸의 높이가
-    // 달라서 줄을 정확히 맞출 수는 없으므로 **비율로 맞춘다** — 없는 정확도를
-    // 지어내지 않는다.
-    var syncing = false;
-    area.addEventListener("scroll", function () {
-      if (syncing) return;
-      var max = area.scrollHeight - area.clientHeight;
-      if (max <= 0) return;
-      syncing = true;
-      preview.scrollTop = (area.scrollTop / max) * (preview.scrollHeight - preview.clientHeight);
-      requestAnimationFrame(function () { syncing = false; });
-    });
-    render();
 
     // ── 잃지 않게 하는 것들 ───────────────────────────────────────
     //
@@ -443,7 +531,7 @@
     // **고친 것이 없으면 안 묻는다.** 늘 물으면 그 물음이 곧 무시된다.
     function dirty() {
       var m = meta.read();
-      return area.value !== (post.body || "") ||
+      return bodyText() !== (post.body || "") ||
         titleInput.value.trim() !== (post.title || "") ||
         statusSel.value !== post.status ||
         visSel.value !== (post.visibility || "public") ||
@@ -487,24 +575,6 @@
       document.body.classList.remove("editing");
     }
 
-    function render() {
-      api("POST", "/api/admin/preview", { markdown: area.value }).then(function (r) {
-        if (!r.ok) {
-          preview.innerHTML = "";
-          preview.appendChild(el("p", { class: "edit-error", text: r.data.error || "미리보기 실패" }));
-          return;
-        }
-        preview.innerHTML = r.data.html;
-        // **공개 화면이 쓰는 것과 같은 함수들이다.** 여기서 다르게 그리면
-        // 미리보기가 아니게 된다.
-        if (window.blogRenderMath) window.blogRenderMath();
-        if (window.blogHighlight) window.blogHighlight();
-        if (window.blogCopyButtons) window.blogCopyButtons();
-        if (window.blogRenderMermaid) window.blogRenderMermaid();
-        if (window.blogMountAnims) window.blogMountAnims();
-      });
-    }
-
     function cancel() {
       if (dirty() && !confirm("고친 것을 버릴까?")) return;
       unbind();
@@ -519,7 +589,7 @@
       note.textContent = "저장하는 중…";
       var m = meta.read();
       api("PUT", "/api/admin/posts/" + encodeURIComponent(slug), {
-        slug: post.slug, title: titleInput.value.trim(), body: area.value,
+        slug: post.slug, title: titleInput.value.trim(), body: bodyText(),
         status: statusSel.value, visibility: visSel.value, rev: post.rev || "",
         // **PUT은 통째로 바꾸기라 안 보낸 칸은 비워진다.** 그래서 메타도
         // 빠짐없이 싣는다 — 사람이 안 건드렸으면 읽어온 값 그대로다.

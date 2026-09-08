@@ -1055,51 +1055,40 @@
   .edit-sib-mv svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.6; }
   .edit-sib-mv[disabled] { opacity: .3; cursor: default; }
 
-  /* ── 쓰기 / 미리보기 ──────────────────────────────────────────
-     넓으면 나란히, 좁으면 **탭으로 가른다.** 375px에서 둘을 위아래로
-     쌓으면 한 화면에 조금씩만 보여서 어느 쪽도 못 읽는다.
+  /* ── 블록 문서 ────────────────────────────────────────────────
+     **평소에는 완성된 화면만 보인다.** 문단을 누르면 그 문단만 원문이 되고,
+     벗어나면 곧바로 다시 그려진다 — 두 칸으로 나뉘어 눈이 오가던 것을 없앤다.
 
-     **가르는 일은 CSS가 한다**(라디오 + `:checked ~`). JS로 하면 상태를
-     따로 들고 있어야 하는데, 브라우저가 이미 라디오로 그걸 한다 —
-     HTML → CSS → 마지막에 JS 원칙 그대로다. */
-  .edit-split { display: grid; gap: .8rem; grid-template-columns: 1fr; }
-  /* 탭 버튼. 넓은 화면에서는 둘 다 보이므로 고를 것이 없다. */
-  .edit-tabs { display: flex; gap: .4rem; margin-bottom: .6rem; }
-  .edit-tabs input { position: absolute; opacity: 0; pointer-events: none; }
-  .edit-tabs label {
-    flex: 1; display: flex; align-items: center; justify-content: center;
-    padding: .4rem; cursor: pointer;
-    font-size: .78rem; line-height: 1;
-    color: var(--ink-dim); background: var(--bg); border: 1px solid var(--line);
+     그리는 것은 서버라(POST /api/admin/blocks) 여기 보이는 것이 곧 발행될
+     화면이다. 그래서 블록의 겉모습에 손대지 않는다 — 누를 수 있다는 표시만
+     얹는다. */
+  .edit-doc { margin-top: .4rem; }
+  .eblk {
+    position: relative;
+    padding: .1rem .5rem; margin: 0 -.5rem;
+    border-left: 2px solid transparent; cursor: text;
   }
-  .edit-tabs input:checked + label {
-    color: #121415; background: var(--rail); border-color: var(--ink); font-weight: 700;
+  .eblk > :first-child { margin-top: 0; }
+  .eblk > :last-child { margin-bottom: 0; }
+  /* 누를 수 있다는 표시는 **왼쪽 띠 하나**다. 바탕색을 깔면 그 문단이
+     본문에서 어떻게 보일지가 가려진다 — 여기 보이는 것이 곧 발행될 화면이라는
+     것이 이 방식의 전부다. */
+  .eblk:hover { border-left-color: var(--rail); }
+  .eblk.on { border-left-color: var(--ink); cursor: auto; }
+  .eblk-src {
+    display: block; width: 100%; margin: 0;
+    font: .85rem/1.62 var(--mono); color: var(--ink); background: var(--bg);
+    border: 1px solid var(--ink); border-radius: 0;
+    padding: .5rem .6rem; resize: none; overflow: hidden;
   }
-  .edit-tabs input:focus-visible + label { outline: 2px solid var(--ink); outline-offset: 1px; }
-  /* 고른 쪽만 보인다. **`:has()`라 JS가 상태를 안 든다** — 라디오가 이미
-     들고 있다. 안 되는 브라우저에서는 규칙이 통째로 무시돼서 둘 다 보이는데,
-     그게 정확히 예전 모습이라 **degrade가 곧 예전 동작**이다. */
-  .edit-panes:has(#pane-write:checked) .edit-preview,
-  .edit-panes:has(#pane-preview:checked) .edit-body { display: none; }
-  @media (min-width: 60rem) {
-    .edit-split { grid-template-columns: 1fr 1fr; }
-    /* 나란히 보이므로 고를 것이 없다. */
-    .edit-tabs { display: none; }
-    .edit-panes:has(#pane-write:checked) .edit-preview { display: block; }
-    .edit-panes:has(#pane-preview:checked) .edit-body { display: block; }
+  .eblk-src:focus-visible { outline: 2px solid var(--rail); outline-offset: 1px; }
+  /* 글 끝의 빈 자리. **빈 문서에도 쓸 자리가 있어야 한다.** */
+  .eblk-add {
+    margin: .6rem -.5rem 0; padding: .5rem;
+    font: .78rem/1 var(--mono); color: var(--ink-dim);
+    border: 1px dashed var(--line-mid); cursor: text;
   }
-  .edit-body {
-    font-family: var(--mono); font-size: .85rem; line-height: 1.62;
-    min-height: 24rem; resize: vertical; padding: .7rem;
-    color: var(--ink); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 0;
-  }
-  .edit-body:focus-visible { outline: 2px solid var(--rail); outline-offset: 1px; }
-  .edit-preview {
-    padding: .7rem; overflow-x: auto;
-    border: 1px solid var(--line); border-radius: 0; background: var(--surface);
-  }
-  .edit-preview > :first-child { margin-top: 0; }
+  .eblk-add:hover { color: var(--ink); border-color: var(--ink); }
 
   /* ── 홈의 최근 글 ────────────────────────────────────────────────
      표제지가 주인공이라 목록은 조용해야 한다. 제목과 날짜 두 칸뿐이고
@@ -1676,7 +1665,9 @@
     .edit-here, .del-here { min-height: 44px; }
 
     /* 편집기. 여기서 오래 머무르므로 특히 중요하다. */
-    .edit-btn, .edit-tabs label { min-height: 44px; }
+    .edit-btn { min-height: 44px; }
+    /* 문단을 손가락으로 누른다. 한 줄짜리 문단도 눌러지는 크기여야 한다. */
+    .eblk, .eblk-add { min-height: 44px; }
     .edit-title, .edit-status, .edit-meta-in { min-height: 44px; }
     /* 체크박스 자체는 안 키운다 — 그러면 네모가 글자를 압도한다. 라벨까지가
        누르는 자리라 그 라벨의 높이만 넓힌다. */
@@ -1694,7 +1685,7 @@
        빼앗는다. 글자를 키우는 쪽이 맞다.)
 
        **본문 textarea가 특히 중요하다** — 편집기에서 제일 오래 머무는 칸이다. */
-    .edit-body, .edit-title, .edit-status, .edit-meta-in { font-size: 16px; }
+    .eblk-src, .edit-title, .edit-status, .edit-meta-in { font-size: 16px; }
 
     /* `/` 조각 팔레트도 손가락으로 고른다. */
     .pal-row { min-height: 44px; align-items: center; font-size: 16px; }
