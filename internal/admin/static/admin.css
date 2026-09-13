@@ -118,6 +118,10 @@ body.admin > * { max-width: none; }
 .ad-back { color: var(--ink-dim); text-decoration: none; font-size: .9rem; }
 .ad-back:hover { color: var(--accent); }
 .ad-spacer { flex: 1; }
+/* 저장 버튼 옆의 상태 선택. ad-field는 세로로 쌓는 게 기본이라 여기서만
+   폭을 좁혀 한 줄에 낀다 — 목록 폭까지 늘어나면 편집바가 다시 두 줄로 밀린다. */
+.ad-editbar-status { flex: none; width: auto; }
+.ad-editbar-status .ad-input { width: auto; }
 
 /* 왼쪽 원문 / 오른쪽 미리보기. 좁아지면 위아래로 쌓는다 — 375px에서
    가로로 밀리지 않게 하는 것은 공개 페이지와 같은 규칙이다. */
@@ -137,6 +141,16 @@ body.admin > * { max-width: none; }
    특정성이 같아 나중에 선언된 위 규칙이 이긴다. */
 .ad-field[hidden] { display: none; }
 .ad-field.wide { grid-column: 1 / -1; }
+/* 분류 선택 + `새 분류` 버튼을 한 줄에. */
+.ad-catrow { display: flex; gap: .4rem; }
+.ad-catrow .ad-input { flex: 1; min-width: 0; }
+.ad-newcat {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;
+  margin-top: .4rem; padding: .5rem; border: 1px dashed var(--line-mid);
+}
+/* **display를 준 요소에는 hidden이 안 먹는다** (ad-field와 같은 이유). */
+.ad-newcat[hidden] { display: none; }
+.ad-newcat .ad-input { flex: 1; min-width: 8rem; }
 .ad-field > span {
   font: 600 .7rem/1 var(--mono); letter-spacing: .06em;
   text-transform: uppercase; color: var(--ink-dim);

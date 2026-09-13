@@ -438,3 +438,49 @@ func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"categories": cats})
 }
+
+// createCategoryReq는 글 편집기에서 그 자리에 새 분류를 만들 때 보내는 것이다.
+type createCategoryReq struct {
+	Name     string `json:"name"`
+	ParentID *int64 `json:"parentId"`
+}
+
+// handleCreateCategory는 분류 하나를 새로 만든다.
+//
+// **편집기가 이걸 쓰는 이유는 분류가 87개뿐이라 미리 다 갖춰두지 못해서다.**
+// 글을 쓰다가 새 프로젝트·새 갈래가 생기면 그 자리에서 만들고 바로 그 글에
+// 붙일 수 있어야 한다 — 지금까지는 SQL을 직접 만져야 했다.
+//
+// slug는 카테고리 slug 규칙과 같은 importer.Slugify로 만든다(save.go의
+// validSlug와 같은 이유: 규칙이 한 곳에만 있어야 한다). 깊이 제한(최대 3단계)은
+// migrations/002의 트리거가 지키므로 여기서 다시 세지 않고, 트리거가 막으면
+// 그 오류를 사람이 읽을 말로 바꿔 돌려준다.
+func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<16))
+	if err != nil {
+		writeErr(w, http.StatusRequestEntityTooLarge, "본문이 너무 크다")
+		return
+	}
+	var req createCategoryReq
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "JSON을 읽지 못했다: "+err.Error())
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		writeErr(w, http.StatusBadRequest, "분류 이름이 비었다")
+		return
+	}
+	if len([]rune(req.Name)) > titleMaxLen {
+		writeErr(w, http.StatusBadRequest, fmt.Sprintf("분류 이름이 너무 길다 (%d자까지)", titleMaxLen))
+		return
+	}
+
+	cat, err := s.store.createCategory(req.Name, req.ParentID)
+	if err != nil {
+		writeSaveErr(w, r, err)
+		return
+	}
+	log.Printf("admin 분류 만들기: %q (id=%d)", cat.Name, cat.ID)
+	writeJSON(w, http.StatusCreated, cat)
+}

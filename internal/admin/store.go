@@ -2,10 +2,13 @@ package admin
 
 import (
 	"database/sql"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/inryeol/blog/internal/curation"
+	"github.com/inryeol/blog/internal/importer"
 )
 
 // store는 admin이 보는 DB다.
@@ -268,6 +271,57 @@ func (s *store) categories() ([]CategoryRow, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
+}
+
+// createCategory는 분류 하나를 만들고 (경로까지 채운) 그 행을 돌려준다.
+//
+// **부모가 있으면 먼저 있는지 본다.** 없는 id를 그냥 넣으면 FK가 막긴 하지만
+// 그 오류 글자는 사람이 읽을 말이 아니다. slug는 이름에서 만들고, 이미 쓰는
+// slug면 사람이 고칠 수 있는 잘못으로 돌려준다(글 slug가 겹칠 때와 같은 판단).
+func (s *store) createCategory(name string, parentID *int64) (*CategoryRow, error) {
+	slug := importer.Slugify(name)
+	if slug == "" {
+		return nil, bad("분류 이름 %q에서 slug를 만들지 못했다", name)
+	}
+
+	if parentID != nil {
+		var n int
+		if err := s.db.QueryRow(`SELECT count(*) FROM categories WHERE id = ?`, *parentID).Scan(&n); err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			return nil, bad("부모 분류가 없다 (id=%d)", *parentID)
+		}
+	}
+
+	res, err := s.db.Exec(`INSERT INTO categories (parent_id, name, slug, sort_order) VALUES (?, ?, ?, 0)`,
+		parentID, name, slug)
+	if err != nil {
+		msg := err.Error()
+		switch {
+		case strings.Contains(msg, "UNIQUE") && strings.Contains(msg, "categories.slug"):
+			return nil, bad("그 이름의 분류가 이미 있다 (slug %q)", slug)
+		case strings.Contains(msg, "최대 3단계까지만 허용"):
+			return nil, bad("분류는 3단계까지만 만들 수 있다. 이 부모 밑에는 못 넣는다")
+		default:
+			return nil, err
+		}
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	cats, err := s.categories()
+	if err != nil {
+		return nil, err
+	}
+	for i := range cats {
+		if cats[i].ID == id {
+			return &cats[i], nil
+		}
+	}
+	return nil, fmt.Errorf("분류를 만들었는데 (id=%d) 다시 찾지 못했다", id)
 }
 
 // counts는 status별 글 수다. 목록 머리에 찍어서 지금 무엇이 얼마나 있는지 보인다.

@@ -773,13 +773,80 @@
     // ── 메타 패널 ────────────────────────────────────────────────
     // 글 하나를 실제로 고치려면 본문만으로 부족하다. 어느 분류에 붙어 있고,
     // 어느 글의 자식이고, 형제 사이 몇 번째인지가 전부 posts의 다른 칸이다.
-    var catSelect = el("select", { class: "ad-input", id: "ad-category" },
-      [el("option", { value: "", text: "— 분류 없음 —" })].concat(
-        (categories || []).map(function (c) {
-          var o = el("option", { value: String(c.id), text: c.path });
-          if (post.categoryId === c.id) o.selected = true;
-          return o;
-        })));
+    // cats는 이 폼이 들고 있는 분류 목록이다. 새로 만들면 여기 밀어 넣고
+    // 선택 상자를 다시 그린다 — 창을 새로고침해야 보이면 방금 만든 걸
+    // 바로 못 쓴다.
+    var catList = (categories || []).slice();
+    var catSelect = el("select", { class: "ad-input", id: "ad-category" });
+
+    function drawCatOptions() {
+      clear(catSelect);
+      catSelect.appendChild(el("option", { value: "", text: "— 분류 없음 —" }));
+      catList.forEach(function (c) {
+        var o = el("option", { value: String(c.id), text: c.path });
+        if (post.categoryId === c.id) o.selected = true;
+        catSelect.appendChild(o);
+      });
+    }
+    drawCatOptions();
+
+    // ── 그 자리에서 새 분류 만들기 ──────────────────────────────────
+    //
+    // **분류는 87개뿐이라 미리 다 갖춰두지 않는다.** 새 프로젝트·새 갈래가
+    // 생기면 지금까지는 SQL을 직접 만져야 붙일 수 있었다 — 그 자리에서
+    // 만들고 바로 이 글에 고르게 한다.
+    var newCatName = el("input", {
+      class: "ad-input", type: "text", placeholder: "새 분류 이름",
+    });
+    // 부모는 지금 목록에서 고른다. **깊이 2(0부터 세어 최상위가 0)까지만
+    // 보여준다** — 그 밑에 자식을 넣으면 4단계가 되어 트리거가 막는다
+    // (migrations/002). 미리 걸러야 헛눌러보고 오류를 받는 일이 없다.
+    var newCatParent = el("select", { class: "ad-input" },
+      [el("option", { value: "", text: "— 최상위 —" })]);
+    function drawParentOptions() {
+      var kept = catList.filter(function (c) { return c.depth < 2; });
+      clear(newCatParent);
+      newCatParent.appendChild(el("option", { value: "", text: "— 최상위 —" }));
+      kept.forEach(function (c) {
+        newCatParent.appendChild(el("option", { value: String(c.id), text: c.path }));
+      });
+    }
+    drawParentOptions();
+    var newCatMsg = el("p", { class: "ad-note" });
+    var newCatBox = el("div", { class: "ad-newcat" }, [
+      newCatName, newCatParent,
+      el("button", { type: "button", class: "ad-btn", text: "만들기", onclick: createCat }),
+      newCatMsg,
+    ]);
+    newCatBox.hidden = true;
+    var newCatToggle = el("button", {
+      type: "button", class: "ad-btn", text: "+ 새 분류",
+      onclick: function () { newCatBox.hidden = !newCatBox.hidden; },
+    });
+
+    function createCat() {
+      var name = newCatName.value.trim();
+      if (!name) { newCatMsg.className = "ad-note ad-error"; newCatMsg.textContent = "이름을 적어라"; return; }
+      newCatMsg.className = "ad-note";
+      newCatMsg.textContent = "만드는 중…";
+      api("POST", "/api/admin/categories", {
+        name: name,
+        parentId: newCatParent.value ? Number(newCatParent.value) : null,
+      }).then(function (r) {
+        if (!r.ok) {
+          newCatMsg.className = "ad-note ad-error";
+          newCatMsg.textContent = r.data.error || "만들지 못했다";
+          return;
+        }
+        catList.push(r.data);
+        drawCatOptions();
+        drawParentOptions();
+        catSelect.value = String(r.data.id);
+        newCatName.value = "";
+        newCatMsg.textContent = "";
+        newCatBox.hidden = true;
+      });
+    }
     var parentInput = el("input", {
       class: "ad-input mono", type: "text", id: "ad-parent",
       placeholder: "부모 글의 slug (비우면 최상위)", value: post.parentSlug || "",
@@ -894,6 +961,7 @@
       isNew ? null : el("button", {
         class: "ad-btn danger", id: "ad-delete", onclick: remove, text: "지우기",
       }),
+      el("label", { class: "ad-field ad-editbar-status" }, [el("span", { text: "상태" }), statusSelect]),
       el("button", { class: "ad-btn primary", id: "ad-save", onclick: save, text: "저장" }),
     ]));
 
@@ -915,7 +983,6 @@
       el("section", { class: "ad-pane" }, [
         el("div", { class: "ad-fields" }, [
           el("label", { class: "ad-field wide" }, [el("span", { text: "제목" }), titleInput]),
-          el("label", { class: "ad-field" }, [el("span", { text: "상태" }), statusSelect]),
           el("label", { class: "ad-field" }, [el("span", { text: "공개 범위" }), visSelect]),
           el("label", { class: "ad-field wide" }, [el("span", { text: "slug" }), slugInput]),
         ]),
@@ -924,7 +991,8 @@
         } }, [
           el("summary", { text: "분류 · 계층 · 순서 · 날짜" }),
           el("div", { class: "ad-fields" }, [
-            el("label", { class: "ad-field wide" }, [el("span", { text: "분류" }), catSelect]),
+            el("label", { class: "ad-field wide" }, [el("span", { text: "분류" }),
+              el("div", { class: "ad-catrow" }, [catSelect, newCatToggle]), newCatBox]),
             el("label", { class: "ad-field wide" }, [el("span", { text: "부모 글" }), parentInput]),
             numberField,
             el("label", { class: "ad-field" }, [el("span", { text: "작성일" }), dateInput]),
@@ -1058,13 +1126,21 @@
           (saved.visibility === "private" ? " (비공개라 허용된 계정만 볼 수 있다)" : "");
         status.className = "ad-status ok";
         status.textContent = msg;
+
+        // **성공하면 그 글의 화면으로 옮긴다.** 눌러놓고 여기 그대로 있으면
+        // 저장이 됐는지 눈으로 확인하려면 또 한 번 눌러야 한다. 다만 draft는
+        // 공개 화면 자체가 없으므로(architecture.md) 옮기지 않고 여기 머문다.
+        if (saved.status !== "draft") {
+          location.href = "/p/" + encodeURIComponent(saved.slug);
+          return;
+        }
         if (isNewPost || saved.slug !== post.slug) {
           // slug가 정해졌거나 바뀌었으면 주소도 그리로 옮긴다. 새로고침했을 때
           // 없는 글을 열지 않게 하려는 것이다. 다시 그리는 폼에 방금 그 말을
           // 같이 넘긴다.
           post = saved;
           history.replaceState({}, "", "/admin/edit/" + encodeURIComponent(saved.slug));
-          renderEditor(saved, false, categories, msg);
+          renderEditor(saved, false, catList, msg);
           return;
         }
         post = saved;
