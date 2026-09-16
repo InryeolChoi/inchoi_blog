@@ -653,6 +653,45 @@
         ]));
       }
 
+      // deleteCategory는 분류 지우기 버튼이 공통으로 쓴다. 서버가 글·하위
+      // 분류가 있다고 400으로 거절하면, 그 문구를 그대로 확인창에 띄워
+      // "그래도 지울까?"로 되묻는다 — 확인하면 ?force=true로 다시 부른다.
+      function deleteCategory(c) {
+        api("DELETE", "/api/admin/categories/" + c.id).then(function (r) {
+          if (r.ok) { cats = null; showStats(); return; }
+          var msg = r.data && r.data.error ? r.data.error : "지우지 못했다";
+          if (r.status !== 400 || !confirm(msg)) { if (r.status !== 400) alert(msg); return; }
+          api("DELETE", "/api/admin/categories/" + c.id + "?force=true").then(function (r2) {
+            if (!r2.ok) { alert(r2.data && r2.data.error ? r2.data.error : "지우지 못했다"); return; }
+            cats = null; // 편집기가 다시 불러오게 캐시를 비운다
+            showStats();
+          });
+        });
+      }
+
+      function deleteButton(c) {
+        return el("button", {
+          class: "ad-btn danger", text: "지우기",
+          onclick: function () { deleteCategory(c); },
+        });
+      }
+
+      // ── 글 없는 분류.
+      var empties = d.categories.filter(function (c) { return c.posts === 0; });
+      if (empties.length) {
+        root.appendChild(el("section", { class: "ad-panel" }, [
+          el("h2", { text: "글 없는 분류" }),
+          el("p", { class: "ad-note", text: "실수로 만들었거나 다 지워서 비어 있는 분류다." }),
+          el("ul", { class: "ad-rows" }, empties.map(function (c) {
+            return el("li", {}, [
+              el("span", { class: "ad-row-name", title: c.path, text: c.path }),
+              c.children ? el("span", { class: "ad-dim", text: "하위 분류 " + c.children + "개" }) : null,
+              deleteButton(c),
+            ]);
+          })),
+        ]));
+      }
+
       // ── 분류별. 직속 글만 센다.
       var top = d.categories.filter(function (c) { return c.posts > 0; });
       var cmax = top.length ? top[0].posts : 0;
@@ -664,6 +703,7 @@
             el("span", { class: "ad-row-name", title: c.path, text: c.path }),
             bar(c.posts, cmax),
             el("span", { class: "ad-row-num", text: num(c.posts) + (c.drafts ? " (draft " + c.drafts + ")" : "") }),
+            deleteButton(c),
           ]);
         })),
       ]));

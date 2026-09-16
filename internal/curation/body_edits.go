@@ -26,6 +26,7 @@ var BodyEdits = concatBodyEdits(
 	projectsCoverEdits,
 	virtualizationCoverEdits,
 	osStubEdits,
+	softWrapEdits,
 )
 
 // concatBodyEdits는 묶음들을 순서대로 이어 붙인다.

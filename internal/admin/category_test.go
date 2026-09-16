@@ -91,3 +91,97 @@ func TestCreateCategoryRejectsBadInput(t *testing.T) {
 		t.Errorf("slug가 겹치는데 %d다: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// 실수로 만든 빈 분류는 곧바로 지워진다.
+func TestDeleteEmptyCategory(t *testing.T) {
+	h := testHandler(t)
+
+	rec := do(t, h, http.MethodPost, "/api/admin/categories", `{"name":"새로운"}`)
+	var cat CategoryRow
+	decode(t, rec, &cat)
+
+	del := do(t, h, http.MethodDelete, "/api/admin/categories/"+strconv.FormatInt(cat.ID, 10), "")
+	if del.Code != http.StatusNoContent {
+		t.Fatalf("상태 코드 %d: %s", del.Code, del.Body.String())
+	}
+
+	list := do(t, h, http.MethodGet, "/api/admin/categories", "")
+	var got struct {
+		Categories []CategoryRow `json:"categories"`
+	}
+	decode(t, list, &got)
+	for _, c := range got.Categories {
+		if c.ID == cat.ID {
+			t.Fatal("지운 분류가 여전히 목록에 있다")
+		}
+	}
+}
+
+// 글이 붙어 있거나 하위 분류가 있으면 force 없이는 경고만 하고 멈춘다 —
+// 화면이 이 문구로 "그래도 지울까?"를 띄운다. force=true로 다시 부르면
+// 실제로 지우고, 글은 무분류가 되고 하위 분류는 최상위로 올라간다.
+func TestDeleteCategoryWarnsThenForces(t *testing.T) {
+	h := testHandler(t)
+
+	rec := do(t, h, http.MethodPost, "/api/admin/categories", `{"name":"글있음"}`)
+	var withPost CategoryRow
+	decode(t, rec, &withPost)
+	postRec := save(t, h, http.MethodPost, "/api/admin/posts", saveReq{
+		Title: "테스트 글", Body: "본문", Status: "draft", CategoryID: &withPost.ID,
+	})
+	var post PostDetail
+	decode(t, postRec, &post)
+
+	if del := do(t, h, http.MethodDelete,
+		"/api/admin/categories/"+strconv.FormatInt(withPost.ID, 10), ""); del.Code != http.StatusBadRequest {
+		t.Errorf("글이 있는데 force 없이 %d다: %s", del.Code, del.Body.String())
+	}
+	if del := do(t, h, http.MethodDelete,
+		"/api/admin/categories/"+strconv.FormatInt(withPost.ID, 10)+"?force=true", ""); del.Code != http.StatusNoContent {
+		t.Fatalf("force인데 %d다: %s", del.Code, del.Body.String())
+	}
+	got := do(t, h, http.MethodGet, "/api/admin/posts/"+post.Slug, "")
+	var reloaded PostDetail
+	decode(t, got, &reloaded)
+	if reloaded.CategoryID != nil {
+		t.Errorf("분류를 지웠는데 글이 여전히 분류 id %v를 갖고 있다", *reloaded.CategoryID)
+	}
+
+	parentRec := do(t, h, http.MethodPost, "/api/admin/categories", `{"name":"부모있음"}`)
+	var parent CategoryRow
+	decode(t, parentRec, &parent)
+	childRec := do(t, h, http.MethodPost, "/api/admin/categories",
+		`{"name":"자식있음","parentId":`+strconv.FormatInt(parent.ID, 10)+`}`)
+	var child CategoryRow
+	decode(t, childRec, &child)
+
+	if del := do(t, h, http.MethodDelete,
+		"/api/admin/categories/"+strconv.FormatInt(parent.ID, 10), ""); del.Code != http.StatusBadRequest {
+		t.Errorf("하위 분류가 있는데 force 없이 %d다: %s", del.Code, del.Body.String())
+	}
+	if del := do(t, h, http.MethodDelete,
+		"/api/admin/categories/"+strconv.FormatInt(parent.ID, 10)+"?force=true", ""); del.Code != http.StatusNoContent {
+		t.Fatalf("force인데 %d다: %s", del.Code, del.Body.String())
+	}
+	list := do(t, h, http.MethodGet, "/api/admin/categories", "")
+	var listGot struct {
+		Categories []CategoryRow `json:"categories"`
+	}
+	decode(t, list, &listGot)
+	found := false
+	for _, c := range listGot.Categories {
+		if c.ID == child.ID {
+			found = true
+			if c.Depth != 0 {
+				t.Errorf("부모를 지웠는데 자식이 여전히 depth %d다", c.Depth)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("부모를 지웠더니 자식까지 사라졌다")
+	}
+
+	if del := do(t, h, http.MethodDelete, "/api/admin/categories/999999", ""); del.Code != http.StatusBadRequest {
+		t.Errorf("없는 분류인데 %d다: %s", del.Code, del.Body.String())
+	}
+}

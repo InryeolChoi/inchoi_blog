@@ -116,6 +116,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/categories", s.handleCategories)
 	// 글을 쓰다가 그 자리에서 분류를 새로 만든다(save.go).
 	mux.HandleFunc("POST /api/admin/categories", s.handleCreateCategory)
+	// 실수로 만든 빈 분류를 지운다(save.go). 글이나 하위 분류가 있으면 거절한다.
+	mux.HandleFunc("DELETE /api/admin/categories/{id}", s.handleDeleteCategory)
 	// 사이트 문구. 지금은 홈 표제지뿐이다(settings.go).
 	mux.HandleFunc("GET /api/admin/settings", s.handleSettings)
 	mux.HandleFunc("PUT /api/admin/settings", s.handleSaveSettings)

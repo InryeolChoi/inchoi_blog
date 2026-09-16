@@ -324,6 +324,57 @@ func (s *store) createCategory(name string, parentID *int64) (*CategoryRow, erro
 	return nil, fmt.Errorf("분류를 만들었는데 (id=%d) 다시 찾지 못했다", id)
 }
 
+// deleteCategory는 분류 하나를 지운다.
+//
+// **비어 있지 않으면 기본은 경고만 하고 멈춘다.** force가 거짓인데 글이나
+// 하위 분류가 있으면 그 수를 담은 badInput을 돌려준다 — 화면이 이 문구로
+// "그래도 지울까?" 확인을 띄우고, 사람이 그러겠다고 하면 force=true로 다시
+// 부른다.
+//
+// **force일 때 무엇이 되나.** 글은 카테고리를 지우면 FK의 ON DELETE SET
+// NULL로 자동으로 무분류가 된다(migrations/001). 하위 분류는 parent_id가
+// ON DELETE RESTRICT라 그대로 두면 DB가 삭제를 막으므로, 먼저 부모를 지우기
+// 전에 parent_id를 비워 최상위로 올린다 — 트리가 끊기는 대신 한 단계 위로
+// 올라온다.
+func (s *store) deleteCategory(id int64, force bool) error {
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM categories WHERE id = ?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return bad("그런 분류가 없다 (id=%d)", id)
+	}
+
+	var posts, children int
+	if err := s.db.QueryRow(`SELECT count(*) FROM posts WHERE category_id = ?`, id).Scan(&posts); err != nil {
+		return err
+	}
+	if err := s.db.QueryRow(`SELECT count(*) FROM categories WHERE parent_id = ?`, id).Scan(&children); err != nil {
+		return err
+	}
+
+	if !force && (posts > 0 || children > 0) {
+		switch {
+		case posts > 0 && children > 0:
+			return bad("이 분류에 글이 %d편, 하위 분류가 %d개 있다. 지우면 글은 무분류가 되고 하위 분류는 최상위로 올라간다. 그래도 지울까?", posts, children)
+		case posts > 0:
+			return bad("이 분류에 글이 %d편 있다. 지우면 그 글들이 무분류가 된다. 그래도 지울까?", posts)
+		default:
+			return bad("이 분류 밑에 하위 분류가 %d개 있다. 지우면 하위 분류가 최상위로 올라간다. 그래도 지울까?", children)
+		}
+	}
+
+	if children > 0 {
+		if _, err := s.db.Exec(`UPDATE categories SET parent_id = NULL WHERE parent_id = ?`, id); err != nil {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(`DELETE FROM categories WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return nil
+}
+
 // counts는 status별 글 수다. 목록 머리에 찍어서 지금 무엇이 얼마나 있는지 보인다.
 func (s *store) counts() (map[string]int, error) {
 	rows, err := s.db.Query(`SELECT status, count(*) FROM posts GROUP BY status`)

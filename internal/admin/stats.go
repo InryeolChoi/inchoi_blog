@@ -47,10 +47,14 @@ type NamedCount struct {
 // CategoryStat는 분류 한 줄이다. **직속 글만 센다** — 하위까지 더하면
 // 상위 분류가 전부를 삼켜서 쏠림이 안 보인다.
 type CategoryStat struct {
+	ID        int64  `json:"id"`
 	Path      string `json:"path"`
 	Posts     int    `json:"posts"`
 	Drafts    int    `json:"drafts"`
 	BodyBytes int    `json:"bodyBytes"`
+	// Children은 하위 분류 수다. 0이고 Posts도 0이면 화면이 지우기 버튼을 낸다
+	// — 실제로 지울 수 있는지는 그래도 서버가 다시 확인한다(store.deleteCategory).
+	Children int `json:"children"`
 }
 
 type ImageStats struct {
@@ -123,10 +127,12 @@ func (s *store) stats() (*Stats, error) {
 
 	// 분류별. 경로는 3단계까지라 재귀 없이 두 번 조인하면 된다.
 	rows, err := s.db.Query(`
-		SELECT coalesce(g.name || ' > ', '') || coalesce(pa.name || ' > ', '') || c.name,
+		SELECT c.id,
+		       coalesce(g.name || ' > ', '') || coalesce(pa.name || ' > ', '') || c.name,
 		       count(p.id),
 		       coalesce(sum(p.status = 'draft'), 0),
-		       coalesce(sum(length(p.body)), 0)
+		       coalesce(sum(length(p.body)), 0),
+		       (SELECT count(*) FROM categories ch WHERE ch.parent_id = c.id)
 		FROM categories c
 		LEFT JOIN categories pa ON pa.id = c.parent_id
 		LEFT JOIN categories g  ON g.id  = pa.parent_id
@@ -139,7 +145,7 @@ func (s *store) stats() (*Stats, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var c CategoryStat
-		if err := rows.Scan(&c.Path, &c.Posts, &c.Drafts, &c.BodyBytes); err != nil {
+		if err := rows.Scan(&c.ID, &c.Path, &c.Posts, &c.Drafts, &c.BodyBytes, &c.Children); err != nil {
 			return nil, err
 		}
 		out.Cats = append(out.Cats, c)

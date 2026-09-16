@@ -25,6 +25,16 @@ func TestBasicMarkdown(t *testing.T) {
 	}
 }
 
+// Enter 한 번만 쳐도 줄이 바뀐다. CommonMark 기본은 줄 끝에 공백 두 개가
+// 있어야 <br>이 나오는데, 그 규칙을 아는 사람이 웹 편집기로 글을 쓸 것이라고
+// 기대할 수 없다.
+func TestSingleNewlineIsHardBreak(t *testing.T) {
+	got := render(t, "첫 줄\n둘째 줄\n")
+	if !strings.Contains(got, "첫 줄<br>\n둘째 줄") {
+		t.Errorf("<br>이 없다:\n%s", got)
+	}
+}
+
 func TestCodeBlockKeepsLanguageClass(t *testing.T) {
 	got := render(t, "```c\nint main() {}\n```\n")
 	if !strings.Contains(got, `class="language-c"`) {

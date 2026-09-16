@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -483,4 +484,25 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("admin 분류 만들기: %q (id=%d)", cat.Name, cat.ID)
 	writeJSON(w, http.StatusCreated, cat)
+}
+
+// handleDeleteCategory는 분류 하나를 지운다. force가 없는데 글·하위 분류가
+// 있으면 store.deleteCategory가 그 수를 담은 badInput으로 거절하고,
+// writeSaveErr가 그 문구를 그대로 400으로 돌려준다 — 화면이 이 문구로
+// "그래도 지울까?" 확인을 띄우고, 사람이 그러겠다고 하면 ?force=true로
+// 다시 부른다.
+func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "분류 id가 아니다")
+		return
+	}
+	force := r.URL.Query().Get("force") == "true"
+
+	if err := s.store.deleteCategory(id, force); err != nil {
+		writeSaveErr(w, r, err)
+		return
+	}
+	log.Printf("admin 분류 지우기: id=%d force=%v", id, force)
+	w.WriteHeader(http.StatusNoContent)
 }
