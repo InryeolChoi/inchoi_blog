@@ -262,6 +262,7 @@ func TestShellRendersTopMenu(t *testing.T) {
 		`class="ad-menu"`,
 		`href="/admin" data-menu="/admin"`,
 		`href="/admin/data" data-menu="/admin/data"`,
+		`href="/admin/graph" data-menu="/admin/graph"`,
 		`href="/admin/settings" data-menu="/admin/settings"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -274,7 +275,7 @@ func TestShellRendersTopMenu(t *testing.T) {
 // 꺼진 브라우저에서 그 메뉴는 막다른 길이다.
 func TestMenuPathsServeTheShell(t *testing.T) {
 	h := testHandler(t)
-	for _, path := range []string{"/admin", "/admin/data", "/admin/settings"} {
+	for _, path := range []string{"/admin", "/admin/data", "/admin/graph", "/admin/settings"} {
 		rec := do(t, h, "GET", path, "")
 		if rec.Code != http.StatusOK {
 			t.Errorf("%s = %d, 200을 바랐다", path, rec.Code)

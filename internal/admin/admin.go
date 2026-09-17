@@ -123,6 +123,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/admin/settings", s.handleSaveSettings)
 	// 데이터 보기. 이 아카이브가 지금 어떤 상태인지 한 화면에서 본다(stats.go).
 	mux.HandleFunc("GET /api/admin/stats", s.handleStats)
+	// 글 지도. 계층과 본문 링크로 이어진 전체 글을 그래프로 본다(graph.go).
+	mux.HandleFunc("GET /api/admin/graph", s.handleGraph)
 	mux.HandleFunc("POST /api/admin/preview", s.handlePreview)
 	// 블록 인라인 편집기가 쓴다(blocks.go). 마크다운을 문단으로 자르고
 	// 각각을 **발행될 바로 그 HTML로** 그려 돌려준다.

@@ -86,6 +86,7 @@
   //   /admin/new              새 글
   //   /admin/home             홈 화면 편집
   //   /admin/data             데이터 보기
+  //   /admin/graph            글 지도
 
   function go(path) {
     history.pushState({}, "", path);
@@ -119,6 +120,7 @@
     if (path === "/admin/new") return showEditor(null, prefillCategory());
     if (path === "/admin/home") return showHome();
     if (path === "/admin/data") return showStats();
+    if (path === "/admin/graph") return showGraph();
     if (path === "/admin/settings") return showSettings();
     return showList();
   }
@@ -129,7 +131,7 @@
   // 못 떠도 세 링크는 그대로 눌린다. 새 글과 편집 화면은 `전체 글`에 딸린
   // 자리라 그쪽을 켠다 — 어디에도 안 걸린 화면을 만들지 않는다.
   function markMenu(path) {
-    var here = path === "/admin/home" || path === "/admin/data" || path === "/admin/settings"
+    var here = path === "/admin/home" || path === "/admin/data" || path === "/admin/graph" || path === "/admin/settings"
       ? path : "/admin";
     Array.prototype.forEach.call(document.querySelectorAll(".ad-menu a"), function (a) {
       var on = a.dataset.menu === here;
@@ -708,6 +710,305 @@
         })),
       ]));
     });
+  }
+
+  // ---------------------------------------------------------------- 지도
+  //
+  // 글 949편을 점으로, 부모-자식과 본문 링크를 선으로 그린다. 힘-기반
+  // 배치(Fruchterman-Reingold 계열)를 손으로 굴린다 — D3 같은 라이브러리를
+  // CDN에서 받아오면 이 저장소의 "빌드 스텝도 CDN도 없다" 규칙과 부딪힌다.
+  //
+  // **몇백 프레임만 굴리고 멈춘다.** 계속 움직이는 그래프는 보기 힘들고,
+  // 950개 점을 매 프레임 밀어내는 건 배터리에도 나쁘다. 자리가 잡히면
+  // 멈추고, 그 다음은 사람이 끌고 돌리고 확대하는 정적인 지도가 된다.
+  function showGraph() {
+    var mine = drawTicket;
+    clear(root);
+    root.appendChild(el("div", { class: "ad-editbar" }, [
+      el("h1", { text: "글 지도" }),
+    ]));
+    var note = el("p", { class: "ad-note", text: "불러오는 중…" });
+    root.appendChild(note);
+
+    api("GET", "/api/admin/graph").then(function (r) {
+      if (stale(mine)) return;
+      if (!r.ok) {
+        note.textContent = (r.data && r.data.error) || "지도를 못 가져왔다";
+        note.className = "ad-error";
+        return;
+      }
+      note.remove();
+      renderGraph(r.data.nodes || [], r.data.edges || []);
+    });
+  }
+
+  function renderGraph(nodes, edges) {
+    if (!nodes.length) {
+      root.appendChild(el("p", { class: "ad-empty", text: "글이 없다." }));
+      return;
+    }
+
+    var wrap = el("div", { class: "ad-graph-wrap" });
+    var canvas = el("canvas", { class: "ad-graph", "aria-label": "글 지도" });
+    var legend = el("p", {
+      class: "ad-note", id: "ad-graph-legend",
+      text: "굵은 선은 하위 글, 옅은 선은 본문 링크다. 끌어서 옮기고, 휠로 확대하고, 점을 누르면 그 글을 연다.",
+    });
+    wrap.appendChild(canvas);
+    root.appendChild(legend);
+    root.appendChild(wrap);
+
+    var ctx = canvas.getContext("2d");
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // ── 자료 준비: id → 색인, 최상위 분류 → 뭉치 중심.
+    var byID = {};
+    nodes.forEach(function (n, i) {
+      n.x = 0; n.y = 0; n.vx = 0; n.vy = 0; n.fixed = false;
+      byID[n.id] = n;
+    });
+    var tops = [];
+    var topIndex = {};
+    nodes.forEach(function (n) {
+      var key = n.top || "(분류 없음)";
+      if (!(key in topIndex)) { topIndex[key] = tops.length; tops.push(key); }
+    });
+    // 뭉치 중심을 서로 충분히 떼어놔야 한다 — 안 그러면 뭉치 안 밀어내기가
+    // 서로 겹쳐서 지도가 그냥 균일한 그물처럼 보인다(글 수가 늘수록 더 그렇다).
+    var anchorR = 260 + Math.sqrt(nodes.length) * 22;
+    var anchors = tops.map(function (_, i) {
+      var a = (i / tops.length) * Math.PI * 2;
+      return { x: Math.cos(a) * anchorR, y: Math.sin(a) * anchorR };
+    });
+    nodes.forEach(function (n) {
+      var key = n.top || "(분류 없음)";
+      var anchor = anchors[topIndex[key]];
+      var a = Math.random() * Math.PI * 2, r = Math.random() * 60;
+      n.ax = anchor.x; n.ay = anchor.y;
+      n.x = anchor.x + Math.cos(a) * r;
+      n.y = anchor.y + Math.sin(a) * r;
+    });
+
+    // 이웃 목록. 스프링 힘과 호버 강조가 같이 쓴다.
+    var neighbors = {};
+    nodes.forEach(function (n) { neighbors[n.id] = []; });
+    var validEdges = edges.filter(function (e) { return byID[e.source] && byID[e.target]; });
+    validEdges.forEach(function (e) {
+      neighbors[e.source].push(e.target);
+      neighbors[e.target].push(e.source);
+    });
+
+    // ── 힘 시뮬레이션. 격자로 나눠 가까운 점끼리만 밀어낸다 — 950개를
+    // 전부 서로 비교하면(n^2) 프레임마다 90만 번 거리 계산이 나온다.
+    var cell = 50;
+    function repel() {
+      var grid = {};
+      nodes.forEach(function (n) {
+        var key = (Math.floor(n.x / cell)) + "," + (Math.floor(n.y / cell));
+        (grid[key] || (grid[key] = [])).push(n);
+      });
+      nodes.forEach(function (n) {
+        var cx = Math.floor(n.x / cell), cy = Math.floor(n.y / cell);
+        for (var dx = -1; dx <= 1; dx++) {
+          for (var dy = -1; dy <= 1; dy++) {
+            var bucket = grid[(cx + dx) + "," + (cy + dy)];
+            if (!bucket) continue;
+            for (var i = 0; i < bucket.length; i++) {
+              var o = bucket[i];
+              if (o === n) continue;
+              var ddx = n.x - o.x, ddy = n.y - o.y;
+              var d2 = ddx * ddx + ddy * ddy || 0.01;
+              if (d2 > 6000) continue;
+              var f = 400 / d2;
+              n.vx += ddx * f; n.vy += ddy * f;
+            }
+          }
+        }
+      });
+    }
+
+    var running = true, iter = 0, maxIter = reduceMotion ? 0 : 240;
+    function tick(temp) {
+      repel();
+      validEdges.forEach(function (e) {
+        var a = byID[e.source], b = byID[e.target];
+        var ddx = b.x - a.x, ddy = b.y - a.y;
+        var dist = Math.sqrt(ddx * ddx + ddy * ddy) || 0.01;
+        var target = e.kind === "parent" ? 45 : 90;
+        var strength = (e.kind === "parent" ? 0.02 : 0.006) * (dist - target);
+        var fx = (ddx / dist) * strength, fy = (ddy / dist) * strength;
+        a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+      });
+      nodes.forEach(function (n) {
+        if (n.fixed) return;
+        // 뭉치 중심으로 끌린다 — 분류별로 은하처럼 갈라져 보이는 이유다.
+        n.vx += (n.ax - n.x) * 0.01;
+        n.vy += (n.ay - n.y) * 0.01;
+        n.vx *= 0.82; n.vy *= 0.82;
+        n.x += n.vx * temp; n.y += n.vy * temp;
+      });
+    }
+
+    // ── 보기(팬·줌). 세계 좌표 ↔ 화면 좌표.
+    var view = { scale: 1, x: 0, y: 0 };
+    // 캔버스 크기를 바꾸면 브라우저가 내용을 지운다. 자리가 이미 다 잡혀서
+    // 프레임 루프가 멈춘 뒤라면(running이 거짓) 아무도 다시 그려주지 않으니
+    // 여기서 직접 다시 맞추고 그린다 — 안 그러면 창 크기를 바꾸는 순간
+    // 지도가 통째로 비어 보인다.
+    function resize() {
+      var r = wrap.getBoundingClientRect();
+      canvas.width = Math.max(320, r.width) * devicePixelRatio;
+      canvas.height = 420 * devicePixelRatio;
+      canvas.style.height = "420px";
+      if (typeof running !== "undefined" && !running) { fitView(); draw(); }
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    var hovered = null, dragging = null, panning = null;
+    var mine = drawTicket;
+
+    function draw() {
+      var w = canvas.width, h = canvas.height;
+      ctx.save();
+      ctx.clearRect(0, 0, w, h);
+      ctx.translate(w / 2 + view.x, h / 2 + view.y);
+      ctx.scale(view.scale * devicePixelRatio, view.scale * devicePixelRatio);
+
+      var ink = cssVar("--ink") || "#111";
+      var dim = cssVar("--line-mid") || "#999";
+      var rail = cssVar("--rail") || "#4aa8ff";
+      var hoverSet = hovered ? [hovered.id].concat(neighbors[hovered.id]) : null;
+
+      validEdges.forEach(function (e) {
+        var a = byID[e.source], b = byID[e.target];
+        var lit = hoverSet && hoverSet.indexOf(e.source) >= 0 && hoverSet.indexOf(e.target) >= 0;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineWidth = (e.kind === "parent" ? 1.4 : 0.7) / view.scale;
+        ctx.strokeStyle = lit ? rail : dim;
+        ctx.globalAlpha = lit ? 0.9 : (e.kind === "parent" ? 0.55 : 0.25);
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+
+      nodes.forEach(function (n) {
+        var lit = hoverSet && hoverSet.indexOf(n.id) >= 0;
+        var r = (n.id === (hovered && hovered.id) ? 5 : 3) / Math.sqrt(view.scale);
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = lit ? rail : (n.status === "draft" ? dim : ink);
+        ctx.globalAlpha = hoverSet && !lit ? 0.35 : 1;
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      if (hovered) {
+        ctx.font = (12 / view.scale) + "px sans-serif";
+        ctx.fillStyle = ink;
+        ctx.fillText(hovered.title, hovered.x + 8 / view.scale, hovered.y - 8 / view.scale);
+      }
+      ctx.restore();
+    }
+
+    // fitView는 자리가 다 잡힌 뒤 한 번, 전체가 다 보이게 확대·이동한다.
+    // 사람이 그 전에 손으로 줌·팬을 했으면(userMoved) 건드리지 않는다 —
+    // 보던 자리를 갑자기 옮기면 안 된다.
+    var userMoved = false;
+    function fitView() {
+      if (userMoved) return;
+      var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      nodes.forEach(function (n) {
+        if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
+        if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
+      });
+      var spanX = Math.max(1, maxX - minX), spanY = Math.max(1, maxY - minY);
+      var s = Math.min(
+        (canvas.width * 0.92) / spanX / devicePixelRatio,
+        (canvas.height * 0.92) / spanY / devicePixelRatio
+      );
+      view.scale = Math.min(6, Math.max(0.08, s));
+      view.x = -view.scale * devicePixelRatio * (minX + maxX) / 2;
+      view.y = -view.scale * devicePixelRatio * (minY + maxY) / 2;
+    }
+
+    function frame() {
+      if (stale(mine)) { window.removeEventListener("resize", resize); return; }
+      if (running) {
+        var temp = Math.max(0.05, 1 - iter / maxIter);
+        tick(temp);
+        iter++;
+        if (iter >= maxIter) { running = false; fitView(); }
+      }
+      draw();
+      if (running || dragging || panning) requestAnimationFrame(frame);
+    }
+    if (reduceMotion) { for (; iter < 60; iter++) tick(0.6); running = false; fitView(); }
+    requestAnimationFrame(frame);
+
+    // ── 입력. Pointer Events라 마우스와 터치를 같은 코드로 받는다.
+    function toWorld(clientX, clientY) {
+      var rect = canvas.getBoundingClientRect();
+      var sx = clientX - rect.left, sy = clientY - rect.top;
+      return {
+        x: (sx - rect.width / 2 - view.x) / view.scale,
+        y: (sy - rect.height / 2 - view.y) / view.scale,
+      };
+    }
+    function hitTest(clientX, clientY) {
+      var p = toWorld(clientX, clientY);
+      var best = null, bestD = 10 / view.scale;
+      nodes.forEach(function (n) {
+        var d = Math.hypot(n.x - p.x, n.y - p.y);
+        if (d < bestD) { bestD = d; best = n; }
+      });
+      return best;
+    }
+
+    canvas.addEventListener("pointerdown", function (e) {
+      canvas.setPointerCapture(e.pointerId);
+      var hit = hitTest(e.clientX, e.clientY);
+      if (hit) { dragging = { node: hit, moved: false }; hit.fixed = true; }
+      else panning = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+      if (!running) requestAnimationFrame(frame);
+    });
+    canvas.addEventListener("pointermove", function (e) {
+      if (dragging) {
+        dragging.moved = true;
+        var p = toWorld(e.clientX, e.clientY);
+        dragging.node.x = p.x; dragging.node.y = p.y;
+        dragging.node.vx = 0; dragging.node.vy = 0;
+        if (!running) draw();
+      } else if (panning) {
+        userMoved = true;
+        view.x = panning.vx + (e.clientX - panning.x);
+        view.y = panning.vy + (e.clientY - panning.y);
+        draw();
+      } else {
+        var hit = hitTest(e.clientX, e.clientY);
+        if (hit !== hovered) { hovered = hit; canvas.style.cursor = hit ? "pointer" : "grab"; if (!running) draw(); }
+      }
+    });
+    function endPointer() {
+      if (dragging && !dragging.moved) go("/admin/edit/" + encodeURIComponent(dragging.node.slug));
+      if (dragging) dragging.node.fixed = false;
+      dragging = null; panning = null;
+    }
+    canvas.addEventListener("pointerup", endPointer);
+    canvas.addEventListener("pointercancel", endPointer);
+    canvas.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      userMoved = true;
+      var factor = Math.exp(-e.deltaY * 0.001);
+      view.scale = Math.min(6, Math.max(0.08, view.scale * factor));
+      draw();
+    }, { passive: false });
+    canvas.style.cursor = "grab";
   }
 
   // ---------------------------------------------------------------- 편집
