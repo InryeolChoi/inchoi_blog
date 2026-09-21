@@ -4,7 +4,9 @@
 // # 지금 어디까지 와 있나
 //
 // 1단계(화면)·2단계(인증)·3단계(저장)가 끝났다. 글은 실제로 DB에 들어가고
-// 이미지도 BLOB으로 저장된다(save.go, upload.go). 남은 것은 4단계(AI 삽입)다.
+// 이미지도 BLOB으로 저장된다(save.go, upload.go). 4단계(AI 삽입)는 글감함으로
+// 시작했다(notes.go) — 프로젝트 하며 남긴 메모를 OpenRouter로 정리해 draft
+// 글을 만든다. 만들어지는 것은 언제나 draft이고 최종 편집은 사람이 한다.
 //
 // 인증은 auth.go에 있다. 허용 목록(AuthConfig.AllowedLogins)에 적은 GitHub
 // 계정만 들어올 수 있고, 관문은 Handler()가 mux 바깥에 두른다.
@@ -59,6 +61,9 @@ type Server struct {
 	// auth가 nil이면 **관문이 없다.** cmd/blog가 이 상태를 loopback에서만
 	// 허용한다(-admin-no-auth). auth.go의 guard 참고.
 	auth *authenticator
+	// openRouter는 글감함의 "초안 생성"이 쓰는 설정이다(notes.go, openrouter.go).
+	// APIKey가 비어 있으면 그 버튼만 실패하고 나머지 admin은 그대로 동작한다.
+	openRouter OpenRouterConfig
 }
 
 // New는 admin 서버를 만든다.
@@ -66,7 +71,10 @@ type Server struct {
 // **auth를 반드시 적어야 한다.** nil이면 인증이 없는 화면이 된다. 기본값으로
 // 슬쩍 얻어지지 않게 인자로 뒀다 — 부르는 쪽이 `nil`이라고 쓰게 만드는 것이
 // 요점이다.
-func New(db *sql.DB, auth *AuthConfig) (*Server, error) {
+//
+// **openRouter는 비어 있어도 된다.** 글감함 자체는 그래도 쓸 수 있고,
+// "초안 생성" 버튼만 503으로 실패한다(notes.go).
+func New(db *sql.DB, auth *AuthConfig, openRouter OpenRouterConfig) (*Server, error) {
 	shell, err := template.ParseFS(templateFS, "templates/admin.html")
 	if err != nil {
 		return nil, fmt.Errorf("admin 템플릿 파싱: %w", err)
@@ -83,10 +91,11 @@ func New(db *sql.DB, auth *AuthConfig) (*Server, error) {
 		store: &store{db: db},
 		// **공개 페이지와 같은 렌더러다.** 확장(수식·코드 라벨·외부 링크 카드)이
 		// 전부 여기 들어 있어서, 미리보기와 실제 글이 같은 결과를 낸다.
-		md:    markdown.New(),
-		shell: shell,
-		css:   css,
-		tags:  tags,
+		md:         markdown.New(),
+		shell:      shell,
+		css:        css,
+		tags:       tags,
+		openRouter: openRouter,
 	}
 	if auth != nil {
 		if s.auth, err = newAuthenticator(*auth, css); err != nil {
@@ -138,6 +147,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/posts/{slug}/siblings", s.handleSiblings)
 	mux.HandleFunc("GET /api/admin/posts/{slug}/refs", s.handleRefs)
 	mux.HandleFunc("DELETE /api/admin/posts/{slug}", s.handleDelete)
+
+	// 글감함. 프로젝트 하면서 남긴 메모를 모아뒀다가 AI로 draft 글을 만든다(notes.go).
+	mux.HandleFunc("GET /api/admin/notes", s.handleListNotes)
+	mux.HandleFunc("POST /api/admin/notes", s.handleCreateNote)
+	mux.HandleFunc("PUT /api/admin/notes/{id}", s.handleUpdateNote)
+	mux.HandleFunc("DELETE /api/admin/notes/{id}", s.handleDeleteNote)
+	mux.HandleFunc("POST /api/admin/notes/{id}/generate", s.handleGenerateNote)
 
 	// 로그아웃은 인증이 꺼져 있어도 등록해 둔다. 읽는 화면의 사이드바가
 	// 부르는 자리라 언제나 있어야 하고, 하는 일은 쿠키 하나를 지우는 것뿐이다.

@@ -8,7 +8,7 @@ import (
 // 데이터 보기는 **읽기 전용이다.** 세어보는 화면이 DB를 건드리면 그게 사고다.
 func TestStatsDoesNotTouchTheDatabase(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestStatsCountsNativePosts(t *testing.T) {
 // 없다) 그 수가 화면에 드러나야 한다.
 func TestStatsFindsUnusedImages(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

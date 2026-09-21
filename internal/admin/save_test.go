@@ -42,7 +42,7 @@ func decode(t *testing.T, rec *httptest.ResponseRecorder, v any) {
 // 가드에 안 걸리고 다음 upload-db.sh에 조용히 사라진다.
 func TestCreateMarksThePostAsNative(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestRenamingASlugRewritesLinksToIt(t *testing.T) {
 	}
 	exec(`UPDATE posts SET body = '앞말 [보이는 글](/p/live-post) 뒷말' WHERE slug = 'draft-post'`)
 
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestSaveRefusesAParentCycle(t *testing.T) {
 // 걸리는 자리를 골라, 본문까지 통째로 되돌아가는지 본다.
 func TestFailedSaveLeavesNothingBehind(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestSaveRollsBackWhatItAlreadyWrote(t *testing.T) {
 	      WHEN old.slug = 'draft-post'
 	      BEGIN SELECT RAISE(ABORT, 'boom'); END`)
 
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +379,7 @@ func TestSaveRollsBackWhatItAlreadyWrote(t *testing.T) {
 // 무시되면 화면에서 private을 골라도 글이 그대로 공개로 남는다.
 func TestVisibilityRoundTrips(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +423,7 @@ func TestVisibilityRoundTrips(t *testing.T) {
 // 비공개가 아니라 아무 조건에도 안 걸리는 공개 글이 된다.
 func TestVisibilityDefaultsToPublicAndRejectsJunk(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +458,7 @@ func TestVisibilityDefaultsToPublicAndRejectsJunk(t *testing.T) {
 // 순서 칸이 저장은 되는데 화면은 그대로인, 안 듣는 칸이 된다.
 func TestSaveCarriesWhoDecidedTheOrder(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +519,7 @@ func TestSaveCarriesWhoDecidedTheOrder(t *testing.T) {
 // 목록이 통째로 사람 것이어야 적어둔 차례가 곧 화면의 차례가 된다.
 func TestSaveAppliesTheOrderYouDragged(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +579,7 @@ func TestSaveRefusesAnOrderThatIsNotMine(t *testing.T) {
 // 그걸 그대로 쓰면 방금 이름을 바꿨다는 이유로 저장 전체가 실패한다.
 func TestSaveKeepsTheOrderWhenTheSlugChanges(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

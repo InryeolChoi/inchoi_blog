@@ -49,7 +49,7 @@ func testDB(t *testing.T) *sql.DB {
 
 func testHandler(t *testing.T) http.Handler {
 	t.Helper()
-	s, err := New(testDB(t), nil)
+	s, err := New(testDB(t), nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestMenuPathsServeTheShell(t *testing.T) {
 // 고쳐 배포하는 것은 "글은 웹 UI에서 직접 쓰고 고친다"와 어긋난다.
 func TestSettingsHoldTheHomeCopy(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

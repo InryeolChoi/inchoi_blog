@@ -20,7 +20,7 @@ func TestDeleteTellsWhatWillBeLostFirst(t *testing.T) {
 	exec(`UPDATE posts SET body = '앞말 [보이는 글](/p/live-post) 뒷말' WHERE slug = 'draft-post'`)
 	exec(`UPDATE categories SET cover_post_id = 1 WHERE id = 1`)
 
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestDeleteUnlinksInsteadOfLeavingDeadLinks(t *testing.T) {
 	}
 	exec(`UPDATE posts SET body = '앞말 [보이는 글](/p/live-post) 뒷말' WHERE slug = 'draft-post'`)
 
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

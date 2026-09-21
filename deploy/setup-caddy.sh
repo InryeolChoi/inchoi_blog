@@ -103,6 +103,11 @@ BLOG_ADMIN_LOGINS=InryeolChoi
 # 세션 쿠키 서명 키. setup-caddy.sh가 만들었다. 바꾸면 로그인이 전부 풀린다.
 BLOG_SESSION_KEY=$key
 
+# 글감함의 "초안 생성"이 쓰는 OpenRouter 키. 없어도 서버는 뜬다 — 그
+# 버튼만 실패한다(cmd/blog의 openRouterConfig). https://openrouter.ai/keys
+#BLOG_OPENROUTER_API_KEY=
+#BLOG_OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
+
 # admin을 켜는 스위치. 위 셋을 채운 뒤에 주석을 푼다.
 #BLOG_ADMIN_FLAG=-admin
 EOF

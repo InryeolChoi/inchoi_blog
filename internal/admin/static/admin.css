@@ -208,6 +208,17 @@ body.admin > * { max-width: none; }
 .ad-btn.primary:hover { filter: brightness(1.1); }
 .ad-btn:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }
 
+/* 편집기가 길어지면 상단(제목·저장)으로 되돌아갈 길을 오른쪽 아래에 띄운다. */
+.ad-totop {
+  position: fixed; right: 1.2rem; bottom: 1.2rem; z-index: 20;
+  font: 600 .85rem/1 inherit; cursor: pointer;
+  color: var(--ink); background: var(--surface);
+  border: 2px solid var(--ink); border-radius: 0;
+  padding: .6rem 1rem; box-shadow: 0 2px 0 var(--ink);
+}
+.ad-totop:hover { background: var(--hover-bg); }
+.ad-totop:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }
+
 .ad-imagebox { display: flex; align-items: center; gap: .7rem; margin-bottom: .8rem; flex-wrap: wrap; }
 /* 파일 입력은 <label class="ad-btn">이 대신 누른다. 감추되 키보드에서
    닿을 수 있게 남긴다 — display:none이면 포커스가 안 간다. */
@@ -370,6 +381,21 @@ body.admin > * { max-width: none; }
 }
 .ad-filters .ad-search { flex: 1 1 16rem; min-width: 10rem; }
 .ad-check { display: inline-flex; align-items: center; gap: .3rem; color: var(--ink-dim); font-size: .9rem; }
+
+/* --------------------------------------------------------------- 글감함 */
+.ad-note-title, .ad-note-body {
+  display: block; width: 100%; font: inherit;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-mid); border-radius: 0;
+  padding: .5rem .6rem; margin-bottom: .6rem;
+}
+.ad-note-body { resize: vertical; }
+.ad-note-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .7rem; }
+.ad-note {
+  border: 2px solid var(--line-mid); padding: .8rem 1rem;
+}
+.ad-note-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.ad-note-actions { margin-top: .5rem; }
 
 /* -------------------------------------------------------------- 환경설정 */
 .ad-card {

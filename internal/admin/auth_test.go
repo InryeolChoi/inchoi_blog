@@ -58,7 +58,7 @@ func authHandler(t *testing.T, gh *httptest.Server, allowed ...string) (http.Han
 		AuthorizeURL:  gh.URL + "/authorize",
 		TokenURL:      gh.URL + "/token",
 		UserURL:       gh.URL + "/user",
-	})
+	}, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +340,7 @@ func TestBrokenAuthConfigRefusesToStart(t *testing.T) {
 	}
 	for name, cfg := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := New(testDB(t), &cfg); err == nil {
+			if _, err := New(testDB(t), &cfg, OpenRouterConfig{}); err == nil {
 				t.Fatal("모자란 설정으로 서버가 만들어졌다")
 			}
 		})

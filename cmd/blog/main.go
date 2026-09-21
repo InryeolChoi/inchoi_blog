@@ -69,7 +69,7 @@ func main() {
 		if auth, err = adminAuth(*addr, *noAuth); err != nil {
 			log.Fatalf("admin: %v", err)
 		}
-		if adm, err = admin.New(sqlDB, auth); err != nil {
+		if adm, err = admin.New(sqlDB, auth, openRouterConfig()); err != nil {
 			log.Fatal(err)
 		}
 		opts = append(opts, web.WithEditor(adm.LoginFor))
@@ -119,7 +119,20 @@ const (
 	envClientSecret = "BLOG_GITHUB_CLIENT_SECRET"
 	envLogins       = "BLOG_ADMIN_LOGINS"
 	envSessionKey   = "BLOG_SESSION_KEY"
+	// envOpenRouterKey/envOpenRouterModel은 글감함의 "초안 생성"이 쓰는 설정이다.
+	// **없어도 서버는 뜬다** — GitHub 로그인과 달리 이건 admin 화면 전체가
+	// 아니라 버튼 하나의 기능이라, 반쯤 설정된 채로 두는 것이 위험하지 않다.
+	envOpenRouterKey   = "BLOG_OPENROUTER_API_KEY"
+	envOpenRouterModel = "BLOG_OPENROUTER_MODEL"
 )
+
+// openRouterConfig는 환경변수에서 글감함 설정을 읽는다.
+func openRouterConfig() admin.OpenRouterConfig {
+	return admin.OpenRouterConfig{
+		APIKey: os.Getenv(envOpenRouterKey),
+		Model:  os.Getenv(envOpenRouterModel),
+	}
+}
 
 // sessionKeyMinLen은 세션 서명 키의 최소 길이다. 짧은 키는 HMAC을 무르게
 // 만들어서, 서명을 맞춰내면 아무 계정으로나 세션을 지어낼 수 있다.

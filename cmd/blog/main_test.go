@@ -74,7 +74,7 @@ func TestAdminIsOffUnlessAskedFor(t *testing.T) {
 
 	// -admin을 줬을 때는 반대로 실제로 붙어야 한다. 안 그러면 위 검사는
 	// 아무것도 확인하지 않는 셈이 된다.
-	adm, err := admin.New(sqlDB, nil)
+	adm, err := admin.New(sqlDB, nil, admin.OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestPublicRoutesSurviveTheAdminMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adm, err := admin.New(sqlDB, nil)
+	adm, err := admin.New(sqlDB, nil, admin.OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -84,6 +84,7 @@
   //   /admin                  목록
   //   /admin/edit/{slug}      기존 글 편집
   //   /admin/new              새 글
+  //   /admin/notes            글감함
   //   /admin/home             홈 화면 편집
   //   /admin/data             데이터 보기
   //   /admin/graph            글 지도
@@ -118,6 +119,7 @@
     var m = /^\/admin\/edit\/(.+)$/.exec(path);
     if (m) return showEditor(decodeURIComponent(m[1]));
     if (path === "/admin/new") return showEditor(null, prefillCategory());
+    if (path === "/admin/notes") return showNotes();
     if (path === "/admin/home") return showHome();
     if (path === "/admin/data") return showStats();
     if (path === "/admin/graph") return showGraph();
@@ -131,7 +133,7 @@
   // 못 떠도 세 링크는 그대로 눌린다. 새 글과 편집 화면은 `전체 글`에 딸린
   // 자리라 그쪽을 켠다 — 어디에도 안 걸린 화면을 만들지 않는다.
   function markMenu(path) {
-    var here = path === "/admin/home" || path === "/admin/data" || path === "/admin/graph" || path === "/admin/settings"
+    var here = path === "/admin/notes" || path === "/admin/home" || path === "/admin/data" || path === "/admin/graph" || path === "/admin/settings"
       ? path : "/admin";
     Array.prototype.forEach.call(document.querySelectorAll(".ad-menu a"), function (a) {
       var on = a.dataset.menu === here;
@@ -352,6 +354,132 @@
           });
         });
       });
+  }
+
+  // ---------------------------------------------------------------- 글감함
+  //
+  // 프로젝트를 하는 동안 남긴 메모를 여기 쌓아둔다. "초안 생성"을 누르면
+  // OpenRouter가 그 메모를 정리해 draft 글 하나를 만든다 — 최종 편집은
+  // 항상 사람이 admin 편집기에서 한다.
+
+  function noteCard(note, onChange) {
+    var busy = false;
+
+    var genBtn = el("button", {
+      type: "button", class: "ad-act",
+      text: note.status === "generated" ? "다시 생성" : "초안 생성",
+    });
+    var editSlug = note.generatedSlug
+      ? el("a", { class: "ad-act", href: "/admin/edit/" + encodeURIComponent(note.generatedSlug), text: "만든 초안 열기 ↗" })
+      : null;
+    var status = el("span", {
+      class: "ad-dim",
+      text: note.status === "generated" ? "초안 생성됨" : "아직 안 만듦",
+    });
+
+    genBtn.addEventListener("click", function () {
+      if (busy) return;
+      busy = true;
+      genBtn.textContent = "만드는 중… (몇십 초 걸릴 수 있다)";
+      genBtn.disabled = true;
+      api("POST", "/api/admin/notes/" + note.id + "/generate").then(function (r) {
+        busy = false;
+        genBtn.disabled = false;
+        if (!r.ok) {
+          genBtn.textContent = note.status === "generated" ? "다시 생성" : "초안 생성";
+          return alert(r.data.error || ("초안을 만들지 못했다 (HTTP " + r.status + ")"));
+        }
+        if (onChange) onChange();
+      });
+    });
+
+    var delBtn = el("button", {
+      type: "button", class: "ad-act danger", text: "글감 지우기",
+      onclick: function () {
+        if (!window.confirm("\"" + note.title + "\" 글감을 지운다. 이미 만든 초안 글은 남는다. 지울까?")) return;
+        api("DELETE", "/api/admin/notes/" + note.id).then(function (r) {
+          if (!r.ok) return alert(r.data.error || "지우지 못했다");
+          if (onChange) onChange();
+        });
+      },
+    });
+
+    return el("li", { class: "ad-note" }, [
+      el("div", { class: "ad-note-head" }, [
+        el("strong", { text: note.title }),
+        status,
+      ]),
+      el("p", { class: "ad-dim", text: dateText(note.createdAt) }),
+      el("div", { class: "ad-acts ad-note-actions" }, [genBtn, editSlug, delBtn]),
+    ]);
+  }
+
+  function showNotes() {
+    var mine = drawTicket;
+    clear(root);
+    root.appendChild(el("div", { class: "ad-listhead" }, [
+      el("h1", { text: "글감함" }),
+    ]));
+    root.appendChild(el("p", { class: "ad-dim", text:
+      "프로젝트를 하면서 남긴 메모를 여기 적어둔다. \"초안 생성\"을 누르면 AI가 정리해서 " +
+      "draft 글을 하나 만든다 — 공개되지 않으며, 최종 편집은 직접 한다." }));
+
+    var titleInput = el("input", { type: "text", placeholder: "제목", maxlength: "300", class: "ad-note-title" });
+    var bodyInput = el("textarea", { rows: "6", placeholder: "글감 본문. 생각나는 대로 적어둔다.", class: "ad-note-body" });
+    var addErr = el("p", { class: "ad-error" });
+    var addBtn = el("button", { type: "button", class: "ad-btn primary", text: "글감 남기기" });
+
+    addBtn.addEventListener("click", function () {
+      clear(addErr);
+      var title = titleInput.value.trim();
+      var body = bodyInput.value.trim();
+      if (!title || !body) {
+        addErr.textContent = "제목과 본문을 둘 다 적어야 한다";
+        return;
+      }
+      addBtn.disabled = true;
+      api("POST", "/api/admin/notes", { title: title, body: body }).then(function (r) {
+        addBtn.disabled = false;
+        if (!r.ok) {
+          addErr.textContent = r.data.error || "글감을 남기지 못했다";
+          return;
+        }
+        titleInput.value = "";
+        bodyInput.value = "";
+        loadList();
+      });
+    });
+
+    root.appendChild(el("section", { class: "ad-card" }, [
+      el("h2", { text: "새 글감" }),
+      titleInput, bodyInput, addErr, addBtn,
+    ]));
+
+    var listBox = el("ul", { class: "ad-note-list" });
+    root.appendChild(listBox);
+
+    function loadList() {
+      var ticketNow = mine;
+      clear(listBox);
+      listBox.appendChild(el("li", { class: "ad-empty", text: "불러오는 중…" }));
+      api("GET", "/api/admin/notes").then(function (r) {
+        if (stale(ticketNow)) return;
+        clear(listBox);
+        if (!r.ok) {
+          listBox.appendChild(el("li", { class: "ad-empty", text: r.data.error || "글감을 못 가져왔다" }));
+          return;
+        }
+        var notes = r.data.notes || [];
+        if (!notes.length) {
+          listBox.appendChild(el("li", { class: "ad-empty", text: "아직 남긴 글감이 없다." }));
+          return;
+        }
+        notes.forEach(function (note) {
+          listBox.appendChild(noteCard(note, loadList));
+        });
+      });
+    }
+    loadList();
   }
 
   // ---------------------------------------------------------------- 홈 화면
@@ -1320,31 +1448,32 @@
       ]));
     }
 
+    root.appendChild(el("div", { class: "ad-fields" }, [
+      el("label", { class: "ad-field wide" }, [el("span", { text: "제목" }), titleInput]),
+      el("label", { class: "ad-field" }, [el("span", { text: "공개 범위" }), visSelect]),
+      el("label", { class: "ad-field wide" }, [el("span", { text: "slug" }), slugInput]),
+    ]));
+    root.appendChild(el("details", { class: "ad-meta", ontoggle: function (e) {
+      if (e.target.open) askOrder();
+    } }, [
+      el("summary", { text: "분류 · 계층 · 순서 · 날짜" }),
+      el("div", { class: "ad-fields" }, [
+        el("label", { class: "ad-field wide" }, [el("span", { text: "분류" }),
+          el("div", { class: "ad-catrow" }, [catSelect, newCatToggle]), newCatBox]),
+        el("label", { class: "ad-field wide" }, [el("span", { text: "부모 글" }), parentInput]),
+        numberField,
+        el("label", { class: "ad-field" }, [el("span", { text: "작성일" }), dateInput]),
+        orderBox,
+      ]),
+      el("p", { class: "ad-note" }, [
+        post.publishedAt
+          ? "공개 시각 " + dateText(post.publishedAt) + " (status를 published로 처음 바꿀 때 서버가 찍는다)"
+          : "status를 published로 바꾸면 그때 공개 시각이 찍힌다.",
+      ]),
+    ]));
+
     root.appendChild(el("div", { class: "ad-split" }, [
       el("section", { class: "ad-pane" }, [
-        el("div", { class: "ad-fields" }, [
-          el("label", { class: "ad-field wide" }, [el("span", { text: "제목" }), titleInput]),
-          el("label", { class: "ad-field" }, [el("span", { text: "공개 범위" }), visSelect]),
-          el("label", { class: "ad-field wide" }, [el("span", { text: "slug" }), slugInput]),
-        ]),
-        el("details", { class: "ad-meta", ontoggle: function (e) {
-          if (e.target.open) askOrder();
-        } }, [
-          el("summary", { text: "분류 · 계층 · 순서 · 날짜" }),
-          el("div", { class: "ad-fields" }, [
-            el("label", { class: "ad-field wide" }, [el("span", { text: "분류" }),
-              el("div", { class: "ad-catrow" }, [catSelect, newCatToggle]), newCatBox]),
-            el("label", { class: "ad-field wide" }, [el("span", { text: "부모 글" }), parentInput]),
-            numberField,
-            el("label", { class: "ad-field" }, [el("span", { text: "작성일" }), dateInput]),
-            orderBox,
-          ]),
-          el("p", { class: "ad-note" }, [
-            post.publishedAt
-              ? "공개 시각 " + dateText(post.publishedAt) + " (status를 published로 처음 바꿀 때 서버가 찍는다)"
-              : "status를 published로 바꾸면 그때 공개 시각이 찍힌다.",
-          ]),
-        ]),
         imageBox(bodyAreaRef),
         bodyAreaRef,
       ]),
@@ -1389,6 +1518,25 @@
       preview.scrollTop = (bodyAreaRef.scrollTop / max) * (preview.scrollHeight - preview.clientHeight);
       requestAnimationFrame(function () { syncing = false; });
     });
+
+    // 글이 길면 아래로 한참 내려간다. 맨 위(제목·상태·저장 버튼)로 바로
+    // 돌아갈 수 있게 스크롤이 어느 정도 내려갔을 때만 뜨는 버튼을 둔다.
+    var toTop = el("button", {
+      class: "ad-totop", type: "button", title: "맨 위로",
+      onclick: function () {
+        var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+      },
+      text: "↑ 맨 위로",
+    });
+    toTop.hidden = true;
+    root.appendChild(toTop);
+    var mine = drawTicket;
+    function onScroll() {
+      if (stale(mine)) { window.removeEventListener("scroll", onScroll); return; }
+      toTop.hidden = window.scrollY < 400;
+    }
+    window.addEventListener("scroll", onScroll);
 
     // `/`를 치면 조각 팔레트가 뜬다. **서버에 묻지 않으므로 지연이 없다.**
     // "이미지 올리기"만은 조각이 아니라 파일 고르는 창을 여는 항목이라,

@@ -53,10 +53,12 @@ go run ./cmd/blog -db blog.db -addr 127.0.0.1:8080
 
 ## 문서
 
-| | |
+| 문서 | 내용 |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | **이 프로젝트의 진짜 문서다.** 구조·결정·이력 전부 |
-| [`deploy/README.md`](deploy/README.md) | GCP 배포, HTTPS, 백업, DB 동기화 절차 |
+| [AGENTS.md](AGENTS.md) | 공통 작업 지침과 작업별 문서 안내 |
+| [docs/architecture.md](docs/architecture.md) | 구조·데이터 모델·공개 화면·렌더링·Admin 설계 |
+| [docs/operations.md](docs/operations.md) | 이관·curation·DB 운영·남은 작업과 결정 |
+| [deploy/README.md](deploy/README.md) | GCP 배포·HTTPS·백업·DB 동기화 실행 절차 |
 
-`AGENTS.md`는 `CLAUDE.md`를 가리키는 심볼릭 링크다 — 어느 도구로 열어도
-같은 문서를 읽는다.
+`CLAUDE.md`는 `AGENTS.md`를 가리키는 심볼릭 링크다. 두 도구가 같은 공통 지침을 읽고,
+작업에 필요한 상세 문서를 찾아간다. 과거 변경 과정은 Git 이력을 참고한다.

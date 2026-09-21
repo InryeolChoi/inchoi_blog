@@ -53,7 +53,7 @@ func upload(t *testing.T, h http.Handler, field, filename string, data []byte, c
 // 내용의 sha256인지 본다.
 func TestUploadStoresTheImageOnceByContent(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestUploadStoresTheImageOnceByContent(t *testing.T) {
 // 사이트 전체에 대한 XSS가 된다.
 func TestUploadRefusesThingsThatAreNotSafeImages(t *testing.T) {
 	sqlDB := testDB(t)
-	s, err := New(sqlDB, nil)
+	s, err := New(sqlDB, nil, OpenRouterConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

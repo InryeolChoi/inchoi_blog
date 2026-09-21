@@ -250,13 +250,13 @@ gcloud compute ssh playground --zone=us-west1-a --project=statcode \
 
    | 표시 | 뜻 |
    |---|---|
-   | `LOST` | 웹에서 쓴 글이 사라진다 (`notion_page_id`가 NULL) |
+   | `LOST` | 서버 글이 사라진다. 출처 전체를 보되 의도된 DropPosts는 제외 |
    | `STALE` | 서버 쪽이 더 최근이다 — 그 뒤에 웹에서 고쳤다는 뜻 |
-   | `LOSTIMG` | 웹에서 올린 이미지가 사라진다 |
+   | `LOSTIMG` | 서버 이미지가 사라진다. 의도된 DropImages는 제외 |
    | `BACK` | **서버에서 지운 글이 되살아난다** |
 
    앞의 셋은 "잃는 것"이고 `BACK`은 **반대 방향**이다 — admin에 지우기가
-   생기면서 열린 자리다(2026-08-31). `notion_page_id`가 NULL인 글만 보는데,
+   생기면서 열린 자리다(2026-08-31). `source = native`인 글만 보는데,
    `import`는 native 글을 절대 만들지 않으므로 올릴 파일에만 있는 native
    글은 **서버에서 지웠다는 뜻밖에 없다.** 그래서 오탐이 없다.
    노션에서 온 글은 여기서 안 본다 — 그건 재이관이 되살리는 것이 이미
@@ -346,4 +346,4 @@ journal에 남는다. 사람이 할 일은 없지만, 도메인을 옮기거나 
   밖으로 나가는 것은 사람이 `deploy/fetch-db.sh`를 돌릴 때뿐이다. 디스크가
   통째로 날아가면 그 사이 것은 같이 날아간다. GCS 버킷에 올리려면 서비스
   계정과 수명주기 규칙을 먼저 정해야 한다.
-- **robots.txt / sitemap.xml.**
+- robots.txt와 sitemap.xml은 구현되어 있다. 기능 후속 작업은 [운영 문서](../docs/operations.md)의 남은 작업을 참고한다.
