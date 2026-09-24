@@ -92,3 +92,17 @@ CGO_ENABLED=0 go build -o /tmp/blog-check ./cmd/blog
 - 데이터 건수는 실시간 사실로 복사하지 않는다. 필요하면 확인 날짜·DB 출처와 함께 기록한다.
 - 완료한 할 일은 목록에서 제거하고 필요한 동작 설명을 해당 절에 합친다. 과거 변경은 Git 이력에서 찾는다.
 - 상세 문서를 추가할 때는 가능하면 기존 두 문서의 적절한 절을 사용한다.
+
+## Agent skills
+
+### 이슈 추적
+
+이슈는 이 저장소의 GitHub Issues에 있고 `gh` CLI로 다룬다. `docs/agents/issue-tracker.md`를 본다.
+
+### triage 라벨
+
+다섯 개 표준 라벨을 기본 이름 그대로 쓴다. `docs/agents/triage-labels.md`를 본다.
+
+### 도메인 문서
+
+단일 컨텍스트(루트 `CONTEXT.md` + `docs/adr/`)다. `docs/agents/domain.md`를 본다.
