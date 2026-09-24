@@ -21,6 +21,18 @@ Group=blog
 # 비어서 admin이 그냥 안 열린다 — 모자란 설정으로 반쯤 열리는 것보다 낫다.
 EnvironmentFile=-/etc/blog/admin.env
 
+# OpenRouter 키(글감함의 "초안 생성")는 **여기 적지 않는다.** 배포가
+# /etc/systemd/system/blog.service.d/openrouter.conf 드롭인과
+# /etc/blog/openrouter.env를 만들어 넣는다(.github/workflows/deploy.yml).
+#
+# 왜 admin.env가 아니라 딴 파일인가: admin.env는 사람이 손으로 적는 파일이고
+# client secret이 들어 있다. 배포가 매번 건드리는 파일과 갈라 둬야, CI가
+# 그 파일을 잘못 쓰는 사고가 로그인까지 망가뜨리지 않는다.
+#
+# 왜 이 유닛 파일이 아니라 드롭인인가: 이 파일은 setup-instance.sh/setup-caddy.sh만
+# 설치한다. 여기 한 줄을 적으면 서버에 반영하려고 셋업을 다시 돌려야 하는데,
+# 배포는 바이너리만 올리는 길이라 그 두 개가 어긋난다.
+
 # -drafts는 **절대 붙이지 않는다.** 작성 중인 글 366편이 그대로 공개된다.
 #
 # -admin은 /etc/blog/admin.env의 BLOG_ADMIN_FLAG로 켠다. 여기 직접 적지

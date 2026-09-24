@@ -122,8 +122,14 @@ const (
 	// envOpenRouterKey/envOpenRouterModel은 글감함의 "초안 생성"이 쓰는 설정이다.
 	// **없어도 서버는 뜬다** — GitHub 로그인과 달리 이건 admin 화면 전체가
 	// 아니라 버튼 하나의 기능이라, 반쯤 설정된 채로 두는 것이 위험하지 않다.
-	envOpenRouterKey   = "BLOG_OPENROUTER_API_KEY"
-	envOpenRouterModel = "BLOG_OPENROUTER_MODEL"
+	//
+	// **여기만 BLOG_ 접두사가 없다.** OpenRouter가 저희 문서와 SDK에서 쓰는
+	// 이름이 그대로 OPENROUTER_API_KEY라, 로컬 셸과 CI secret과 서버가 같은
+	// 이름을 쓰는 쪽이 낫다 — 접두사를 붙이면 옮겨 붙일 때마다 이름을 고치게 된다.
+	envOpenRouterKey   = "OPENROUTER_API_KEY"
+	// 모델은 secret이 아니고 admin 환경설정에서 고친다(internal/admin/ai.go).
+	// 이 환경변수는 화면에서 아직 아무것도 안 골랐을 때의 서버 기본값이다.
+	envOpenRouterModel = "OPENROUTER_MODEL"
 )
 
 // openRouterConfig는 환경변수에서 글감함 설정을 읽는다.

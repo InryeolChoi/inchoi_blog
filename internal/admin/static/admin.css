@@ -488,3 +488,65 @@ body.admin > * { max-width: none; }
   max-width: 100%; overflow: hidden;
 }
 .ad-graph { display: block; width: 100%; height: 420px; touch-action: none; }
+
+/* ------------------------------------------------- AI 초안 생성 설정
+   환경설정 안의 한 절이라 `.ad-card`를 그대로 쓴다. 여기서 더하는 것은
+   폼 칸의 간격과, 좁은 폭에서 버튼이 줄을 넘어가도 괜찮게 하는 것뿐이다. */
+.ad-ai-field { display: block; margin: 1rem 0 0; }
+.ad-ai-field > label {
+  display: block; margin: 0 0 .3rem;
+  font: 600 .7rem/1 var(--mono); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-dim);
+}
+/* 모델 칸은 한 줄이지만 id가 길다(제공자/모델). 넓은 화면에서도 통째로
+   보이게 폭을 다 쓴다. */
+.ad-ai-model { display: block; width: 100%; box-sizing: border-box; }
+/* 지시문은 `.ad-body`(글 편집기 본문, 26rem)를 쓰되 여기서는 그만큼 길 일이
+   없다. 문단 몇 개가 보이는 높이면 된다. */
+.ad-ai-prompt { min-height: 12rem; }
+.ad-ai-note { margin: .4rem 0 0; font-size: .78rem; }
+/* 버튼 줄. **줄을 넘긴다** — 좁은 폭에서 한 줄을 고집하면 글자가 잘린다. */
+.ad-ai-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+.ad-ai-row .ad-act { margin-left: 0; }
+.ad-ai-credits { margin: .8rem 0 0; }
+/* 잔액 카드는 데이터 화면의 `.ad-stats`를 그대로 쓴다. auto-fit이라 넓으면
+   셋이 나란히, 좁으면 한 줄에 하나씩 선다 — 화면 폭마다 규칙을 따로 쓰지 않는다. */
+.ad-ai-stats { margin: 0 0 .6rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+
+/* 손가락으로 쓰는 화면에서는 작은 글씨 칸을 키운다. **입력 글자는 16px 위로**
+   — 그 아래면 iOS가 칸을 누를 때 화면을 확대하고, 돌아오지 않는다. */
+@media (pointer: coarse) {
+  .ad-ai-model, .ad-ai-prompt, .ad-note-title, .ad-note-body { font-size: 1rem; }
+  .ad-ai-row .ad-act { min-height: 44px; display: inline-flex; align-items: center; }
+}
+
+/* ------------------------------------------------------------- 알림 창
+   <dialog>.showModal()이 가운데 정렬과 바깥 어둡게(::backdrop)를 해준다.
+   여기서 정하는 것은 생김새와 좁은 폭에서의 여백뿐이다. */
+/* **`body.admin > *`보다 세게 적는다.** 위쪽의 그 규칙이 max-width를 none으로
+   되돌리는데, <dialog>는 body의 직계 자식이라 거기에 걸려 폭이 화면만큼 늘어난다. */
+body.admin > .ad-modal, .ad-modal {
+  border: 2px solid var(--ink); border-radius: 0;
+  padding: 1rem 1.1rem;
+  width: max-content; max-width: min(22rem, calc(100% - 2rem));
+  color: var(--ink); background: var(--bg);
+  box-shadow: 6px 6px 0 var(--line-mid);
+}
+.ad-modal.danger { border-color: #b91c1c; }
+.ad-modal::backdrop { background: rgba(0, 0, 0, .45); }
+/* 줄바꿈을 글자 그대로 살린다. 두 문장을 한 줄로 붙이면 무엇이 바뀌었는지가
+   문장 끝에 묻힌다. */
+.ad-modal-text { margin: 0 0 .9rem; white-space: pre-line; line-height: 1.55; }
+.ad-modal-acts { display: flex; justify-content: flex-end; }
+/* 확인 버튼은 손가락으로도 누를 수 있어야 한다. */
+.ad-modal-acts .ad-btn { min-height: 44px; }
+
+/* 열릴 때 살짝 떠오른다. **움직임을 줄이라고 한 사람에게는 안 움직인다** —
+   공개 화면의 애니메이션과 같은 규칙이다. */
+@media (prefers-reduced-motion: no-preference) {
+  .ad-modal[open] { animation: ad-modal-in .12s ease-out; }
+  @keyframes ad-modal-in {
+    from { opacity: 0; transform: translateY(.4rem); }
+    to   { opacity: 1; transform: none; }
+  }
+}

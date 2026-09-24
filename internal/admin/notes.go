@@ -142,7 +142,17 @@ func (s *store) generateNoteDraft(cfg OpenRouterConfig, id int64, now time.Time)
 		return nil, errNoSuchNote
 	}
 
-	title, body, err := generateDraftBody(context.Background(), cfg, note.Title, note.Body)
+	// 모델과 프롬프트는 설정에서 고른다(ai.go). 사람이 환경설정에서 고쳤으면
+	// 그것이, 아니면 서버 환경변수가, 그것도 없으면 코드 기본값이 쓰인다.
+	model, prompt, err := s.aiConfig(cfg)
+	if err != nil {
+		// **DB를 못 읽은 것이다.** 그냥 올리면 writeGenerateErr의 기본 가지에
+		// 걸려 502(남의 서비스 탓)로 나가는데, 이건 이 서버 탓이라 500이어야
+		// 한다 — 어디를 봐야 하는지가 달라진다.
+		return nil, fmt.Errorf("%w: AI 설정을 읽지 못했다: %v", errLocalFailure, err)
+	}
+
+	title, body, err := generateDraftBody(context.Background(), cfg, model, prompt, note.Title, note.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +180,10 @@ func (s *store) generateNoteDraft(cfg OpenRouterConfig, id int64, now time.Time)
 }
 
 var errNoSuchNote = errors.New("그런 글감이 없다")
+
+// errLocalFailure는 **이 서버 탓**인 실패다. OpenRouter가 준 오류와 갈라서
+// 상태 코드를 다르게 내보낸다(writeGenerateErr).
+var errLocalFailure = errors.New("서버 오류")
 
 // ------------------------------------------------------------- HTTP 핸들러
 
@@ -315,6 +329,9 @@ func writeGenerateErr(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, errOpenRouterNotConfigured):
 		writeErr(w, http.StatusServiceUnavailable, err.Error())
+	case errors.Is(err, errLocalFailure):
+		log.Printf("admin 글감 초안 생성 실패(서버): %s %s: %v", r.Method, r.URL.Path, err)
+		writeErr(w, http.StatusInternalServerError, "초안을 만들지 못했다")
 	default:
 		log.Printf("admin 글감 초안 생성 실패: %s %s: %v", r.Method, r.URL.Path, err)
 		writeErr(w, http.StatusBadGateway, "초안을 만들지 못했다: "+err.Error())

@@ -777,9 +777,23 @@ go run ./cmd/sortorder -db blog.db -apply
 화면에서 "초안 생성"을 누르면 OpenRouter(`internal/admin/openrouter.go`,
 기본 모델 `anthropic/claude-sonnet-4.5`)가 정리해 **항상 draft** 글 하나를
 만든다(`internal/admin/notes.go`의 `generateNoteDraft` → 기존 `savePost` 재사용).
-공개는 사람이 admin에서 status를 바꿔야 일어난다. 키는
-`BLOG_OPENROUTER_API_KEY`(`/etc/blog/admin.env`, `deploy/setup-caddy.sh`) —
-비어 있어도 서버는 뜨고 그 버튼만 503으로 실패한다.
+공개는 사람이 admin에서 status를 바꿔야 일어난다.
+
+**키는 `OPENROUTER_API_KEY`다.** 값은 GitHub Actions의 같은 이름 secret에 있고,
+배포가 `/etc/blog/openrouter.env`와 `blog.service.d/openrouter.conf` 드롭인을
+만들어 넣는다(`.github/workflows/deploy.yml`). 사람이 손으로 적는
+`/etc/blog/admin.env`와 **일부러 갈라 둔 파일**이다 — 배포가 매번 건드리는
+파일에 GitHub client secret이 같이 있으면 CI 사고 하나가 로그인까지 망가뜨린다.
+키가 비어 있어도 서버는 뜨고 그 버튼만 503으로 실패한다.
+**키 값은 어떤 API 응답에도 실리지 않는다**(`internal/admin/ai.go`는 있는지
+여부만 boolean으로 내려준다).
+
+쓸 모델과 지시문은 secret이 아니라서 **admin 환경설정 화면에서 고친다**
+(`settings` 표의 `ai.model`·`ai.prompt`, `internal/admin/ai.go`). 저장된 값이
+없으면 서버 환경변수 `OPENROUTER_MODEL`, 그것도 없으면 코드 기본값 순으로
+고른다. 같은 화면에서 OpenRouter의 `/api/v1/credits`로 잔액을,
+`/api/v1/models`로 고를 수 있는 모델 목록을 본다 — **둘 다 설정 조회와 갈라 둔
+요청이라**, OpenRouter가 죽어도 설정 화면과 초안 생성은 그대로 동작한다.
 
 남은 것:
 

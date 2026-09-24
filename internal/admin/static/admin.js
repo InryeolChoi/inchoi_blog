@@ -76,6 +76,37 @@
       String(d.getDate()).padStart(2, "0");
   }
 
+  // notify는 다 됐다는 것을 화면 가운데서 알리고 확인을 받는다.
+  //
+  // **왜 줄 끝의 글자가 아니라 창인가.** 저장 버튼 옆에 적으면 긴 폼 아래쪽에
+  // 있을 때 눈이 거기 없고, 모바일에서는 키보드에 가려 아예 안 보인다.
+  // 한 번 멈춰 세우는 편이 "저장됐나?" 하고 다시 누르는 것보다 낫다.
+  //
+  // **alert()가 아니라 <dialog>다.** alert은 탭 전체를 멈추고 생김새를 손댈 수
+  // 없다. <dialog>.showModal()은 가운데 정렬·Esc로 닫기·바깥 포커스 가두기를
+  // 브라우저가 해주고, 닫히면 원래 누르던 버튼으로 포커스가 돌아온다.
+  function notify(message, kind) {
+    // 아주 오래된 브라우저에는 showModal이 없다. 그때는 조용히 지나가지 말고
+    // alert이라도 띄운다 — 알림이 통째로 사라지는 쪽이 제일 나쁘다.
+    if (!window.HTMLDialogElement || !document.createElement("dialog").showModal) {
+      window.alert(message);
+      return;
+    }
+    var ok = el("button", { type: "button", class: "ad-btn primary", text: "확인" });
+    var dialog = el("dialog", { class: "ad-modal" + (kind === "error" ? " danger" : "") }, [
+      el("p", { class: "ad-modal-text", text: message }),
+      el("div", { class: "ad-modal-acts" }, [ok]),
+    ]);
+    ok.addEventListener("click", function () { dialog.close(); });
+    // 닫히면 문서에서 치운다. 남겨두면 저장할 때마다 <dialog>가 쌓인다.
+    dialog.addEventListener("close", function () {
+      if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+    });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    ok.focus();
+  }
+
   // ---------------------------------------------------------------- 라우팅
   //
   // 경로 두 개뿐이다. history API를 쓰므로 새로고침해도 서버가 같은 껍데기를
@@ -623,15 +654,210 @@
 
   // ---------------------------------------------------------------- 환경설정
   //
-  // **여기 있는 것은 이 브라우저의 설정뿐이다.** 서버에 저장하지 않고
-  // localStorage에만 남는다 — 공개 화면의 화면 설정과 같은 자리, 같은 키를
-  // 쓰므로 admin에서 다크로 바꾸면 공개 화면도 다크다.
+  // 두 종류가 섞여 있어서 **절마다 어디에 저장되는지 적는다.** 테마는 이
+  // 브라우저에만(localStorage) 남고, AI 설정은 서버의 settings 표에 남는다 —
+  // 한 화면에 있다고 같은 자리에 저장되는 줄 알면, 다른 기기에서 열었을 때
+  // 왜 하나는 따라오고 하나는 안 따라오는지 알 수 없다.
   //
-  // **없는 것을 있는 척하지 않는다.** 글쓰기 기본값이나 계정 설정 같은 것은
-  // 아직 저장할 자리가 없어서 여기 두지 않는다.
+  // 테마는 공개 화면의 화면 설정과 같은 키라, admin에서 다크로 바꾸면 공개
+  // 화면도 다크다.
+  //
+  // **없는 것을 있는 척하지 않는다.** 글쓰기 기본값 같은 것은 아직 저장할
+  // 자리가 없어서 여기 두지 않는다.
   //
   // 홈 문구는 2026-09-09에 제 화면으로 나갔다(`/admin/home`). 서버에 저장하는
   // 것이 이 화면의 성격과 달랐고, 무엇보다 **구석에 있어서 있는 줄을 몰랐다.**
+
+  // ------------------------------------------------------- AI 초안 생성 설정
+  //
+  // 글감함의 "초안 생성"이 무엇으로 돌아가는지를 한 자리에 모은다 — 어떤
+  // 모델을 쓰고, 어떤 지시문을 주고, 돈이 얼마나 남았나. **누르기 전에 보이는
+  // 것이 요점이다.** 예전에는 버튼을 눌러 실패해야 키가 없다는 것을 알았다.
+  //
+  // **키는 여기서 못 고친다.** 서버의 환경변수이고, 배포가 넣는다. 화면은
+  // 있는지 없는지만 안다 — DB로 내려오면 백업과 이관 작업본이 전부 secret을
+  // 들고 다니게 된다(internal/admin/ai.go).
+  //
+  // 저장은 **모델과 프롬프트 둘을 한 번에** 보낸다. 서로 맞물리는 값이라
+  // (프롬프트를 모델에 맞춰 쓴다) 따로 저장하면 반만 바뀐 상태가 생긴다.
+
+  // money는 OpenRouter가 주는 달러 값을 읽을 수 있게 적는다. 소수점 둘은
+  // 잔액으로는 너무 거칠다 — 한 번 부르는 값이 센트 아래라서 0.00으로만 보인다.
+  function money(v) {
+    if (typeof v !== "number" || isNaN(v)) return "—";
+    return "$" + v.toFixed(v !== 0 && Math.abs(v) < 0.01 ? 4 : 2);
+  }
+
+  function aiCard() {
+    var card = el("section", { class: "ad-card" }, [
+      el("h2", { text: "AI 초안 생성" }),
+      el("p", { class: "ad-dim", text:
+        "글감함에서 \"초안 생성\"을 누르면 OpenRouter로 이 설정이 쓰인다. " +
+        "모델과 프롬프트는 서버에 저장되므로 다른 기기에서도 같다." }),
+    ]);
+    var wait = el("p", { class: "ad-dim", text: "불러오는 중…" });
+    card.appendChild(wait);
+
+    api("GET", "/api/admin/ai").then(function (r) {
+      card.removeChild(wait);
+      if (!r.ok) {
+        card.appendChild(el("p", { class: "ad-error", text: r.data.error || "AI 설정을 못 가져왔다" }));
+        return;
+      }
+      var d = r.data;
+      var defaults = d.defaults || {};
+      var effective = d.effective || {};
+
+      // ── 키. **없으면 제일 먼저, 눈에 띄게 적는다** — 이 값이 없으면 아래
+      //    설정을 아무리 손봐도 버튼은 실패한다.
+      card.appendChild(d.configured
+        ? el("p", { class: "ad-dim", text: "서버에 API 키가 있다. 키 자체는 화면에 나오지 않는다." })
+        : el("p", { class: "ad-warn ad-warn-inline", text:
+            "서버에 API 키가 없다. 초안 생성은 실패한다 — GitHub Actions의 " +
+            "OPENROUTER_API_KEY secret을 넣고 다시 배포하면 들어간다." }));
+
+      // ── 잔액. 키가 없으면 물어볼 것도 없다.
+      if (d.configured) card.appendChild(creditsBox());
+
+      // ── 모델
+      var list = el("datalist", { id: "ad-ai-models" });
+      var modelInput = el("input", {
+        type: "text", class: "ad-input ad-ai-model", list: "ad-ai-models",
+        maxlength: "200", placeholder: defaults.model || "", value: d.model || "",
+        autocapitalize: "off", autocorrect: "off", spellcheck: "false",
+      });
+      var loadBtn = el("button", { type: "button", class: "ad-act", text: "쓸 수 있는 모델 불러오기" });
+      var modelNote = el("p", { class: "ad-dim ad-ai-note", text: modelNoteText(d, effective) });
+
+      // 모델 목록은 **누를 때만 받는다.** 수백 개라 설정 화면을 열 때마다
+      // 받아오면 그 값을 쓰지도 않는 사람의 화면이 매번 느려진다.
+      loadBtn.addEventListener("click", function () {
+        loadBtn.disabled = true;
+        loadBtn.textContent = "불러오는 중…";
+        api("GET", "/api/admin/ai/models").then(function (m) {
+          loadBtn.disabled = false;
+          if (!m.ok) {
+            loadBtn.textContent = "쓸 수 있는 모델 불러오기";
+            modelNote.textContent = m.data.error || "모델 목록을 못 가져왔다";
+            modelNote.className = "ad-error ad-ai-note";
+            return;
+          }
+          var models = m.data.models || [];
+          clear(list);
+          models.forEach(function (mm) {
+            // 자동완성 목록은 브라우저가 걸러 준다. 값은 id고, 사람이 읽을
+            // 이름과 가격은 곁들이는 글자로 붙인다.
+            list.appendChild(el("option", { value: mm.id, label: modelLabel(mm) }));
+          });
+          loadBtn.textContent = "모델 " + models.length + "개 불러옴";
+          modelNote.className = "ad-dim ad-ai-note";
+          modelNote.textContent = "칸을 누르고 이름을 치면 자동완성으로 고를 수 있다.";
+        });
+      });
+
+      card.appendChild(el("div", { class: "ad-field ad-ai-field" }, [
+        el("label", { for: "ad-ai-model-input", text: "모델" }),
+        modelInput, list,
+        el("div", { class: "ad-ai-row" }, [loadBtn]),
+        modelNote,
+      ]));
+      modelInput.id = "ad-ai-model-input";
+
+      // ── 프롬프트
+      var promptInput = el("textarea", {
+        id: "ad-ai-prompt-input", class: "ad-body ad-ai-prompt", rows: "12",
+        placeholder: defaults.prompt || "",
+      });
+      promptInput.value = d.prompt || "";
+      card.appendChild(el("div", { class: "ad-field ad-ai-field" }, [
+        el("label", { for: "ad-ai-prompt-input", text: "지시문(시스템 프롬프트)" }),
+        promptInput,
+        el("p", { class: "ad-dim ad-ai-note", text:
+          "비우면 기본 지시문이 쓰인다(회색으로 보이는 문장). 첫 줄을 \"# 제목\"으로 " +
+          "내놓으라는 규칙은 지우지 않는 편이 낫다 — 그 줄을 글 제목으로 떼어 쓴다." }),
+      ]));
+
+      // ── 저장
+      var status = el("p", { class: "ad-status" });
+      var save = el("button", { type: "button", class: "ad-btn primary", text: "AI 설정 저장" });
+      save.addEventListener("click", function () {
+        save.disabled = true;
+        status.className = "ad-status pending";
+        status.textContent = "저장 중…";
+        api("PUT", "/api/admin/ai", { model: modelInput.value, prompt: promptInput.value })
+          .then(function (r2) {
+            save.disabled = false;
+            if (!r2.ok) {
+              status.className = "ad-error";
+              status.textContent = (r2.data && r2.data.error) || "저장하지 못했다";
+              return;
+            }
+            // **성공도 삼키지 않는다.** 무엇이 실제로 쓰이게 됐는지까지 적는다.
+            // 창으로 한 번 멈춰 세우고, 줄 끝의 글자는 지운다 — 같은 말을 두
+            // 군데에 두면 창을 닫은 뒤에도 남아서 언제 저장한 것인지 흐려진다.
+            status.className = "ad-status";
+            status.textContent = "";
+            modelNote.className = "ad-dim ad-ai-note";
+            modelNote.textContent = modelNoteText(r2.data, r2.data.effective || {});
+            notify("AI 설정을 저장했다.\n이제 " + ((r2.data.effective || {}).model || "") + "로 초안을 만든다.");
+          });
+      });
+      card.appendChild(el("div", { class: "ad-homesave" }, [save, status]));
+    });
+
+    return card;
+  }
+
+  // modelNoteText는 지금 실제로 무엇이 쓰이는지 한 줄로 적는다.
+  //
+  // **저장된 값이 비어 있을 때가 핵심이다.** 칸이 비어 있으면 "아무것도 안
+  // 쓴다"로 읽히지만 실제로는 기본값이나 서버 환경변수가 쓰인다.
+  function modelNoteText(d, effective) {
+    var used = effective.model || "";
+    if (d.model) return "지금 " + used + "로 만든다.";
+    if (d.envModel) return "비어 있어서 서버가 정한 " + used + "로 만든다.";
+    return "비어 있어서 기본값 " + used + "로 만든다.";
+  }
+
+  function modelLabel(m) {
+    var label = m.name || m.id;
+    // 가격은 토큰 하나당 달러다. 백만 토큰당으로 환산해야 사람이 읽을 수 있다.
+    var p = parseFloat(m.prompt);
+    var o = parseFloat(m.output);
+    if (!isNaN(p) && !isNaN(o)) {
+      label += " · 입력 $" + (p * 1e6).toFixed(2) + " / 출력 $" + (o * 1e6).toFixed(2) + " (1M 토큰)";
+    }
+    return label;
+  }
+
+  // creditsBox는 남은 금액을 보여준다. **따로 부른다** — OpenRouter가 느리거나
+  // 죽어도 설정 화면의 나머지는 떠야 한다.
+  function creditsBox() {
+    var box = el("div", { class: "ad-ai-credits" });
+    var reload = el("button", { type: "button", class: "ad-act", text: "다시 확인" });
+
+    function load() {
+      clear(box);
+      box.appendChild(el("p", { class: "ad-dim", text: "잔액을 확인하는 중…" }));
+      api("GET", "/api/admin/ai/credits").then(function (r) {
+        clear(box);
+        if (!r.ok) {
+          box.appendChild(el("p", { class: "ad-error", text: r.data.error || "잔액을 못 가져왔다" }));
+          box.appendChild(el("div", { class: "ad-ai-row" }, [reload]));
+          return;
+        }
+        box.appendChild(el("div", { class: "ad-stats ad-ai-stats" }, [
+          statCard("남은 금액", money(r.data.remaining), "이 키로 더 쓸 수 있는 금액"),
+          statCard("충전", money(r.data.total), "지금까지 넣은 금액"),
+          statCard("사용", money(r.data.used), "지금까지 쓴 금액"),
+        ]));
+        box.appendChild(el("div", { class: "ad-ai-row" }, [reload]));
+      });
+    }
+    reload.addEventListener("click", load);
+    load();
+    return box;
+  }
 
   function showSettings() {
     var mine = drawTicket;
@@ -672,6 +898,8 @@
       el("p", { class: "ad-dim", text: "이 브라우저에만 저장한다. 공개 화면과 같은 설정이다." }),
       el("div", { class: "ad-segs" }, buttons),
     ]));
+
+    root.appendChild(aiCard());
 
     root.appendChild(el("section", { class: "ad-card" }, [
       el("h2", { text: "계정" }),

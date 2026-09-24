@@ -154,6 +154,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/admin/notes/{id}", s.handleUpdateNote)
 	mux.HandleFunc("DELETE /api/admin/notes/{id}", s.handleDeleteNote)
 	mux.HandleFunc("POST /api/admin/notes/{id}/generate", s.handleGenerateNote)
+	// 글감함이 쓰는 AI 설정(ai.go). 모델과 프롬프트는 사람이 여기서 고치고,
+	// **키는 못 고친다** — 키는 인스턴스의 환경변수이고 DB로 새면 안 된다.
+	mux.HandleFunc("GET /api/admin/ai", s.handleAI)
+	mux.HandleFunc("PUT /api/admin/ai", s.handleSaveAI)
+	// 잔액과 모델 목록은 OpenRouter에 직접 묻는다. 설정 조회와 갈라 둬서,
+	// 남의 서비스가 느려도 설정 화면 자체는 뜬다.
+	mux.HandleFunc("GET /api/admin/ai/credits", s.handleAICredits)
+	mux.HandleFunc("GET /api/admin/ai/models", s.handleAIModels)
 
 	// 로그아웃은 인증이 꺼져 있어도 등록해 둔다. 읽는 화면의 사이드바가
 	// 부르는 자리라 언제나 있어야 하고, 하는 일은 쿠키 하나를 지우는 것뿐이다.
