@@ -537,9 +537,25 @@ body.admin > .ad-modal, .ad-modal {
 /* 줄바꿈을 글자 그대로 살린다. 두 문장을 한 줄로 붙이면 무엇이 바뀌었는지가
    문장 끝에 묻힌다. */
 .ad-modal-text { margin: 0 0 .9rem; white-space: pre-line; line-height: 1.55; }
-.ad-modal-acts { display: flex; justify-content: flex-end; }
+.ad-modal-acts { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; }
 /* 확인 버튼은 손가락으로도 누를 수 있어야 한다. */
 .ad-modal-acts .ad-btn { min-height: 44px; }
+.ad-modal-acts a.ad-btn { display: inline-flex; align-items: center; text-decoration: none; }
+.ad-ai-edit { margin: 1rem 0; }
+.ad-ai-edit summary { cursor: pointer; font-weight: 700; }
+.ad-ai-instruction { display: block; box-sizing: border-box; width: 100%; min-height: 5rem; margin: .75rem 0; font: inherit; }
+body.admin > .ad-ai-review, .ad-ai-review {
+  width: min(64rem, calc(100% - 2rem)); max-width: min(64rem, calc(100% - 2rem));
+  max-height: min(85vh, 55rem); overflow: auto;
+}
+.ad-ai-review h2 { margin: 0; }
+.ad-ai-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin: 1rem 0; }
+.ad-ai-review-grid label { display: grid; gap: .35rem; min-width: 0; font-weight: 700; }
+.ad-ai-review-body { box-sizing: border-box; width: 100%; height: min(52vh, 33rem); resize: vertical; font: .85rem/1.5 var(--mono); }
+@media (max-width: 700px) {
+  .ad-ai-review-grid { grid-template-columns: 1fr; }
+  .ad-ai-review-body { height: 12rem; font-size: 1rem; }
+}
 
 /* 열릴 때 살짝 떠오른다. **움직임을 줄이라고 한 사람에게는 안 움직인다** —
    공개 화면의 애니메이션과 같은 규칙이다. */

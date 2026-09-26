@@ -122,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 	// 자리라 오류 화면이 오면 파싱에서 터지고 진짜 원인이 가려진다.
 	mux.HandleFunc("GET /api/admin/posts", s.handleList)
 	mux.HandleFunc("GET /api/admin/posts/{slug}", s.handleGet)
+	mux.HandleFunc("POST /api/admin/posts/{slug}/ai-revise", s.handleRevisePost)
 	mux.HandleFunc("GET /api/admin/categories", s.handleCategories)
 	// 글을 쓰다가 그 자리에서 분류를 새로 만든다(save.go).
 	mux.HandleFunc("POST /api/admin/categories", s.handleCreateCategory)

@@ -85,17 +85,21 @@
   // **alert()가 아니라 <dialog>다.** alert은 탭 전체를 멈추고 생김새를 손댈 수
   // 없다. <dialog>.showModal()은 가운데 정렬·Esc로 닫기·바깥 포커스 가두기를
   // 브라우저가 해주고, 닫히면 원래 누르던 버튼으로 포커스가 돌아온다.
-  function notify(message, kind) {
+  function notify(message, kind, action) {
     // 아주 오래된 브라우저에는 showModal이 없다. 그때는 조용히 지나가지 말고
     // alert이라도 띄운다 — 알림이 통째로 사라지는 쪽이 제일 나쁘다.
     if (!window.HTMLDialogElement || !document.createElement("dialog").showModal) {
-      window.alert(message);
+      if (action) {
+        if (window.confirm(message + "\n\n화면으로 가볼까?")) location.href = action.href;
+      } else window.alert(message);
       return;
     }
     var ok = el("button", { type: "button", class: "ad-btn primary", text: "확인" });
+    var actionLink = action ? el("a", { class: "ad-btn primary", href: action.href,
+      text: action.text }) : null;
     var dialog = el("dialog", { class: "ad-modal" + (kind === "error" ? " danger" : "") }, [
       el("p", { class: "ad-modal-text", text: message }),
-      el("div", { class: "ad-modal-acts" }, [ok]),
+      el("div", { class: "ad-modal-acts" }, [ok, actionLink]),
     ]);
     ok.addEventListener("click", function () { dialog.close(); });
     // 닫히면 문서에서 치운다. 남겨두면 저장할 때마다 <dialog>가 쌓인다.
@@ -421,6 +425,13 @@
           return alert(r.data.error || ("초안을 만들지 못했다 (HTTP " + r.status + ")"));
         }
         if (onChange) onChange();
+        notify("AI 초안 생성에 성공했다. 편집 화면에서 확인하고 저장 상태를 정할 수 있다.",
+          "ok", { href: "/admin/edit/" + encodeURIComponent(r.data.slug), text: "글 화면으로 가보기" });
+      }).catch(function () {
+        busy = false;
+        genBtn.disabled = false;
+        genBtn.textContent = note.status === "generated" ? "다시 생성" : "초안 생성";
+        notify("연결이 끊겨 초안 생성 결과를 받지 못했다. 목록을 새로 불러와 확인해라", "error");
       });
     });
 
@@ -478,6 +489,7 @@
         titleInput.value = "";
         bodyInput.value = "";
         loadList();
+        notify("글감을 남겼다. 목록에서 초안 생성을 시작할 수 있다.");
       });
     });
 
@@ -1700,6 +1712,20 @@
       ]),
     ]));
 
+    if (!isNew) {
+      var reviseInstruction = el("textarea", { class: "ad-input ad-ai-instruction", rows: "3",
+        maxlength: "2000", placeholder: "예: 반복을 줄이고 문장을 간결하게 다듬어줘. 사실과 코드는 유지해줘." });
+      var reviseBtn = el("button", { type: "button", class: "ad-btn", text: "AI 수정안 받기",
+        onclick: requestRevision });
+      var reviseStatus = el("p", { class: "ad-note", role: "status" });
+      root.appendChild(el("details", { class: "ad-card ad-ai-edit" }, [
+        el("summary", { text: "AI로 기존 글 수정" }),
+        el("p", { class: "ad-dim", text:
+          "현재 제목·본문과 수정 요청을 OpenRouter에 보낸다. 제안을 편집기에 적용한 뒤 저장해야 글이 바뀐다." }),
+        reviseInstruction, reviseBtn, reviseStatus,
+      ]));
+    }
+
     root.appendChild(el("div", { class: "ad-split" }, [
       el("section", { class: "ad-pane" }, [
         imageBox(bodyAreaRef),
@@ -1806,6 +1832,83 @@
     }
     renderPreview();
 
+    function requestRevision() {
+      var instruction = reviseInstruction.value.trim();
+      if (!instruction) {
+        reviseStatus.className = "ad-note ad-error";
+        reviseStatus.textContent = "어떻게 고칠지 적어라";
+        reviseInstruction.focus();
+        return;
+      }
+      var sentTitle = titleInput.value;
+      var sentBody = bodyAreaRef.value;
+      reviseBtn.disabled = true;
+      reviseBtn.textContent = "AI가 수정하는 중… (최대 5분)";
+      reviseStatus.className = "ad-note";
+      reviseStatus.textContent = "수정안을 기다리는 중…";
+      api("POST", "/api/admin/posts/" + encodeURIComponent(post.slug) + "/ai-revise", {
+        rev: post.rev, title: sentTitle, body: sentBody, instruction: instruction,
+      }).then(function (r) {
+        if (stale(mine)) return;
+        reviseBtn.disabled = false;
+        reviseBtn.textContent = "AI 수정안 받기";
+        if (!r.ok) {
+          reviseStatus.className = "ad-note ad-error";
+          reviseStatus.textContent = r.data.error || "AI 수정안을 받지 못했다";
+          return;
+        }
+        if (titleInput.value !== sentTitle || bodyAreaRef.value !== sentBody) {
+          reviseStatus.className = "ad-note ad-error";
+          reviseStatus.textContent = "AI가 작업하는 동안 편집 내용이 바뀌었다. 현재 내용을 기준으로 다시 요청해라";
+          return;
+        }
+        showRevision(sentTitle, sentBody, r.data.title, r.data.body);
+      }).catch(function () {
+        if (stale(mine)) return;
+        reviseBtn.disabled = false;
+        reviseBtn.textContent = "AI 수정안 받기";
+        reviseStatus.className = "ad-note ad-error";
+        reviseStatus.textContent = "연결이 끊겨 AI 수정안을 받지 못했다";
+      });
+    }
+
+    function showRevision(oldTitle, oldBody, newTitle, newBody) {
+      var before = el("textarea", { class: "ad-input ad-ai-review-body", readonly: "readonly" });
+      before.value = "# " + oldTitle + "\n\n" + oldBody;
+      var after = el("textarea", { class: "ad-input ad-ai-review-body", readonly: "readonly" });
+      after.value = "# " + newTitle + "\n\n" + newBody;
+      var cancel = el("button", { type: "button", class: "ad-btn", text: "취소" });
+      var apply = el("button", { type: "button", class: "ad-btn primary", text: "편집기에 적용" });
+      var dialog = el("dialog", { class: "ad-modal ad-ai-review" }, [
+        el("h2", { text: "AI 수정안 확인" }),
+        el("p", { class: "ad-dim", text: "적용해도 저장 전까지 글은 바뀌지 않는다." }),
+        el("div", { class: "ad-ai-review-grid" }, [
+          el("label", {}, [el("span", { text: "현재 내용" }), before]),
+          el("label", {}, [el("span", { text: "AI 제안" }), after]),
+        ]),
+        el("div", { class: "ad-modal-acts" }, [cancel, apply]),
+      ]);
+      cancel.addEventListener("click", function () { dialog.close(); });
+      apply.addEventListener("click", function () {
+        if (titleInput.value !== oldTitle || bodyAreaRef.value !== oldBody) {
+          reviseStatus.className = "ad-note ad-error";
+          reviseStatus.textContent = "편집 내용이 바뀌었다. 현재 내용을 기준으로 다시 요청해라";
+          dialog.close();
+          return;
+        }
+        titleInput.value = newTitle;
+        bodyAreaRef.value = newBody;
+        bodyAreaRef.dispatchEvent(new Event("input", { bubbles: true }));
+        reviseStatus.className = "ad-note";
+        reviseStatus.textContent = "AI 제안을 편집기에 적용했다. 확인한 뒤 저장해라";
+        dialog.close();
+      });
+      dialog.addEventListener("close", function () { dialog.remove(); });
+      document.body.appendChild(dialog);
+      dialog.showModal();
+      cancel.focus();
+    }
+
     function save() {
       var payload = {
         slug: slugInput.value.trim(),
@@ -1844,11 +1947,18 @@
         status.className = "ad-status ok";
         status.textContent = msg;
 
-        // **성공하면 그 글의 화면으로 옮긴다.** 눌러놓고 여기 그대로 있으면
-        // 저장이 됐는지 눈으로 확인하려면 또 한 번 눌러야 한다. 다만 draft는
-        // 공개 화면 자체가 없으므로(architecture.md) 옮기지 않고 여기 머문다.
+        // 저장 후에는 편집기를 새 rev로 갱신한다. 공개 가능한 글에만
+        // 화면 링크를 보여준다. draft와 private는 공개 URL로 확인할 수 없다.
         if (saved.status !== "draft") {
-          location.href = "/p/" + encodeURIComponent(saved.slug);
+          post = saved;
+          history.replaceState({}, "", "/admin/edit/" + encodeURIComponent(saved.slug));
+          renderEditor(saved, false, catList, msg);
+          if (saved.visibility === "public") {
+            notify("글 배포에 성공했다. 공개 화면에서 결과를 확인할 수 있다.", "ok",
+              { href: "/p/" + encodeURIComponent(saved.slug), text: "화면으로 가보기" });
+          } else {
+            notify("비공개 글을 저장했다. 허용된 계정만 볼 수 있다.");
+          }
           return;
         }
         if (isNewPost || saved.slug !== post.slug) {

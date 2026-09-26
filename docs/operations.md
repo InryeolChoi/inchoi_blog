@@ -781,6 +781,8 @@ go run ./cmd/sortorder -db blog.db -apply
 생성 요청은 최대 5분 기다리고, 이 요청의 서버 응답 기한은 5분 15초다.
 시간이 지나면 504와 재시도 안내를 돌려준다. 브라우저 연결이 끊기면
 OpenRouter 호출도 취소한다.
+기존 글의 AI 수정도 같은 모델과 5분 제한을 사용한다. 수정 요청·본문을
+OpenRouter에 보내지만 제안만 돌려주며, 실제 저장은 admin 편집기에서 한다.
 
 **키는 `OPENROUTER_API_KEY`다.** 값은 GitHub Actions의 같은 이름 secret에 있고,
 배포가 `/etc/blog/openrouter.env`와 `blog.service.d/openrouter.conf` 드롭인을

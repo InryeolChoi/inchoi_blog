@@ -111,19 +111,29 @@ const draftWriteTimeout = draftHTTPTimeout + 15*time.Second
 // 또 고르지 않는다 — 두 군데서 고르면 화면이 보여주는 모델과 실제로 부른 모델이
 // 갈라진다.
 func generateDraftBody(ctx context.Context, cfg OpenRouterConfig, model, prompt, noteTitle, noteBody string) (title, body string, err error) {
+	result, err := completeOpenRouter(ctx, cfg, model, prompt, "글감 제목: "+noteTitle+"\n\n글감 본문:\n"+noteBody)
+	if err != nil {
+		return "", "", err
+	}
+	title, body = splitDraftTitle(result)
+	return title, body, nil
+}
+
+// completeOpenRouter는 초안 작성과 기존 글 수정이 함께 쓰는 호출이다.
+func completeOpenRouter(ctx context.Context, cfg OpenRouterConfig, model, prompt, userContent string) (string, error) {
 	if cfg.APIKey == "" {
-		return "", "", errOpenRouterNotConfigured
+		return "", errOpenRouterNotConfigured
 	}
 
 	reqBody, err := json.Marshal(openRouterRequest{
 		Model: model,
 		Messages: []openRouterMessage{
 			{Role: "system", Content: prompt},
-			{Role: "user", Content: "글감 제목: " + noteTitle + "\n\n글감 본문:\n" + noteBody},
+			{Role: "user", Content: userContent},
 		},
 	})
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, draftHTTPTimeout)
@@ -132,7 +142,7 @@ func generateDraftBody(ctx context.Context, cfg OpenRouterConfig, model, prompt,
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		"https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
@@ -143,36 +153,34 @@ func generateDraftBody(ctx context.Context, cfg OpenRouterConfig, model, prompt,
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", "", fmt.Errorf("%w: %v", errOpenRouterTimeout, err)
+			return "", fmt.Errorf("%w: %v", errOpenRouterTimeout, err)
 		}
-		return "", "", fmt.Errorf("OpenRouter 호출 실패: %w", err)
+		return "", fmt.Errorf("OpenRouter 호출 실패: %w", err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", "", fmt.Errorf("%w: %v", errOpenRouterTimeout, err)
+			return "", fmt.Errorf("%w: %v", errOpenRouterTimeout, err)
 		}
-		return "", "", fmt.Errorf("OpenRouter 응답을 읽지 못했다: %w", err)
+		return "", fmt.Errorf("OpenRouter 응답을 읽지 못했다: %w", err)
 	}
 
 	var out openRouterResponse
 	if err := json.Unmarshal(data, &out); err != nil {
-		return "", "", fmt.Errorf("OpenRouter 응답을 파싱하지 못했다 (HTTP %d)", resp.StatusCode)
+		return "", fmt.Errorf("OpenRouter 응답을 파싱하지 못했다 (HTTP %d)", resp.StatusCode)
 	}
 	if out.Error != nil {
-		return "", "", fmt.Errorf("OpenRouter 오류: %s", out.Error.Message)
+		return "", fmt.Errorf("OpenRouter 오류: %s", out.Error.Message)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("OpenRouter가 HTTP %d를 돌려줬다", resp.StatusCode)
+		return "", fmt.Errorf("OpenRouter가 HTTP %d를 돌려줬다", resp.StatusCode)
 	}
 	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
-		return "", "", errors.New("OpenRouter가 빈 응답을 돌려줬다")
+		return "", errors.New("OpenRouter가 빈 응답을 돌려줬다")
 	}
-
-	title, body = splitDraftTitle(out.Choices[0].Message.Content)
-	return title, body, nil
+	return out.Choices[0].Message.Content, nil
 }
 
 // splitDraftTitle은 모델이 낸 첫 줄("# 제목")을 title로, 나머지를 body로 가른다.

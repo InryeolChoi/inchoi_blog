@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +47,74 @@ func TestDraftResponseTimeout(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "5분 안에 끝나지 않았다") {
 		t.Fatalf("시간 초과 안내 = %s", rec.Body.String())
+	}
+}
+
+func TestRevisePostReturnsProposalWithoutSaving(t *testing.T) {
+	db := testDB(t)
+	server, err := New(db, nil, OpenRouterConfig{APIKey: testKey, Model: "test/model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	post, err := server.store.postBySlug("live-post")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	oldClient := http.DefaultClient
+	http.DefaultClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var sent openRouterRequest
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Error(err)
+		}
+		if sent.Model != "test/model" || !strings.Contains(sent.Messages[1].Content, "반복을 줄여줘") {
+			t.Errorf("OpenRouter 요청: %+v", sent)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(
+			`{"choices":[{"message":{"role":"assistant","content":"# 다듬은 제목\n\n다듬은 본문이다."}}]}`)),
+			Header: make(http.Header)}, nil
+	})}
+	t.Cleanup(func() { http.DefaultClient = oldClient })
+
+	// rev가 오래됐으면 외부 호출 전에 거절한다.
+	stale := do(t, server.Handler(), http.MethodPost, "/api/admin/posts/live-post/ai-revise",
+		`{"rev":"old","title":"보이는 글","body":"본문","instruction":"반복을 줄여줘"}`)
+	if stale.Code != http.StatusConflict {
+		t.Fatalf("오래된 rev = %d", stale.Code)
+	}
+
+	ts := httptest.NewServer(server.Handler())
+	defer ts.Close()
+	payload, _ := json.Marshal(reviseReq{Rev: post.Rev, Title: post.Title, Body: post.Body,
+		Instruction: "반복을 줄여줘"})
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/admin/posts/live-post/ai-revise", strings.NewReader(string(payload)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", ts.URL)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Transport: http.DefaultTransport}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("AI 수정 = %d: %s", resp.StatusCode, body)
+	}
+	var proposal struct{ Title, Body string }
+	if err := json.NewDecoder(resp.Body).Decode(&proposal); err != nil {
+		t.Fatal(err)
+	}
+	if proposal.Title != "다듬은 제목" || proposal.Body != "다듬은 본문이다." {
+		t.Errorf("수정안: %+v", proposal)
+	}
+	unchanged, err := server.store.postBySlug("live-post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Title != post.Title || unchanged.Body != post.Body || unchanged.Rev != post.Rev {
+		t.Fatal("AI 제안을 요청하기만 했는데 원본 글이 바뀌었다")
 	}
 }
 
