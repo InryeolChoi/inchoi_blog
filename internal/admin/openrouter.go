@@ -79,6 +79,7 @@ const defaultOpenRouterModel = "anthropic/claude-sonnet-5"
 // 503으로 구별해서 돌려줘야 하는데, badInput이면 errors.As가 먼저 걸려
 // 400(사람이 고칠 수 있는 입력 오류)으로 잘못 분류된다.
 var errOpenRouterNotConfigured = errors.New("OpenRouter가 설정되지 않았다. 서버에 OPENROUTER_API_KEY를 설정해라")
+var errOpenRouterTimeout = errors.New("OpenRouter 초안 생성이 5분 안에 끝나지 않았다. 잠시 후 다시 시도하거나 더 빠른 모델을 골라라")
 
 type openRouterMessage struct {
 	Role    string `json:"role"`
@@ -99,10 +100,10 @@ type openRouterResponse struct {
 	} `json:"error"`
 }
 
-// draftHTTPTimeout은 이 요청 하나의 상한이다. 글 하나를 통째로 쓰게 시키므로
-// 여유를 둔다. cmd/blog의 서버 WriteTimeout(60초)보다 짧게 잡아, 서버가
-// 연결을 끊기 전에 여기서 먼저 사람이 읽을 수 있는 오류로 끝나게 한다.
-const draftHTTPTimeout = 50 * time.Second
+// 글 한 편을 생성하는 동안 모델이 토큰을 내보내는 시간이 길 수 있다.
+// 핸들러의 쓰기 기한보다 먼저 끝나야 시간 초과 오류를 브라우저에 보낼 수 있다.
+const draftHTTPTimeout = 5 * time.Minute
+const draftWriteTimeout = draftHTTPTimeout + 15*time.Second
 
 // generateDraftBody는 글감 본문을 OpenRouter에 보내 (제목, 본문) 초안을 받는다.
 //
@@ -141,12 +142,18 @@ func generateDraftBody(ctx context.Context, cfg OpenRouterConfig, model, prompt,
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", "", fmt.Errorf("%w: %v", errOpenRouterTimeout, err)
+		}
 		return "", "", fmt.Errorf("OpenRouter 호출 실패: %w", err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", "", fmt.Errorf("%w: %v", errOpenRouterTimeout, err)
+		}
 		return "", "", fmt.Errorf("OpenRouter 응답을 읽지 못했다: %w", err)
 	}
 

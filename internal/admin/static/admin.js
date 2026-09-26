@@ -411,7 +411,7 @@
     genBtn.addEventListener("click", function () {
       if (busy) return;
       busy = true;
-      genBtn.textContent = "만드는 중… (몇십 초 걸릴 수 있다)";
+      genBtn.textContent = "만드는 중… (최대 5분 걸릴 수 있다)";
       genBtn.disabled = true;
       api("POST", "/api/admin/notes/" + note.id + "/generate").then(function (r) {
         busy = false;

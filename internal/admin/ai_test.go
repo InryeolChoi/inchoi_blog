@@ -1,11 +1,52 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type waitForCancelBody struct{ ctx context.Context }
+
+func (b waitForCancelBody) Read([]byte) (int, error) {
+	<-b.ctx.Done()
+	return 0, b.ctx.Err()
+}
+func (waitForCancelBody) Close() error { return nil }
+
+// OpenRouter가 헤더만 보낸 뒤 생성이 멈춰도, 응답 읽기가 취소되고
+// 브라우저에는 원인을 알 수 있는 504가 돌아가야 한다.
+func TestDraftResponseTimeout(t *testing.T) {
+	oldClient := http.DefaultClient
+	http.DefaultClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: waitForCancelBody{r.Context()}, Header: make(http.Header)}, nil
+	})}
+	t.Cleanup(func() { http.DefaultClient = oldClient })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, _, err := generateDraftBody(ctx, OpenRouterConfig{APIKey: testKey}, "test/model", "prompt", "title", "body")
+	if !errors.Is(err, errOpenRouterTimeout) {
+		t.Fatalf("응답 읽기 시간 초과 = %v", err)
+	}
+	rec := do(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeGenerateErr(w, r, err)
+	}), http.MethodPost, "/api/admin/notes/1/generate", "")
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("시간 초과 응답 = %d, 본문 %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "5분 안에 끝나지 않았다") {
+		t.Fatalf("시간 초과 안내 = %s", rec.Body.String())
+	}
+}
 
 // aiHandler는 키가 있는 서버를 만든다. **키 값 자체가 응답에 새는지**를 보는
 // 시험이 있어서, 픽스처에 알아보기 쉬운 값을 넣는다.

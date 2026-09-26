@@ -775,9 +775,12 @@ go run ./cmd/sortorder -db blog.db -apply
 **글감함(2026-09-19)은 구현되어 있다.** 프로젝트를 하며 남긴 메모를 `notes`
 테이블에 쌓아두고(`migrations/009_notes.sql`), admin의 `/admin/notes`
 화면에서 "초안 생성"을 누르면 OpenRouter(`internal/admin/openrouter.go`,
-기본 모델 `anthropic/claude-sonnet-4.5`)가 정리해 **항상 draft** 글 하나를
+기본 모델 `anthropic/claude-sonnet-5`)가 정리해 **항상 draft** 글 하나를
 만든다(`internal/admin/notes.go`의 `generateNoteDraft` → 기존 `savePost` 재사용).
 공개는 사람이 admin에서 status를 바꿔야 일어난다.
+생성 요청은 최대 5분 기다리고, 이 요청의 서버 응답 기한은 5분 15초다.
+시간이 지나면 504와 재시도 안내를 돌려준다. 브라우저 연결이 끊기면
+OpenRouter 호출도 취소한다.
 
 **키는 `OPENROUTER_API_KEY`다.** 값은 GitHub Actions의 같은 이름 secret에 있고,
 배포가 `/etc/blog/openrouter.env`와 `blog.service.d/openrouter.conf` 드롭인을

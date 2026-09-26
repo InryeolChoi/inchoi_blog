@@ -133,7 +133,7 @@ func (s *store) deleteNote(id int64) (bool, error) {
 // **글 생성은 savePost를 그대로 쓴다.** slug 만들기·검증·트랜잭션이 편집기로
 // 쓴 글과 똑같이 적용되어야 한다 — 여기서 따로 INSERT를 만들면 언젠가 그
 // 규칙과 갈라진다.
-func (s *store) generateNoteDraft(cfg OpenRouterConfig, id int64, now time.Time) (*PostDetail, error) {
+func (s *store) generateNoteDraft(ctx context.Context, cfg OpenRouterConfig, id int64, now time.Time) (*PostDetail, error) {
 	note, err := s.noteByID(id)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (s *store) generateNoteDraft(cfg OpenRouterConfig, id int64, now time.Time)
 		return nil, fmt.Errorf("%w: AI 설정을 읽지 못했다: %v", errLocalFailure, err)
 	}
 
-	title, body, err := generateDraftBody(context.Background(), cfg, model, prompt, note.Title, note.Body)
+	title, body, err := generateDraftBody(ctx, cfg, model, prompt, note.Title, note.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -303,15 +303,20 @@ func (s *Server) handleDeleteNote(w http.ResponseWriter, r *http.Request) {
 
 // handleGenerateNote는 글감 하나를 AI로 정리해 draft 글을 만든다.
 //
-// OpenRouter 호출이 몇십 초 걸릴 수 있어 이 요청도 그만큼 걸린다 — draftHTTPTimeout이
-// 서버의 WriteTimeout보다 먼저 끊겨 사람이 읽을 오류로 끝나게 한다(openrouter.go).
+// 이 요청은 일반 페이지보다 오래 걸릴 수 있다. 쓰기 기한을 이 핸들러에서만
+// 늘리고, OpenRouter 요청의 기한은 그보다 짧게 둔다.
 func (s *Server) handleGenerateNote(w http.ResponseWriter, r *http.Request) {
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(draftWriteTimeout)); err != nil {
+		log.Printf("admin 글감 초안 생성 쓰기 기한 설정 실패: %v", err)
+		writeErr(w, http.StatusInternalServerError, "초안을 만들지 못했다")
+		return
+	}
 	id, ok := noteID(r)
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "글감 id가 아니다")
 		return
 	}
-	post, err := s.store.generateNoteDraft(s.openRouter, id, time.Now().UTC())
+	post, err := s.store.generateNoteDraft(r.Context(), s.openRouter, id, time.Now().UTC())
 	if err != nil {
 		writeGenerateErr(w, r, err)
 		return
@@ -329,6 +334,9 @@ func writeGenerateErr(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, errOpenRouterNotConfigured):
 		writeErr(w, http.StatusServiceUnavailable, err.Error())
+	case errors.Is(err, errOpenRouterTimeout):
+		log.Printf("admin 글감 초안 생성 시간 초과: %s %s: %v", r.Method, r.URL.Path, err)
+		writeErr(w, http.StatusGatewayTimeout, errOpenRouterTimeout.Error())
 	case errors.Is(err, errLocalFailure):
 		log.Printf("admin 글감 초안 생성 실패(서버): %s %s: %v", r.Method, r.URL.Path, err)
 		writeErr(w, http.StatusInternalServerError, "초안을 만들지 못했다")
