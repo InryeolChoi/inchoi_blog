@@ -196,7 +196,9 @@ body.admin > * { max-width: none; }
 /* ------------------------------------------------------------ 버튼과 알림 */
 
 .ad-btn {
-  font: 600 .85rem/1 inherit; cursor: pointer;
+  /* `font: ... inherit`는 문법 오류라 선언이 통째로 버려진다. <button>과 <a>가
+     서로 다른 기본 글자 크기로 보이던 원인이다. */
+  font: inherit; font-size: .85rem; font-weight: 600; line-height: 1; cursor: pointer;
   color: var(--ink); background: var(--surface);
   border: 1px solid var(--line-mid); border-radius: 0;
   padding: .5rem .9rem;
@@ -211,7 +213,7 @@ body.admin > * { max-width: none; }
 /* 편집기가 길어지면 상단(제목·저장)으로 되돌아갈 길을 오른쪽 아래에 띄운다. */
 .ad-totop {
   position: fixed; right: 1.2rem; bottom: 1.2rem; z-index: 20;
-  font: 600 .85rem/1 inherit; cursor: pointer;
+  font: inherit; font-size: .85rem; font-weight: 600; line-height: 1; cursor: pointer;
   color: var(--ink); background: var(--surface);
   border: 2px solid var(--ink); border-radius: 0;
   padding: .6rem 1rem; box-shadow: 0 2px 0 var(--ink);

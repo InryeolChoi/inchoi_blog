@@ -1,12 +1,14 @@
 package admin
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -89,6 +91,7 @@ type openRouterMessage struct {
 type openRouterRequest struct {
 	Model    string              `json:"model"`
 	Messages []openRouterMessage `json:"messages"`
+	Stream   bool                `json:"stream,omitempty"`
 }
 
 type openRouterResponse struct {
@@ -110,8 +113,8 @@ const draftWriteTimeout = draftHTTPTimeout + 15*time.Second
 // model과 prompt는 **이미 정해져서 들어온다**(store.aiConfig). 여기서 기본값을
 // 또 고르지 않는다 — 두 군데서 고르면 화면이 보여주는 모델과 실제로 부른 모델이
 // 갈라진다.
-func generateDraftBody(ctx context.Context, cfg OpenRouterConfig, model, prompt, noteTitle, noteBody string) (title, body string, err error) {
-	result, err := completeOpenRouter(ctx, cfg, model, prompt, "글감 제목: "+noteTitle+"\n\n글감 본문:\n"+noteBody)
+func generateDraftBody(ctx context.Context, cfg OpenRouterConfig, model, prompt, noteTitle, noteBody string, onProgress func(chars int)) (title, body string, err error) {
+	result, err := completeOpenRouter(ctx, cfg, model, prompt, "글감 제목: "+noteTitle+"\n\n글감 본문:\n"+noteBody, onProgress)
 	if err != nil {
 		return "", "", err
 	}
@@ -120,7 +123,15 @@ func generateDraftBody(ctx context.Context, cfg OpenRouterConfig, model, prompt,
 }
 
 // completeOpenRouter는 초안 작성과 기존 글 수정이 함께 쓰는 호출이다.
-func completeOpenRouter(ctx context.Context, cfg OpenRouterConfig, model, prompt, userContent string) (string, error) {
+//
+// onProgress가 있으면 **스트리밍**으로 받는다. 모델이 쓰는 대로 조각이 오므로
+// 지금까지 받은 글자 수를 그때그때 알릴 수 있고, 연결이 오래 조용해서 끊기는 일도
+// 줄어든다. nil이면 예전처럼 한 번에 받는다.
+//
+// **어디서 시간이 가는지 로그로 남긴다.** 헤더가 오기까지(ttfb), 첫 글자가
+// 오기까지(first), 전체(total)를 나눠 적는다 — 느릴 때 모델이 생각하느라
+// 늦은 건지, 쓰는 속도가 느린 건지 구별하려는 것이다.
+func completeOpenRouter(ctx context.Context, cfg OpenRouterConfig, model, prompt, userContent string, onProgress func(chars int)) (string, error) {
 	if cfg.APIKey == "" {
 		return "", errOpenRouterNotConfigured
 	}
@@ -131,6 +142,7 @@ func completeOpenRouter(ctx context.Context, cfg OpenRouterConfig, model, prompt
 			{Role: "system", Content: prompt},
 			{Role: "user", Content: userContent},
 		},
+		Stream: onProgress != nil,
 	})
 	if err != nil {
 		return "", err
@@ -150,6 +162,7 @@ func completeOpenRouter(ctx context.Context, cfg OpenRouterConfig, model, prompt
 	req.Header.Set("HTTP-Referer", "https://inquieto.dev")
 	req.Header.Set("X-Title", "blog 글감함")
 
+	started := time.Now()
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -158,7 +171,35 @@ func completeOpenRouter(ctx context.Context, cfg OpenRouterConfig, model, prompt
 		return "", fmt.Errorf("OpenRouter 호출 실패: %w", err)
 	}
 	defer resp.Body.Close()
+	ttfb := time.Since(started)
 
+	var text string
+	if onProgress != nil && resp.StatusCode == http.StatusOK {
+		var first time.Duration
+		text, first, err = readOpenRouterStream(ctx, resp.Body, started, onProgress)
+		log.Printf("OpenRouter 스트림: model=%s ttfb=%s first=%s total=%s chars=%d err=%v",
+			model, ttfb.Round(time.Millisecond), first.Round(time.Millisecond),
+			time.Since(started).Round(time.Millisecond), len([]rune(text)), err)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		text, err = readOpenRouterJSON(ctx, resp)
+		log.Printf("OpenRouter 호출: model=%s ttfb=%s total=%s chars=%d err=%v",
+			model, ttfb.Round(time.Millisecond), time.Since(started).Round(time.Millisecond),
+			len([]rune(text)), err)
+		if err != nil {
+			return "", err
+		}
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", errors.New("OpenRouter가 빈 응답을 돌려줬다")
+	}
+	return text, nil
+}
+
+// readOpenRouterJSON은 한 번에 오는 응답을 읽는다.
+func readOpenRouterJSON(ctx context.Context, resp *http.Response) (string, error) {
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -177,10 +218,76 @@ func completeOpenRouter(ctx context.Context, cfg OpenRouterConfig, model, prompt
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("OpenRouter가 HTTP %d를 돌려줬다", resp.StatusCode)
 	}
-	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
-		return "", errors.New("OpenRouter가 빈 응답을 돌려줬다")
+	if len(out.Choices) == 0 {
+		return "", nil
 	}
 	return out.Choices[0].Message.Content, nil
+}
+
+type openRouterChunk struct {
+	Choices []struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+	} `json:"choices"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// progressInterval보다 자주 onProgress를 부르지 않는다. 조각마다 부르면
+// 브라우저로 가는 줄이 수백 개가 된다.
+const progressInterval = 300 * time.Millisecond
+
+// readOpenRouterStream은 SSE 응답을 읽어 글 전체를 모은다. first는 첫 글자가
+// 온 시각(요청 시작 기준)이다.
+//
+// ": OPENROUTER PROCESSING" 같은 주석 줄은 연결 유지용이라 건너뛴다.
+func readOpenRouterStream(ctx context.Context, body io.Reader, started time.Time, onProgress func(chars int)) (text string, first time.Duration, err error) {
+	var sb strings.Builder
+	chars := 0
+	lastReport := time.Time{}
+
+	sc := bufio.NewScanner(body)
+	sc.Buffer(make([]byte, 64<<10), 4<<20)
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "[DONE]" {
+			break
+		}
+		var chunk openRouterChunk
+		if json.Unmarshal([]byte(payload), &chunk) != nil {
+			continue
+		}
+		if chunk.Error != nil {
+			return sb.String(), first, fmt.Errorf("OpenRouter 오류: %s", chunk.Error.Message)
+		}
+		if len(chunk.Choices) == 0 || chunk.Choices[0].Delta.Content == "" {
+			continue
+		}
+		piece := chunk.Choices[0].Delta.Content
+		if first == 0 {
+			first = time.Since(started)
+		}
+		sb.WriteString(piece)
+		chars += len([]rune(piece))
+		if time.Since(lastReport) >= progressInterval {
+			lastReport = time.Now()
+			onProgress(chars)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return sb.String(), first, fmt.Errorf("%w: %v", errOpenRouterTimeout, err)
+		}
+		return sb.String(), first, fmt.Errorf("OpenRouter 응답을 읽지 못했다: %w", err)
+	}
+	onProgress(chars)
+	return sb.String(), first, nil
 }
 
 // splitDraftTitle은 모델이 낸 첫 줄("# 제목")을 title로, 나머지를 body로 가른다.

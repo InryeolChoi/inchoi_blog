@@ -133,7 +133,7 @@ func (s *store) deleteNote(id int64) (bool, error) {
 // **글 생성은 savePost를 그대로 쓴다.** slug 만들기·검증·트랜잭션이 편집기로
 // 쓴 글과 똑같이 적용되어야 한다 — 여기서 따로 INSERT를 만들면 언젠가 그
 // 규칙과 갈라진다.
-func (s *store) generateNoteDraft(ctx context.Context, cfg OpenRouterConfig, id int64, now time.Time) (*PostDetail, error) {
+func (s *store) generateNoteDraft(ctx context.Context, cfg OpenRouterConfig, id int64, now time.Time, onProgress func(chars int)) (*PostDetail, error) {
 	note, err := s.noteByID(id)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (s *store) generateNoteDraft(ctx context.Context, cfg OpenRouterConfig, id 
 		return nil, fmt.Errorf("%w: AI 설정을 읽지 못했다: %v", errLocalFailure, err)
 	}
 
-	title, body, err := generateDraftBody(ctx, cfg, model, prompt, note.Title, note.Body)
+	title, body, err := generateDraftBody(ctx, cfg, model, prompt, note.Title, note.Body, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -316,32 +316,76 @@ func (s *Server) handleGenerateNote(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "글감 id가 아니다")
 		return
 	}
-	post, err := s.store.generateNoteDraft(r.Context(), s.openRouter, id, time.Now().UTC())
+	// ?stream=1이면 진행 상황을 줄 단위 JSON(NDJSON)으로 흘려 보낸다. 모델이 쓰는
+	// 동안 화면이 글자 수를 보여줄 수 있고, 연결이 조용해서 끊기는 것도 막는다.
+	// 없으면 예전처럼 결과 JSON 하나로 답한다.
+	if r.URL.Query().Get("stream") == "1" {
+		s.streamGenerateNote(w, r, id)
+		return
+	}
+	started := time.Now()
+	post, err := s.store.generateNoteDraft(r.Context(), s.openRouter, id, time.Now().UTC(), nil)
 	if err != nil {
 		writeGenerateErr(w, r, err)
 		return
 	}
-	log.Printf("admin 글감 초안 생성: note id=%d -> slug=%q", id, post.Slug)
+	log.Printf("admin 글감 초안 생성: note id=%d -> slug=%q (%s)", id, post.Slug, time.Since(started).Round(time.Millisecond))
 	writeJSON(w, http.StatusOK, post)
 }
 
+// streamGenerateNote는 생성하는 동안 {"type":"progress","chars":N}을 흘리고,
+// 끝에 {"type":"done","post":...} 또는 {"type":"error","status":N,"error":"..."}를 준다.
+// 헤더를 이미 보냈으므로 오류도 상태 코드가 아니라 이벤트로 알린다.
+func (s *Server) streamGenerateNote(w http.ResponseWriter, r *http.Request, id int64) {
+	rc := http.NewResponseController(w)
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	enc := json.NewEncoder(w)
+	send := func(v any) {
+		if enc.Encode(v) == nil {
+			_ = rc.Flush()
+		}
+	}
+	send(map[string]any{"type": "progress", "chars": 0})
+
+	started := time.Now()
+	post, err := s.store.generateNoteDraft(r.Context(), s.openRouter, id, time.Now().UTC(), func(chars int) {
+		send(map[string]any{"type": "progress", "chars": chars})
+	})
+	if err != nil {
+		status, msg := generateErrStatus(r, err)
+		send(map[string]any{"type": "error", "status": status, "error": msg})
+		return
+	}
+	log.Printf("admin 글감 초안 생성: note id=%d -> slug=%q (%s)", id, post.Slug, time.Since(started).Round(time.Millisecond))
+	send(map[string]any{"type": "done", "post": post})
+}
+
 func writeGenerateErr(w http.ResponseWriter, r *http.Request, err error) {
+	status, msg := generateErrStatus(r, err)
+	writeErr(w, status, msg)
+}
+
+// generateErrStatus는 생성 오류를 (상태 코드, 사람이 읽을 메시지)로 바꾼다.
+func generateErrStatus(r *http.Request, err error) (int, string) {
 	var bi badInput
 	switch {
 	case errors.As(err, &bi):
-		writeErr(w, http.StatusBadRequest, err.Error())
+		return http.StatusBadRequest, err.Error()
 	case errors.Is(err, errNoSuchNote):
-		writeErr(w, http.StatusNotFound, err.Error())
+		return http.StatusNotFound, err.Error()
 	case errors.Is(err, errOpenRouterNotConfigured):
-		writeErr(w, http.StatusServiceUnavailable, err.Error())
+		return http.StatusServiceUnavailable, err.Error()
 	case errors.Is(err, errOpenRouterTimeout):
 		log.Printf("admin 글감 초안 생성 시간 초과: %s %s: %v", r.Method, r.URL.Path, err)
-		writeErr(w, http.StatusGatewayTimeout, errOpenRouterTimeout.Error())
+		return http.StatusGatewayTimeout, errOpenRouterTimeout.Error()
 	case errors.Is(err, errLocalFailure):
 		log.Printf("admin 글감 초안 생성 실패(서버): %s %s: %v", r.Method, r.URL.Path, err)
-		writeErr(w, http.StatusInternalServerError, "초안을 만들지 못했다")
+		return http.StatusInternalServerError, "초안을 만들지 못했다"
 	default:
 		log.Printf("admin 글감 초안 생성 실패: %s %s: %v", r.Method, r.URL.Path, err)
-		writeErr(w, http.StatusBadGateway, "초안을 만들지 못했다: "+err.Error())
+		return http.StatusBadGateway, "초안을 만들지 못했다: " + err.Error()
 	}
 }

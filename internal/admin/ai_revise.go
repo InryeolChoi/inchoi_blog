@@ -73,7 +73,7 @@ func (s *Server) handleRevisePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := completeOpenRouter(r.Context(), s.openRouter, model, revisePrompt,
-		"수정 요청:\n"+req.Instruction+"\n\n기존 제목: "+req.Title+"\n\n기존 본문:\n"+req.Body)
+		"수정 요청:\n"+req.Instruction+"\n\n기존 제목: "+req.Title+"\n\n기존 본문:\n"+req.Body, nil)
 	if err != nil {
 		writeGenerateErr(w, r, err)
 		return

@@ -35,7 +35,7 @@ func TestDraftResponseTimeout(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	_, _, err := generateDraftBody(ctx, OpenRouterConfig{APIKey: testKey}, "test/model", "prompt", "title", "body")
+	_, _, err := generateDraftBody(ctx, OpenRouterConfig{APIKey: testKey}, "test/model", "prompt", "title", "body", nil)
 	if !errors.Is(err, errOpenRouterTimeout) {
 		t.Fatalf("응답 읽기 시간 초과 = %v", err)
 	}
@@ -352,5 +352,34 @@ func TestAIScreenIsWired(t *testing.T) {
 	}
 	if !strings.Contains(string(css), "@media (prefers-reduced-motion: no-preference)") {
 		t.Error("알림 창 애니메이션에 prefers-reduced-motion이 없다")
+	}
+}
+
+// 스트림은 주석 줄을 건너뛰고 조각을 이어 붙이며, 진행 글자 수를 알린다.
+func TestCompleteOpenRouterStream(t *testing.T) {
+	sse := ": OPENROUTER PROCESSING\n\n" +
+		`data: {"choices":[{"delta":{"content":"# 제목\n\n"}}]}` + "\n\n" +
+		`data: {"choices":[{"delta":{"content":"본문이다."}}]}` + "\n\n" +
+		"data: [DONE]\n\n"
+	oldClient := http.DefaultClient
+	http.DefaultClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var sent openRouterRequest
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil || !sent.Stream {
+			t.Errorf("stream 요청이 아니다: %+v %v", sent, err)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(sse)), Header: make(http.Header)}, nil
+	})}
+	t.Cleanup(func() { http.DefaultClient = oldClient })
+
+	last := -1
+	title, body, err := generateDraftBody(context.Background(), OpenRouterConfig{APIKey: testKey}, "test/model", "p", "t", "b", func(n int) { last = n })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title != "제목" || body != "본문이다." {
+		t.Fatalf("title=%q body=%q", title, body)
+	}
+	if last != len([]rune("# 제목\n\n본문이다.")) {
+		t.Fatalf("마지막 진행 글자 수 = %d", last)
 	}
 }

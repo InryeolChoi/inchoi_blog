@@ -397,6 +397,47 @@
   // OpenRouter가 그 메모를 정리해 draft 글 하나를 만든다 — 최종 편집은
   // 항상 사람이 admin 편집기에서 한다.
 
+  // streamGenerate는 초안 생성을 스트리밍으로 부른다. 서버가 줄 단위 JSON을 흘리고
+  // (progress → done|error), 이 함수는 api()와 같은 {ok, status, data}로 끝낸다.
+  function streamGenerate(id, onProgress) {
+    return fetch("/api/admin/notes/" + id + "/generate?stream=1", { method: "POST" }).then(function (res) {
+      var ct = res.headers.get("Content-Type") || "";
+      if (!res.body || ct.indexOf("ndjson") < 0) {
+        // 시작도 못 하고 일반 JSON 오류로 끝난 경우(권한·CSRF 등).
+        return res.json().catch(function () {
+          return { error: "응답을 읽지 못했다 (HTTP " + res.status + ")" };
+        }).then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+      }
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = "";
+      var result = null;
+      function handle(line) {
+        if (!line.trim()) return;
+        var ev;
+        try { ev = JSON.parse(line); } catch (e) { return; }
+        if (ev.type === "progress") onProgress(ev.chars);
+        else if (ev.type === "done") result = { ok: true, status: 200, data: ev.post };
+        else if (ev.type === "error") result = { ok: false, status: ev.status, data: { error: ev.error } };
+      }
+      function pump() {
+        return reader.read().then(function (chunk) {
+          if (chunk.done) {
+            handle(buf);
+            if (!result) throw new Error("끝 이벤트 없이 연결이 끊겼다");
+            return result;
+          }
+          buf += decoder.decode(chunk.value, { stream: true });
+          var lines = buf.split("\n");
+          buf = lines.pop();
+          lines.forEach(handle);
+          return pump();
+        });
+      }
+      return pump();
+    });
+  }
+
   function noteCard(note, onChange) {
     var busy = false;
 
@@ -415,13 +456,16 @@
     genBtn.addEventListener("click", function () {
       if (busy) return;
       busy = true;
-      genBtn.textContent = "만드는 중… (최대 5분 걸릴 수 있다)";
+      genBtn.textContent = "연결하는 중…";
       genBtn.disabled = true;
-      api("POST", "/api/admin/notes/" + note.id + "/generate").then(function (r) {
+      var idle = note.status === "generated" ? "다시 생성" : "초안 생성";
+      streamGenerate(note.id, function (chars) {
+        genBtn.textContent = chars > 0 ? "쓰는 중… " + chars.toLocaleString() + "자" : "모델이 생각하는 중…";
+      }).then(function (r) {
         busy = false;
         genBtn.disabled = false;
         if (!r.ok) {
-          genBtn.textContent = note.status === "generated" ? "다시 생성" : "초안 생성";
+          genBtn.textContent = idle;
           return alert(r.data.error || ("초안을 만들지 못했다 (HTTP " + r.status + ")"));
         }
         if (onChange) onChange();
