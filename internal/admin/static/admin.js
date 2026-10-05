@@ -67,6 +67,21 @@
     });
   }
 
+  // saveApi는 저장 버튼이 쓰는 호출이다. api와 다른 점은 **네트워크가 끊겨도
+  // 결과를 돌려준다**는 것이다. fetch가 거절되면 api의 약속은 그대로 실패해서,
+  // 저장 버튼 옆이 "저장하는 중…"에서 영영 멈춘다.
+  function saveApi(method, path, body) {
+    return api(method, path, body).catch(function () {
+      return { ok: false, status: 0, data: { error: "서버에 연결하지 못했다. 저장되지 않았다" } };
+    });
+  }
+
+  // saveFailed는 저장이 안 된 것을 **창으로** 알린다. 성공만 창으로 알리면
+  // 실패가 줄 끝의 작은 글자로만 남아, 긴 폼에서 저장된 줄 알고 나가게 된다.
+  function saveFailed(r, fallback) {
+    notify((r.data && r.data.error) || fallback, "error");
+  }
+
   function dateText(iso) {
     if (!iso) return "";
     var d = new Date(iso);
@@ -521,13 +536,15 @@
       var body = bodyInput.value.trim();
       if (!title || !body) {
         addErr.textContent = "제목과 본문을 둘 다 적어야 한다";
+        notify(addErr.textContent, "error");
         return;
       }
       addBtn.disabled = true;
-      api("POST", "/api/admin/notes", { title: title, body: body }).then(function (r) {
+      saveApi("POST", "/api/admin/notes", { title: title, body: body }).then(function (r) {
         addBtn.disabled = false;
         if (!r.ok) {
           addErr.textContent = r.data.error || "글감을 남기지 못했다";
+          saveFailed(r, "글감을 남기지 못했다");
           return;
         }
         titleInput.value = "";
@@ -686,15 +703,17 @@
           Object.keys(inputs).forEach(function (k) { values[k] = inputs[k].value; });
           note.className = "ad-status";
           note.textContent = "저장하는 중…";
-          api("PUT", "/api/admin/settings", { values: values }).then(function (r2) {
+          saveApi("PUT", "/api/admin/settings", { values: values }).then(function (r2) {
             if (!r2.ok) {
               note.className = "ad-status ad-error";
               note.textContent = (r2.data && r2.data.error) || "저장하지 못했다";
+              saveFailed(r2, "저장하지 못했다");
               return;
             }
             // **성공도 삼키지 않는다.** 눌렀는데 아무 표시가 없으면 저장이
             // 됐는지 알 수 없다.
             note.textContent = "저장했다.";
+            notify("홈 화면을 저장했다.");
           });
         } });
 
@@ -889,12 +908,13 @@
         save.disabled = true;
         status.className = "ad-status pending";
         status.textContent = "저장 중…";
-        api("PUT", "/api/admin/ai", { model: modelInput.value, prompt: promptInput.value })
+        saveApi("PUT", "/api/admin/ai", { model: modelInput.value, prompt: promptInput.value })
           .then(function (r2) {
             save.disabled = false;
             if (!r2.ok) {
               status.className = "ad-error";
               status.textContent = (r2.data && r2.data.error) || "저장하지 못했다";
+              saveFailed(r2, "AI 설정을 저장하지 못했다");
               return;
             }
             // **성공도 삼키지 않는다.** 무엇이 실제로 쓰이게 됐는지까지 적는다.
@@ -935,11 +955,12 @@
       save.disabled = true;
       status.className = "ad-status pending";
       status.textContent = "저장 중…";
-      api("PUT", "/api/admin/ai/style", { style: value }).then(function (r) {
+      saveApi("PUT", "/api/admin/ai/style", { style: value }).then(function (r) {
         save.disabled = false;
         if (!r.ok) {
           status.className = "ad-error";
           status.textContent = (r.data && r.data.error) || "저장하지 못했다";
+          saveFailed(r, "문체 가이드를 저장하지 못했다");
           return;
         }
         status.className = "ad-status";
@@ -2102,12 +2123,13 @@
       status.textContent = "저장하는 중…";
       var isNewPost = isNew || !post.slug;
       var req = isNewPost
-        ? api("POST", "/api/admin/posts", payload)
-        : api("PUT", "/api/admin/posts/" + encodeURIComponent(post.slug), payload);
+        ? saveApi("POST", "/api/admin/posts", payload)
+        : saveApi("PUT", "/api/admin/posts/" + encodeURIComponent(post.slug), payload);
       req.then(function (r) {
         if (!r.ok) {
           status.className = "ad-status ad-error";
           status.textContent = r.data.error || ("저장 실패 (HTTP " + r.status + ")");
+          saveFailed(r, "저장하지 못했다 (HTTP " + r.status + ")");
           return;
         }
         // **새 rev를 받아 둔다.** 안 받으면 이어서 또 저장할 때 서버가
@@ -2140,10 +2162,14 @@
           post = saved;
           history.replaceState({}, "", "/admin/edit/" + encodeURIComponent(saved.slug));
           renderEditor(saved, false, catList, msg);
+          notify(msg);
           return;
         }
         post = saved;
         slugInput.value = saved.slug;
+        // draft를 다시 저장한 경우도 **창으로 알린다.** 줄 끝 글자만으로는
+        // 저장이 됐는지, 이전 글자가 남은 건지 구별되지 않는다.
+        notify(msg);
       });
     }
 

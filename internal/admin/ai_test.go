@@ -413,3 +413,40 @@ func TestBrokenBoldHintIsWired(t *testing.T) {
 		}
 	}
 }
+
+// **저장 버튼은 어떤 결과에서도 창으로 알린다.** 성공만 알리면 실패가 줄 끝의
+// 작은 글자로 남아 저장된 줄 알고 나가게 된다. 저장 호출은 saveApi로 하고
+// (네트워크가 끊겨도 결과를 돌려준다), 실패는 saveFailed가 창으로 띄운다.
+func TestSaveButtonsAlwaysNotify(t *testing.T) {
+	raw, err := staticFS.ReadFile("static/admin.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(raw)
+	// 저장하는 PUT과, 글·글감을 만드는 POST가 api()를 직접 부르면 네트워크 오류가
+	// "저장하는 중…"에서 멈춘다.
+	for _, bad := range []string{
+		`api("PUT", "/api/admin/`,
+		`api("POST", "/api/admin/notes"`,
+		`api("POST", "/api/admin/posts"`,
+		`: api("PUT", "/api/admin/posts/`,
+	} {
+		if strings.Contains(js, bad) {
+			t.Errorf("저장 호출이 saveApi를 안 거친다: %s", bad)
+		}
+	}
+	// 저장 자리 다섯 곳(홈, AI 설정, 문체 가이드, 글, 글감)이 모두 실패를 창으로 띄운다.
+	if got := strings.Count(js, "saveFailed("); got < 5 {
+		t.Errorf("saveFailed 호출 = %d, 저장 자리마다 하나씩 5개 이상이어야 한다", got)
+	}
+	for _, want := range []string{
+		`function saveApi`, `서버에 연결하지 못했다. 저장되지 않았다`,
+		`notify("홈 화면을 저장했다.")`,
+		// draft를 저장해도 창이 뜬다.
+		`notify(msg);`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("admin.js에 %q가 없다", want)
+		}
+	}
+}
