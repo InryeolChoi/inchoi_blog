@@ -592,3 +592,37 @@ body.admin > .ad-ai-review, .ad-ai-review {
     to   { opacity: 1; transform: none; }
   }
 }
+
+/* ── 본문 블록 문서 ─────────────────────────────────────────────
+   두 칸 대신 한 칸이다. 블록의 겉모습(.eblk)은 공개 글 화면의 바로 고치기와
+   같은 규칙을 쓴다(web/templates/layout.html). 여기서는 admin 쪽 틀만 잡는다. */
+.ad-pane-doc .ad-panehead { align-items: center; flex-wrap: wrap; }
+.ad-doc { min-width: 0; overflow-wrap: anywhere; margin-top: .4rem; }
+.ad-doc .eblk {
+  position: relative; padding: .1rem .5rem; margin: 0 -.5rem;
+  border-left: 2px solid transparent; cursor: text;
+}
+.ad-doc .eblk > :first-child { margin-top: 0; }
+.ad-doc .eblk > :last-child { margin-bottom: 0; }
+.ad-doc .eblk:hover { border-left-color: var(--rail); }
+.ad-doc .eblk.on { border-left-color: var(--ink); cursor: auto; }
+.ad-doc .eblk-src {
+  display: block; width: 100%; box-sizing: border-box; margin: 0;
+  font: .85rem/1.62 var(--mono); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--ink); border-radius: 0;
+  padding: .5rem .6rem; resize: none; overflow: hidden;
+}
+.ad-doc .eblk-src:focus-visible { outline: 2px solid var(--rail); outline-offset: 1px; }
+.ad-doc .eblk-add {
+  margin: .6rem -.5rem 0; padding: .5rem;
+  font: .78rem/1 var(--mono); color: var(--ink-dim);
+  border: 1px dashed var(--line-mid); cursor: text;
+}
+.ad-doc .eblk-add:hover { color: var(--ink); border-color: var(--ink); }
+@media (pointer: coarse) {
+  .ad-doc .eblk, .ad-doc .eblk-add { min-height: 44px; }
+  .ad-doc .eblk-src { font-size: 16px; }
+}
+/* 이미지·코드·표의 넘침은 그 요소 안에서 처리한다(문서폭을 밀지 않는다). */
+.ad-doc img, .ad-doc video, .ad-doc iframe { max-width: 100%; height: auto; }
+.ad-doc pre, .ad-doc table { max-width: 100%; overflow-x: auto; }

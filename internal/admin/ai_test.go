@@ -386,7 +386,7 @@ func TestCompleteOpenRouterStream(t *testing.T) {
 	}
 }
 
-// 굵게 안 닫힌 `**…**`는 미리보기에서 말풍선으로 짚는다(admin.js flagBrokenBold).
+// 굵게 안 닫힌 `**…**`는 블록 문서에서 말풍선으로 짚는다(admin.js flagBrokenBold).
 // 브라우저 없이 확인할 수 있는 계약만 못 박는다 — 렌더된 글자 노드만 보고,
 // 코드·수식 안은 건너뛰고, 공개 화면 스크립트에는 붙지 않는다.
 func TestBrokenBoldHintIsWired(t *testing.T) {
@@ -395,7 +395,7 @@ func TestBrokenBoldHintIsWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`function flagBrokenBold`, `flagBrokenBold(preview)`,
+		`function flagBrokenBold`, `flagBrokenBold(doc)`,
 		`SHOW_TEXT`, `CODE: 1, PRE: 1`, `"katex"`, `ad-boldfix-tip`, `<strong>`,
 	} {
 		if !strings.Contains(string(js), want) {
