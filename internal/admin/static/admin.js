@@ -724,6 +724,55 @@
   // 홈 문구는 2026-09-09에 제 화면으로 나갔다(`/admin/home`). 서버에 저장하는
   // 것이 이 화면의 성격과 달랐고, 무엇보다 **구석에 있어서 있는 줄을 몰랐다.**
 
+  // ------------------------------------------------------- 안 닫힌 굵게 표시
+  //
+  // **CommonMark 규칙상 굵게 안 되는 `**…**`를 미리보기에서 짚어 준다.**
+  // 한글 곁은 emphasis.go가 풀어 주지만, `**"quoted"**text`처럼 영어 글자가
+  // 바로 붙으면 그대로 `**`가 남는다. 그 자리 바로 위에 희미한 말풍선으로
+  // 고치는 법(`<strong>…</strong>`)을 적는다 — 렌더러 규칙을 넓히지 않고 사람이
+  // 한 군데만 고치게 한다. 공개 화면에는 붙지 않는다(admin 미리보기만).
+  //
+  // 렌더된 결과에서 **글자 노드만** 본다. 코드·수식 안의 `**`는 진짜 `**`다.
+  var brokenBold = /\*\*([^\s*](?:[^*\n]*[^\s*])?)\*\*/g;
+  var brokenBoldSkip = { CODE: 1, PRE: 1, SCRIPT: 1, STYLE: 1, TEXTAREA: 1 };
+
+  function flagBrokenBold(root) {
+    var found = [];
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        if (n.nodeValue.indexOf("**") < 0) return NodeFilter.FILTER_REJECT;
+        for (var p = n.parentNode; p && p !== root; p = p.parentNode) {
+          if (brokenBoldSkip[p.nodeName] ||
+              (p.classList && (p.classList.contains("katex") || p.classList.contains("ad-boldfix")))) {
+            return NodeFilter.FILTER_REJECT;
+          }
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    while (walker.nextNode()) found.push(walker.currentNode);
+
+    found.forEach(function (node) {
+      var text = node.nodeValue;
+      var frag = document.createDocumentFragment();
+      var last = 0;
+      var m;
+      brokenBold.lastIndex = 0;
+      while ((m = brokenBold.exec(text))) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        frag.appendChild(el("span", { class: "ad-boldfix", tabindex: "0" }, [
+          document.createTextNode(m[0]),
+          el("span", { class: "ad-boldfix-tip", role: "note",
+            text: "굵게 안 됐다. <strong>" + m[1] + "</strong> 로 쓰면 된다" }),
+        ]));
+        last = m.index + m[0].length;
+      }
+      if (last === 0) return;
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+  }
+
   // ------------------------------------------------------- AI 초안 생성 설정
   //
   // 글감함의 "초안 생성"이 무엇으로 돌아가는지를 한 자리에 모은다 — 어떤
@@ -1944,6 +1993,7 @@
         if (window.blogRenderMermaid) window.blogRenderMermaid();
         // 애니메이션도 다시 붙인다. innerHTML을 갈아치웠으니 통째로 사라졌다.
         if (window.blogMountAnims) window.blogMountAnims();
+        flagBrokenBold(preview);
 
         var heads = r.data.outline || [];
         previewNote.className = "ad-note";

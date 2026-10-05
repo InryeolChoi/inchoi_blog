@@ -385,3 +385,31 @@ func TestCompleteOpenRouterStream(t *testing.T) {
 		t.Fatalf("마지막 진행 글자 수 = %d", last)
 	}
 }
+
+// 굵게 안 닫힌 `**…**`는 미리보기에서 말풍선으로 짚는다(admin.js flagBrokenBold).
+// 브라우저 없이 확인할 수 있는 계약만 못 박는다 — 렌더된 글자 노드만 보고,
+// 코드·수식 안은 건너뛰고, 공개 화면 스크립트에는 붙지 않는다.
+func TestBrokenBoldHintIsWired(t *testing.T) {
+	js, err := staticFS.ReadFile("static/admin.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`function flagBrokenBold`, `flagBrokenBold(preview)`,
+		`SHOW_TEXT`, `CODE: 1, PRE: 1`, `"katex"`, `ad-boldfix-tip`, `<strong>`,
+	} {
+		if !strings.Contains(string(js), want) {
+			t.Errorf("admin.js에 %q가 없다", want)
+		}
+	}
+	css, err := staticFS.ReadFile("static/admin.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 말풍선은 클릭을 가로채지 않고, 올리거나 포커스하면 또렷해진다.
+	for _, want := range []string{`.ad-boldfix-tip`, `pointer-events: none`, `.ad-boldfix:focus .ad-boldfix-tip`} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("admin.css에 %q가 없다", want)
+		}
+	}
+}

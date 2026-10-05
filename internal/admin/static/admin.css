@@ -193,6 +193,30 @@ body.admin > * { max-width: none; }
 .ad-preview-body { min-width: 0; overflow-wrap: anywhere; }
 .ad-preview-body > :first-child { margin-top: 0; }
 
+/* 굵게 안 닫힌 `**…**`를 짚는 희미한 말풍선(admin.js flagBrokenBold). 글 바로 위에
+   뜬다. 평소엔 흐리고, 올리거나 포커스하면 또렷해진다. 클릭을 가로채지 않는다. */
+.ad-boldfix {
+  position: relative;
+  text-decoration: underline dotted; text-decoration-color: var(--ink-dim);
+  text-underline-offset: .2em;
+}
+.ad-boldfix-tip {
+  position: absolute; left: 0; bottom: 100%; margin-bottom: .45rem; z-index: 2;
+  width: max-content; max-width: min(22rem, calc(100vw - 2rem));
+  padding: .25rem .5rem;
+  font: .72rem/1.4 var(--mono); font-weight: 400; white-space: normal;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--ink); border-radius: 0;
+  opacity: .45; pointer-events: none;
+}
+.ad-boldfix-tip::after {
+  content: ""; position: absolute; left: .8rem; top: 100%;
+  border: .35rem solid transparent; border-top-color: var(--ink);
+}
+.ad-boldfix:hover .ad-boldfix-tip,
+.ad-boldfix:focus .ad-boldfix-tip { opacity: 1; }
+.ad-boldfix:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }
+
 /* ------------------------------------------------------------ 버튼과 알림 */
 
 .ad-btn {
