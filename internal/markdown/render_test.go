@@ -323,3 +323,35 @@ func TestPartlyFilledTableHeadStays(t *testing.T) {
 		t.Errorf("반쯤 찬 표 머리를 없앴다:\n%s", got)
 	}
 }
+
+// 한글 조사가 바로 붙은 `**`가 굵게 되어야 한다. 닫는 `**` 앞이 문장부호이고
+// 뒤가 글자이면 CommonMark 기본 규칙은 닫지 못한다(emphasis.go).
+func TestBoldNextToKorean(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`**"~다"**로 끝낸다`, `<strong>&quot;~다&quot;</strong>로 끝낸다`},
+		{`문장 **강조(괄호)**를 쓴다`, `<strong>강조(괄호)</strong>를 쓴다`},
+		{"**`code`**를 쓴다", `<strong><code>code</code></strong>를 쓴다`},
+		{`한글**"인용"**도 된다`, `한글<strong>&quot;인용&quot;</strong>도 된다`},
+		{`**왜 그렇게 했는지**를 남긴다`, `<strong>왜 그렇게 했는지</strong>를 남긴다`},
+		{`*기울임("괄호")*도`, `<em>기울임(&quot;괄호&quot;)</em>도`},
+	} {
+		if got := render(t, tc.in); !strings.Contains(got, tc.want) {
+			t.Errorf("%q\n  원한 것: %s\n  나온 것: %s", tc.in, tc.want, got)
+		}
+	}
+}
+
+// **영어 글과 일상 기호는 그대로다.** 문장부호 곁에서 닫히지 않는 CommonMark
+// 동작과, 곱셈·목록·밑줄이 강조로 번지지 않는 것을 지킨다.
+func TestEmphasisUnchangedOutsideKorean(t *testing.T) {
+	for _, tc := range []struct{ in, mustNot string }{
+		{`**"quoted"**text`, `<strong>`},
+		{`a * b * c`, `<em>`},
+		{`snake_case_name`, `<em>`},
+		{`2 ** 3`, `<strong>`},
+	} {
+		if got := render(t, tc.in); strings.Contains(got, tc.mustNot) {
+			t.Errorf("%q가 달라졌다: %s", tc.in, got)
+		}
+	}
+}

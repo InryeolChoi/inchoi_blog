@@ -36,6 +36,8 @@ func New() *Renderer {
 				// `:::anim 이름` 한 줄을 이름 붙인 애니메이션 자리로 바꾼다.
 				// **본문에 <script>를 담는 길은 열지 않는다** — anim.go 참고.
 				&animExtension{},
+				// 한글 조사가 바로 붙은 `**"말"**로`를 굵게 만든다 (emphasis.go).
+				&cjkEmphasisExtension{},
 			),
 			goldmark.WithParserOptions(
 				// 제목에 id를 달아 목차와 앵커 링크에 쓴다.
