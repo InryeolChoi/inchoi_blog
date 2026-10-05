@@ -152,6 +152,12 @@ func (s *store) generateNoteDraft(ctx context.Context, cfg OpenRouterConfig, id 
 		return nil, fmt.Errorf("%w: AI 설정을 읽지 못했다: %v", errLocalFailure, err)
 	}
 
+	style, err := s.aiStyle()
+	if err != nil {
+		return nil, fmt.Errorf("%w: 문체 가이드를 읽지 못했다: %v", errLocalFailure, err)
+	}
+	prompt = withStyle(prompt, style)
+
 	title, body, err := generateDraftBody(ctx, cfg, model, prompt, note.Title, note.Body, onProgress)
 	if err != nil {
 		return nil, err

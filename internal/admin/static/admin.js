@@ -859,9 +859,87 @@
           });
       });
       card.appendChild(el("div", { class: "ad-homesave" }, [save, status]));
+      card.appendChild(styleSection(d));
     });
 
     return card;
+  }
+
+  // styleSection은 문체 가이드를 고치는 자리다(internal/admin/ai_style.go).
+  //
+  // **제안은 저장하지 않는다.** "새 가이드 제안받기"는 모델이 쓴 안을 아래 칸에
+  // 띄울 뿐이고, 사람이 읽고 고친 뒤 수락해야 위 칸과 서버에 들어간다. 모델이
+  // 한 번 이상하게 뽑은 문체가 모든 다음 초안에 퍼지는 것을 사람이 막는다.
+  function styleSection(d) {
+    var wrap = el("div", { class: "ad-field ad-ai-field" });
+    var styleInput = el("textarea", {
+      id: "ad-ai-style-input", class: "ad-body ad-ai-prompt", rows: "10",
+      maxlength: "4096", placeholder: "비어 있으면 문체 가이드 없이 초안을 만든다.",
+    });
+    styleInput.value = d.style || "";
+    var status = el("p", { class: "ad-status" });
+    var save = el("button", { type: "button", class: "ad-btn", text: "문체 가이드 저장" });
+    var propose = el("button", { type: "button", class: "ad-act", text: "새 가이드 제안받기" });
+    var box = el("div", { class: "ad-ai-proposal" });
+
+    function saveStyle(value, done) {
+      save.disabled = true;
+      status.className = "ad-status pending";
+      status.textContent = "저장 중…";
+      api("PUT", "/api/admin/ai/style", { style: value }).then(function (r) {
+        save.disabled = false;
+        if (!r.ok) {
+          status.className = "ad-error";
+          status.textContent = (r.data && r.data.error) || "저장하지 못했다";
+          return;
+        }
+        status.className = "ad-status";
+        status.textContent = "";
+        styleInput.value = r.data.style || "";
+        notify("문체 가이드를 저장했다.\n다음 초안부터 반영된다.");
+        if (done) done();
+      });
+    }
+    save.addEventListener("click", function () { saveStyle(styleInput.value); });
+
+    propose.addEventListener("click", function () {
+      propose.disabled = true;
+      propose.textContent = "제안을 만드는 중…";
+      clear(box);
+      api("POST", "/api/admin/ai/style/propose", {}).then(function (r) {
+        propose.disabled = false;
+        propose.textContent = "새 가이드 제안받기";
+        if (!r.ok) {
+          box.appendChild(el("p", { class: "ad-error", text: (r.data && r.data.error) || "제안을 못 받았다" }));
+          return;
+        }
+        var sources = r.data.sources || [];
+        var draft = el("textarea", { class: "ad-body ad-ai-prompt", rows: "10", maxlength: "4096",
+          "aria-label": "제안된 문체 가이드" });
+        draft.value = r.data.proposal || "";
+        var accept = el("button", { type: "button", class: "ad-btn primary", text: "수락하고 저장" });
+        var discard = el("button", { type: "button", class: "ad-act", text: "버리기" });
+        accept.addEventListener("click", function () {
+          saveStyle(draft.value, function () { clear(box); });
+        });
+        discard.addEventListener("click", function () { clear(box); });
+        clear(box);
+        box.appendChild(el("p", { class: "ad-dim ad-ai-note", text:
+          "제안(저장 전). 위 칸의 지금 가이드와 비교해 고친 뒤 수락한다. 근거 글 " +
+          sources.length + "편: " + sources.map(function (p) { return p.title; }).join(", ") }));
+        box.appendChild(draft);
+        box.appendChild(el("div", { class: "ad-homesave" }, [accept, discard]));
+      });
+    });
+
+    wrap.appendChild(el("label", { for: "ad-ai-style-input", text: "문체 가이드" }));
+    wrap.appendChild(styleInput);
+    wrap.appendChild(el("p", { class: "ad-dim ad-ai-note", text:
+      "초안을 만들 때 지시문 뒤에 자동으로 붙는다. 웹에서 직접 쓴 글(AI가 만든 초안은 제외)을 " +
+      "OpenRouter로 보내 새 가이드를 제안받을 수 있다. 제안은 수락하기 전에는 저장되지 않는다." }));
+    wrap.appendChild(el("div", { class: "ad-homesave" }, [save, propose, status]));
+    wrap.appendChild(box);
+    return wrap;
   }
 
   // modelNoteText는 지금 실제로 무엇이 쓰이는지 한 줄로 적는다.

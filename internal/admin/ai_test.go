@@ -298,6 +298,8 @@ func TestAIScreenIsWired(t *testing.T) {
 		`/api/admin/ai`,
 		`/api/admin/ai/credits`,
 		`/api/admin/ai/models`,
+		// 문체 가이드: 제안은 저장하지 않고, 수락해야 PUT으로 저장한다.
+		`/api/admin/ai/style/propose`, `/api/admin/ai/style`, `수락하고 저장`,
 		// 기존 컴포넌트를 쓴다. 새 디자인을 만들지 않는다.
 		`ad-card`, `ad-stats`, `ad-input`, `ad-homesave`,
 		// 모델 목록은 누를 때만 받는다(수백 개다).

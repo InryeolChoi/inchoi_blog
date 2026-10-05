@@ -159,6 +159,9 @@ func (s *Server) Handler() http.Handler {
 	// **키는 못 고친다** — 키는 인스턴스의 환경변수이고 DB로 새면 안 된다.
 	mux.HandleFunc("GET /api/admin/ai", s.handleAI)
 	mux.HandleFunc("PUT /api/admin/ai", s.handleSaveAI)
+	// 문체 가이드(ai_style.go). 제안은 저장하지 않고, 수락은 사람이 PUT으로 한다.
+	mux.HandleFunc("POST /api/admin/ai/style/propose", s.handleProposeStyle)
+	mux.HandleFunc("PUT /api/admin/ai/style", s.handleSaveStyle)
 	// 잔액과 모델 목록은 OpenRouter에 직접 묻는다. 설정 조회와 갈라 둬서,
 	// 남의 서비스가 느려도 설정 화면 자체는 뜬다.
 	mux.HandleFunc("GET /api/admin/ai/credits", s.handleAICredits)

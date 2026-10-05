@@ -118,6 +118,8 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 		// 저장된 값. 안 고쳤으면 빈 값이고, 화면은 자리표시자를 보여준다.
 		"model":  saved[aiModelKey],
 		"prompt": saved[aiPromptKey],
+		// 문체 가이드(ai_style.go). 지시문과 따로 저장되고 초안 생성 때 뒤에 붙는다.
+		"style": saved[aiStyleKey],
 		// 실제로 쓰일 값. 저장된 값이 비었을 때 무엇이 쓰이는지 화면이 그대로 적는다.
 		"effective": map[string]string{"model": model, "prompt": prompt},
 		"defaults": map[string]string{
