@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>블록 편집기 시제품</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --paper: #fff;
+  --ink: #121415;
+  --muted: #62686b;
+  --line: #d8dcdd;
+  --panel: #f3f4f2;
+  --accent: #ffe600;
+  --danger: #a32e28;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #191a1a;
+    --ink: #f1f1ee;
+    --muted: #a5a8a3;
+    --line: #454746;
+    --panel: #252727;
+    --accent: #b7ec86;
+    --danger: #ff9b90;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.65 Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, summary:focus-visible, input:focus-visible,
+textarea:focus-visible, [contenteditable]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px clamp(16px, 4vw, 48px);
+  border-bottom: 1px solid var(--line);
+}
+.bar strong { font-size: 14px; }
+#copy {
+  min-height: 44px;
+  padding: 5px 14px;
+  border: 1px solid var(--ink);
+  background: var(--accent);
+  color: #121415;
+  font-size: 14px;
+  font-weight: 700;
+}
+main {
+  --gutter: 78px;
+  width: min(100%, calc(46rem + var(--gutter) + 48px));
+  margin-inline: auto;
+  padding: clamp(36px, 9vh, 100px) 24px 20vh calc(var(--gutter) + 24px);
+}
+#title {
+  width: 100%;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  font-size: clamp(30px, 5vw, 52px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.045em;
+}
+#title::placeholder { color: var(--muted); opacity: 1; }
+.hint { margin: 16px 0 30px; color: var(--muted); font-size: 14px; }
+.hint code { background: var(--panel); padding: 2px 4px; white-space: nowrap; }
+.block { position: relative; margin: 0 0 6px; }
+.block-tools {
+  position: absolute;
+  inset-inline-end: 100%;
+  inset-block-start: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-inline-end: 6px;
+  color: var(--muted);
+  opacity: 0;
+}
+.block:hover > .block-tools, .block:focus-within > .block-tools,
+.block:has(details[open]) > .block-tools { opacity: 1; }
+.block-tools > button, .block-tools summary {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 21px;
+  cursor: pointer;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+.block-tools > button:hover, .block-tools summary:hover { background: var(--panel); color: var(--ink); }
+.block-tools details { position: relative; }
+.block-menu {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 0;
+  min-width: max-content;
+  padding: 4px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.block-menu button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 4px 12px;
+  text-align: start;
+  color: var(--danger);
+}
+.block-menu button:hover { background: var(--panel); }
+.field {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.field:focus-visible { outline: 1px solid var(--line); }
+.field[data-empty]::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  pointer-events: none;
+}
+h1.field, h2.field, h3.field { font-weight: 800; letter-spacing: -.035em; }
+h1.field { font-size: 32px; }
+h2.field { font-size: 26px; }
+h3.field { font-size: 21px; }
+blockquote.field { border-inline-start: 3px solid var(--ink); padding-inline-start: 14px; }
+.block[data-kind="bullet"]::before {
+  content: "•";
+  position: absolute;
+  inset-inline-start: 6px;
+  inset-block-start: 4px;
+  pointer-events: none;
+}
+.block[data-kind="bullet"] .field { padding-inline-start: 25px; }
+textarea.field {
+  min-height: 104px;
+  max-height: 65vh;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  resize: none;
+  border-radius: 0;
+  font: 16px/1.6 "IBM Plex Mono", ui-monospace, monospace;
+}
+#copy-fallback { margin-top: 24px; }
+#copy-fallback textarea { display: block; width: 100%; min-height: 110px; }
+#copy-status { color: var(--muted); font-size: 13px; margin-top: 10px; }
+@media (pointer: coarse), (max-width: 600px) {
+  main { --gutter: 48px; padding-inline-end: 12px; padding-inline-start: calc(var(--gutter) + 8px); }
+  .block-tools { opacity: 1; }
+  .block-tools > button { display: none; }
+  .block-tools summary { width: 44px; height: 44px; }
+  .field { min-height: 44px; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <strong>inchoi blog · 글쓰기 시제품</strong>
+  <button id="copy" type="button">마크다운 복사</button>
+</header>
+<main>
+  <input id="title" aria-label="글 제목" placeholder="글 제목">
+  <p class="hint">
+    본문에서 <code>##</code> 또는 <code>```</code> 뒤에 스페이스를 눌러 보세요.
+    코드에서 <kbd>⌘↵</kbd> 또는 <kbd>Ctrl+Enter</kbd>로 다음 문단을 씁니다.
+  </p>
+  <div id="editor" aria-label="본문"></div>
+  <div id="copy-status" role="status"></div>
+  <div id="copy-fallback" hidden>
+    <label for="markdown">복사할 마크다운</label>
+    <textarea id="markdown" readonly></textarea>
+  </div>
+</main>
+<template id="block-template">
+  <div class="block">
+    <div class="block-tools">
+      <button type="button" data-action="add" aria-label="아래에 블록 추가" title="아래에 블록 추가">+</button>
+      <details>
+        <summary aria-label="블록 메뉴" title="블록 메뉴">⠿</summary>
+        <div class="block-menu">
+          <button type="button" data-action="add">아래에 블록 추가</button>
+          <button type="button" data-action="delete">블록 삭제</button>
+        </div>
+      </details>
+    </div>
+  </div>
+</template>
+<script>
+const editor = document.querySelector('#editor');
+const template = document.querySelector('#block-template');
+const blockTypes = {
+  paragraph: { tag: 'p', label: '문단' },
+  h1: { tag: 'h1', label: '제목 1', prefix: '# ' },
+  h2: { tag: 'h2', label: '제목 2', prefix: '## ' },
+  h3: { tag: 'h3', label: '제목 3', prefix: '### ' },
+  bullet: { tag: 'p', label: '목록 항목', prefix: '- ' },
+  quote: { tag: 'blockquote', label: '인용', prefix: '> ' },
+  code: { tag: 'textarea', label: '코드' },
+};
+const shortcuts = new Map([
+  ['#', 'h1'], ['##', 'h2'], ['###', 'h3'], ['-', 'bullet'], ['>', 'quote'], ['```', 'code'],
+]);
+
+function updateField(field) {
+  if (field instanceof HTMLTextAreaElement) {
+    field.style.height = 'auto';
+    field.style.height = field.scrollHeight + 2 + 'px';
+    return;
+  }
+  field.toggleAttribute('data-empty', field.textContent === '');
+}
+
+function setKind(block, kind) {
+  const type = blockTypes[kind];
+  const field = document.createElement(type.tag);
+  field.className = 'field';
+  field.setAttribute('aria-label', type.label);
+  field.dataset.placeholder = type.label;
+  if (kind === 'code') {
+    field.spellcheck = false;
+    field.placeholder = '코드 입력';
+  } else {
+    field.contentEditable = 'true';
+    field.setAttribute('role', 'textbox');
+    field.setAttribute('aria-multiline', 'true');
+  }
+  block.dataset.kind = kind;
+  block.querySelector('.field')?.remove();
+  block.append(field);
+  return field;
+}
+
+function addBlock(after, kind = 'paragraph') {
+  const block = template.content.firstElementChild.cloneNode(true);
+  const field = setKind(block, kind);
+  if (after) after.after(block);
+  else editor.append(block);
+  updateField(field);
+  return field;
+}
+
+function focusField(field, atEnd = false) {
+  field.focus();
+  if (field instanceof HTMLTextAreaElement) {
+    const offset = atEnd ? field.value.length : 0;
+    field.setSelectionRange(offset, offset);
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(field);
+  range.collapse(!atEnd);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
+}
+
+function removeBlock(block, preferPrevious = false) {
+  const previous = block.previousElementSibling?.querySelector('.field');
+  const next = block.nextElementSibling?.querySelector('.field');
+  const destination = preferPrevious ? previous || next : next || previous;
+  block.remove();
+  focusField(destination || addBlock(), Boolean(previous && destination === previous));
+}
+
+function selectedRange(field) {
+  const selection = window.getSelection();
+  if (!selection.rangeCount || !field.contains(selection.anchorNode) || !field.contains(selection.focusNode)) return null;
+  return selection.getRangeAt(0);
+}
+
+function textAtSide(field, range, before) {
+  const side = document.createRange();
+  side.selectNodeContents(field);
+  if (before) side.setEnd(range.startContainer, range.startOffset);
+  else side.setStart(range.endContainer, range.endOffset);
+  return side.toString();
+}
+
+function convertShortcut(field, event) {
+  if (event.data !== ' ' || field.childElementCount) return;
+  const kind = shortcuts.get(field.textContent);
+  const range = selectedRange(field);
+  if (!kind || !range?.collapsed || textAtSide(field, range, false)) return;
+  event.preventDefault();
+  const replacement = setKind(field.closest('.block'), kind);
+  updateField(replacement);
+  focusField(replacement);
+}
+
+function splitBlock(field, range) {
+  const block = field.closest('.block');
+  const next = addBlock(block, block.dataset.kind === 'bullet' ? 'bullet' : 'paragraph');
+  range.deleteContents();
+  const tail = document.createRange();
+  tail.selectNodeContents(field);
+  tail.setStart(range.startContainer, range.startOffset);
+  next.append(tail.extractContents());
+  updateField(field);
+  updateField(next);
+  focusField(next);
+}
+
+editor.addEventListener('beforeinput', event => {
+  const field = event.target;
+  if (!event.cancelable || event.isComposing || !field.matches('.field[contenteditable]')) return;
+  if (event.inputType === 'insertParagraph') {
+    const range = selectedRange(field);
+    if (!range) return;
+    event.preventDefault();
+    splitBlock(field, range);
+  } else if (event.inputType === 'insertText') {
+    convertShortcut(field, event);
+  }
+});
+
+editor.addEventListener('input', event => {
+  const field = event.target.closest('.field');
+  if (!field) return;
+  if (!event.isComposing && event.data === '*' && field.isContentEditable) {
+    const range = selectedRange(field);
+    const text = range?.startContainer;
+    if (range?.collapsed && text.nodeType === Node.TEXT_NODE && !text.parentElement.closest('strong, b')) {
+      const match = text.data.slice(0, range.startOffset).match(/\*\*([^*\n]+)\*\*$/);
+      if (match) {
+        range.setStart(text, range.startOffset - match[0].length);
+        range.deleteContents();
+        const strong = document.createElement('strong');
+        strong.textContent = match[1];
+        range.insertNode(strong);
+        range.setStartAfter(strong);
+        range.collapse(true);
+      }
+    }
+  }
+  updateField(field);
+});
+
+editor.addEventListener('compositionend', event => {
+  if (event.target.matches('.field')) updateField(event.target);
+});
+
+editor.addEventListener('keydown', event => {
+  if (event.isComposing || event.keyCode === 229) return;
+  const field = event.target.closest('.field');
+  if (!field) return;
+  const block = field.closest('.block');
+  const code = block.dataset.kind === 'code';
+  const range = code ? null : selectedRange(field);
+  if (event.key === 'Enter' && code && (event.metaKey || event.ctrlKey)) {
+    event.preventDefault();
+    focusField(addBlock(block));
+    return;
+  }
+  if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
+  if (event.key === 'Backspace') {
+    const empty = code ? field.value === '' : range?.collapsed && field.textContent === '';
+    if (empty && (block.dataset.kind !== 'paragraph' || editor.childElementCount > 1)) {
+      event.preventDefault();
+      removeBlock(block, true);
+    }
+    return;
+  }
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  const before = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+  const atEdge = code
+    ? field.selectionStart === field.selectionEnd && field.selectionStart === (before ? 0 : field.value.length)
+    : range?.collapsed && !textAtSide(field, range, before);
+  const neighbor = before ? block.previousElementSibling : block.nextElementSibling;
+  if (atEdge && neighbor) {
+    event.preventDefault();
+    focusField(neighbor.querySelector('.field'), before);
+  }
+});
+
+editor.addEventListener('click', event => {
+  const action = event.target.closest('[data-action]');
+  if (!action) return;
+  const block = action.closest('.block');
+  block.querySelector('details').open = false;
+  if (action.dataset.action === 'add') {
+    focusField(addBlock(block));
+    return;
+  }
+  removeBlock(block);
+});
+
+document.addEventListener('click', event => {
+  for (const menu of editor.querySelectorAll('details[open]')) {
+    if (!menu.contains(event.target)) menu.open = false;
+  }
+});
+editor.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  const menu = event.target.closest('details[open]');
+  if (!menu) return;
+  menu.open = false;
+  menu.querySelector('summary').focus();
+});
+
+function inlineMarkdown(node) {
+  if (node.nodeType === Node.TEXT_NODE) return node.data.replace(/\u00a0/g, ' ');
+  if (node.nodeName === 'BR') return '\n';
+  const content = Array.from(node.childNodes, inlineMarkdown).join('');
+  if (node.nodeName === 'STRONG' || node.nodeName === 'B') return '**' + content + '**';
+  if (node.nodeName === 'EM' || node.nodeName === 'I') return '*' + content + '*';
+  if (node.nodeName === 'DIV') return '\n' + content;
+  return content;
+}
+
+function getMarkdown() {
+  const title = document.querySelector('#title').value.trim();
+  const parts = title ? ['# ' + title] : [];
+  let previousKind;
+  for (const block of editor.children) {
+    const kind = block.dataset.kind;
+    const field = block.querySelector('.field');
+    if (kind === 'code') {
+      const longest = Math.max(2, ...(field.value.match(/`+/g) || []).map(run => run.length));
+      const fence = '`'.repeat(longest + 1);
+      parts.push(fence + '\n' + field.value + '\n' + fence);
+    } else {
+      const content = inlineMarkdown(field).trim();
+      if (!content) continue;
+      const prefix = blockTypes[kind].prefix || '';
+      const line = kind === 'quote' ? content.replace(/^/gm, prefix) : prefix + content;
+      if (kind === 'bullet' && previousKind === 'bullet') parts[parts.length - 1] += '\n' + line;
+      else parts.push(line);
+    }
+    previousKind = kind;
+  }
+  return parts.join('\n\n');
+}
+
+document.querySelector('#copy').addEventListener('click', async () => {
+  const markdown = getMarkdown();
+  const status = document.querySelector('#copy-status');
+  const fallback = document.querySelector('#copy-fallback');
+  try {
+    await navigator.clipboard.writeText(markdown);
+    fallback.hidden = true;
+    status.textContent = '마크다운을 복사했습니다.';
+  } catch {
+    fallback.hidden = false;
+    const field = document.querySelector('#markdown');
+    field.value = markdown;
+    field.select();
+    status.textContent = '선택된 마크다운을 복사하세요.';
+  }
+});
+
+addBlock();
+</script>
+</body>
+</html>
