@@ -28,9 +28,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7.0.0
         with:
           # go.mod의 버전을 그대로 쓴다. 여기에 숫자를 또 적으면 둘이 갈라진다.
           go-version-file: go.mod
@@ -48,11 +48,11 @@ jobs:
             go build -trimpath -ldflags="-s -w" -o blog ./cmd/blog
           ls -l blog
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3.0.0
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3.0.1
 
       # 쌓인 SSH 키를 치운다.
       #
