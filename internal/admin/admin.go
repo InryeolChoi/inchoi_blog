@@ -36,6 +36,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"runtime/debug"
@@ -116,7 +117,7 @@ func (s *Server) Handler() http.Handler {
 	// JS가 목록/편집을 갈아 끼운다. 새로고침해도 화면이 유지된다.
 	mux.HandleFunc("GET /admin", s.handleShell)
 	mux.HandleFunc("GET /admin/{rest...}", s.handleShell)
-	mux.HandleFunc("GET /admin/static/{file}", s.handleStatic)
+	mux.HandleFunc("GET /admin/static/{file...}", s.handleStatic)
 
 	// API. 전부 JSON이고, 실패해도 HTML을 돌려주지 않는다 — fetch()가 받는
 	// 자리라 오류 화면이 오면 파싱에서 터지고 진짜 원인이 가려진다.
@@ -261,11 +262,19 @@ func (s *Server) handleShell(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// staticName은 정적 파일 이름이 될 수 있는 형태인지 본다. 이름이 그대로
-// embed.FS 경로가 되므로 형태를 좁혀둔다.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("file")
-	if strings.ContainsAny(name, "/\\.") && !strings.HasSuffix(name, ".js") && !strings.HasSuffix(name, ".css") {
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		http.NotFound(w, r)
+		return
+	}
+	var contentType string
+	switch {
+	case strings.HasSuffix(name, ".js"):
+		contentType = "text/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".css"):
+		contentType = "text/css; charset=utf-8"
+	default:
 		http.NotFound(w, r)
 		return
 	}
@@ -274,15 +283,7 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	switch {
-	case strings.HasSuffix(name, ".js"):
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-	case strings.HasSuffix(name, ".css"):
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-	default:
-		http.NotFound(w, r)
-		return
-	}
+	w.Header().Set("Content-Type", contentType)
 	// 만들면서 계속 고치는 파일이다. 캐시가 남으면 고친 게 안 보인다.
 	w.Header().Set("Cache-Control", "no-store")
 	if _, err := w.Write(data); err != nil {

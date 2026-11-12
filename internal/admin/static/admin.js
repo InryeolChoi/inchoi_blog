@@ -16,6 +16,7 @@
   "use strict";
 
   var root = document.getElementById("ad-root");
+  var editorCleanup = null;
   var config = JSON.parse(document.getElementById("ad-config").textContent);
 
   // ---------------------------------------------------------------- 잔손질
@@ -46,6 +47,10 @@
   }
 
   function clear(node) {
+    if (node === root && editorCleanup) {
+      editorCleanup();
+      editorCleanup = null;
+    }
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
@@ -1839,229 +1844,118 @@
         });
     }
 
-    // ── 블록 문서 ────────────────────────────────────────────────
-    //
-    // 노션처럼 **한 칸**이다. 평소에는 발행될 화면 그대로 보이고, 문단을
-    // 누르면 그 문단만 원문이 된다. 벗어나면 곧바로 다시 그려진다.
-    // 글 화면의 바로 고치기(web/static/inline-edit.js)와 같은 방식이다.
-    //
-    // **본문 정본은 여전히 마크다운 문자열 하나다.** 블록은 화면에서만 나눈
-    // 것이고, 저장은 빈 줄(`\n\n`)로 이어 붙인다. 자르는 것도 그리는 것도
-    // 서버다(POST /api/admin/blocks) — 브라우저가 흉내 내면 편집기에서 본 것과
-    // 발행 뒤 화면이 갈린다.
-    var doc = el("div", { class: "edit-doc ad-doc" });
-    var previewNote = el("p", { class: "ad-note" });
-    var blocks = [];       // [{src, html}] 화면 순서 그대로
-    var openBlockRef = null; // 지금 원문으로 열어둔 블록 객체. 없으면 null
-    var openArea = null;   // 그 블록의 textarea
-    var loaded = false;    // 처음 자르기가 끝났나. 그 전에는 본문을 내줄 수 없다
-    var chain = Promise.resolve(); // 서버 왕복을 순서대로 — 인덱스가 아니라 객체로 찾는다
+    var editor = null;
+    var editingMode = "rich";
+    var loadingEditor = true;
+    var saving = false;
+    var doc = el("div", { class: "ad-doc" });
+    var source = el("textarea", { class: "ad-body", "aria-label": "마크다운 원문", spellcheck: "false", hidden: "" });
+    var preview = el("article", { class: "ad-preview-body", "aria-label": "미리보기", hidden: "" });
+    var editorNote = el("p", { class: "ad-editor-hint", id: "editor-shortcuts", text: "편집기를 불러오는 중…" });
+    var richButton = el("button", { type: "button", class: "ad-btn", text: "편집", onclick: function () { setMode("rich"); } });
+    var sourceButton = el("button", { type: "button", class: "ad-btn", text: "원문", onclick: function () { setMode("source"); } });
+    var previewButton = el("button", { type: "button", class: "ad-btn", text: "미리보기", onclick: function () { setMode("preview"); } });
+    var sourceMarkdown = post.body || "";
+    var sourceInitialValue;
+    var modeTicket = 0;
+    var events = new AbortController();
+    resetSource(sourceMarkdown);
 
-    // getBody는 저장할 본문이다. **끝 줄바꿈은 원문을 따른다** — 이관이 넣은
-    // 본문은 대개 줄바꿈으로 끝나고, 안 맞추면 열었다 저장만 해도 마지막 줄이 바뀐다.
-    // 처음 자르기 전에는 서버에서 받은 원문을 그대로 내준다(빈 본문으로 덮어쓰지 않게).
-    // 원문이 줄바꿈으로 끝났으면 그대로 끝낸다. 열었다 저장만 해도 글이 바뀌면 안 된다.
-    var endsNL = isNew || /\n$/.test(post.body || "");
+    function resetSource(markdown) {
+      sourceMarkdown = markdown;
+      source.value = markdown;
+      sourceInitialValue = source.value;
+    }
+
     function getBody() {
-      if (!loaded) return post.body || "";
-      return blocks.map(function (b) { return b.src; }).join("\n\n") + (endsNL ? "\n" : "");
+      if (editingMode !== "source" && editor) return editor.getMarkdown();
+      return source.value === sourceInitialValue ? sourceMarkdown : source.value;
     }
 
-    function updateCount() {
-      var n = getBody().length;
-      previewNote.className = "ad-note";
-      previewNote.textContent = n.toLocaleString() + "자 · 문단을 누르면 고친다";
-    }
-
-    // 서버에 문단들의 그림을 받아 blocks를 채운다.
-    function splitAll(markdown) {
-      return api("POST", "/api/admin/blocks", { markdown: markdown }).then(function (r) {
-        if (!r.ok) {
-          doc.textContent = "";
-          doc.appendChild(el("p", { class: "ad-note ad-error",
-            text: r.data.error || "문단을 나누지 못했다" }));
-          return false;
-        }
-        blocks = r.data.blocks || [];
-        blocks.forEach(function (g) { g.drawn = g.src; });
-        loaded = true;
-        openBlockRef = null;
-        paint();
-        return true;
-      });
-    }
-
-    function paint(focus) {
-      doc.textContent = "";
-      openArea = null;
-      // 팔레트 상자는 attach마다 body에 하나씩 붙는다. 문단을 다시 그릴 때 치우지
-      // 않으면 열고 닫는 만큼 쌓인다.
-      Array.prototype.forEach.call(document.querySelectorAll("body > .pal"), function (n) { n.remove(); });
-      blocks.forEach(function (b) {
-        if (b === openBlockRef) {
-          doc.appendChild(openBlockNode(b, focus));
-          return;
-        }
-        var node = el("div", { class: "eblk" });
-        node.innerHTML = b.html;
-        node.addEventListener("mousedown", function (e) {
-          // 편집 중에는 링크를 따라가지 않는다. 지금 하려는 일은 읽기가 아니라 고치기다.
-          e.preventDefault();
-          edit(b);
-        });
-        doc.appendChild(node);
-      });
-      // 맨 아래의 빈 자리. 빈 문서에도 쓸 자리가 있어야 하고, 글 끝에 덧붙이는 것이
-      // 가장 흔한 일이다.
-      var tail = el("div", { class: "eblk-add", text: "+ 여기에 이어 쓰기" });
-      tail.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        var nb = { src: "", html: "" };
-        blocks.push(nb);
-        edit(nb);
-      });
-      doc.appendChild(tail);
-      // 공개 화면이 쓰는 것과 **같은 함수들**이다. 다르게 그리면 미리보기가 아니게 된다.
-      if (window.blogRenderMath) window.blogRenderMath();
-      if (window.blogHighlight) window.blogHighlight();
-      if (window.blogCopyButtons) window.blogCopyButtons();
-      if (window.blogRenderMermaid) window.blogRenderMermaid();
-      if (window.blogMountAnims) window.blogMountAnims();
-      flagBrokenBold(doc);
-      updateCount();
-    }
-
-    function openBlockNode(b, focus) {
-      var box = el("textarea", { class: "eblk-src mono", spellcheck: "false", rows: "1" });
-      box.value = b.src;
-      openArea = box;
-      var wrap = el("div", { class: "eblk on" }, [box]);
-      function grow() {
-        box.style.height = "auto";
-        box.style.height = box.scrollHeight + "px";
-      }
-      box.addEventListener("input", function () {
-        b.src = box.value;
-        grow();
-      });
-      box.addEventListener("keydown", function (e) {
-        // Escape는 닫는다. 마우스를 안 쓰고도 빠져나올 길이 있어야 한다.
-        if (e.key === "Escape") {
-          e.preventDefault();
-          box.blur();
-          return;
-        }
-        var plain = !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && !e.isComposing;
-        if (!plain || box.selectionStart !== box.selectionEnd) return;
-        var at = box.selectionStart;
-        var i = blocks.indexOf(b);
-        // 첫 줄에서 ↑, 마지막 줄에서 ↓ — 이웃 문단으로 건너간다. 노션에서 화살표로
-        // 글 전체를 오가는 것과 같다. 팔레트가 떠 있으면 팔레트가 화살표를 쓴다.
-        if (e.key === "ArrowUp" && i > 0 && box.value.lastIndexOf("\n", at - 1) < 0 && !paletteOpen()) {
-          e.preventDefault();
-          jump(b, blocks[i - 1], "end");
-        } else if (e.key === "ArrowDown" && i < blocks.length - 1 && box.value.indexOf("\n", at) < 0 && !paletteOpen()) {
-          e.preventDefault();
-          jump(b, blocks[i + 1], "start");
-        } else if (e.key === "Backspace" && box.value === "" && i > 0) {
-          // 빈 문단에서 지우면 앞 문단 끝으로 간다 — 빈 문단은 닫을 때 사라진다.
-          e.preventDefault();
-          jump(b, blocks[i - 1], "end");
-        }
-      });
-      box.addEventListener("blur", function () { closeBlock(b, box.value); });
-      if (window.blogPalette) {
-        window.blogPalette.attach(box, null, function () {
-          var picker = document.getElementById("ad-image");
-          if (picker) picker.click();
-        });
-      }
-      // 커서가 수식 안에 들어가면 그 자리 위에 그린 수식이 뜬다. 옆에 미리보기가
-      // 없으니 수식만은 다른 길로 보여줘야 한다.
-      if (window.blogMathLive) window.blogMathLive.attach(box);
-      setTimeout(function () {
-        grow();
-        box.focus();
-        var at = focus === "start" ? 0 : box.value.length;
-        box.setSelectionRange(at, at);
-      }, 0);
-      return wrap;
-    }
-
-    // 팔레트가 떠 있으면 화살표는 팔레트의 것이다(palette.js가 aria-expanded를 건다).
-    function paletteOpen() {
-      return !!(openArea && openArea.getAttribute("aria-expanded"));
-    }
-
-    function edit(b, where) {
-      if (openBlockRef === b) return;
-      var prev = openBlockRef;
-      openBlockRef = b;
-      if (prev) closeBlock(prev, prev.src, true);
-      paint(where || "end");
-    }
-
-    // jump는 지금 문단을 닫고 이웃 문단을 연다. 닫으면서 문단이 없어지거나 갈라질 수
-    // 있어서 인덱스가 아니라 객체로 넘긴다.
-    function jump(from, to, where) {
-      openBlockRef = to;
-      closeBlock(from, from.src, true).then(function () { paint(where); });
-    }
-
-    // closeBlock은 고친 문단을 다시 그린다. **하나가 여럿으로 갈릴 수 있다** —
-    // 사람이 빈 줄을 넣으면 거기서 문단이 나뉘는 것이 마크다운의 규칙이다.
-    // 비면 그 문단을 지운다. quiet이면 다시 그리지 않는다(다음 paint가 한다).
-    function closeBlock(b, src, quiet) {
-      // 같은 문단을 두 번 닫지 않는다. 열려 있던 textarea가 사라질 때 blur가 뒤늦게
-      // 오는데, 그게 새로 연 문단을 다시 그려 커서를 잃게 만든다.
-      if (b.closing) return Promise.resolve();
-      b.closing = true;
-      if (openBlockRef === b && !quiet) openBlockRef = null;
-      var job = chain.then(function () {
-        if (b.src === b.drawn && b.html) return;     // 안 고쳤으면 서버에 안 묻는다
-        return api("POST", "/api/admin/blocks", { markdown: src }).then(function (r) {
-          var i = blocks.indexOf(b);
-          if (i < 0) return;
-          if (!r.ok) {
-            // 못 그렸으면 원문을 그대로 둔다. 반쯤 그린 것을 남기지 않는다.
-            previewNote.className = "ad-note ad-error";
-            previewNote.textContent = r.data.error || "그리지 못했다";
-            b.html = "<pre>" + src.replace(/[&<>]/g, "?") + "</pre>";
-            return;
-          }
-          var got = r.data.blocks || [];
-          got.forEach(function (g) { g.drawn = g.src; });
-          if (openBlockRef === b) openBlockRef = got[0] || null;
-          blocks.splice.apply(blocks, [i, 1].concat(got));
-        });
-      });
-      chain = job.catch(function () {});
-      return job.then(function () { if (!quiet) paint(); });
-    }
-
-    // setBody는 본문을 통째로 바꾼다(AI 제안을 적용할 때).
     function setBody(markdown) {
-      return splitAll(markdown);
+      resetSource(markdown);
+      if (editor) editor.setMarkdown(markdown);
+      if (editingMode === "preview") drawPreview(markdown);
     }
 
-    // insertMarkdown은 이미지처럼 서버가 만들어 준 조각을 **커서 자리에** 끼운다.
-    // 열린 문단이 있으면 그 문단 안의 커서 자리, 없으면 글 끝이다.
-    function insertMarkdown(text) {
-      if (openArea) {
-        var a = openArea;
-        var at = a.selectionStart;
-        a.value = a.value.slice(0, at) + "\n\n" + text + "\n\n" + a.value.slice(a.selectionEnd);
-        a.dispatchEvent(new Event("input"));
-        a.focus();
-        return;
+    function drawPreview(markdown) {
+      var request = ++modeTicket;
+      preview.textContent = "미리보기를 불러오는 중…";
+      saveApi("POST", "/api/admin/preview", { markdown: markdown }).then(function (r) {
+        if (!doc.isConnected || editingMode !== "preview" || request !== modeTicket) return;
+        if (!r.ok) {
+          preview.textContent = r.status ? r.data.error || "미리보기를 불러오지 못했다" : "미리보기 서버에 연결하지 못했다";
+          return;
+        }
+        preview.innerHTML = r.data.html;
+        if (window.blogRenderMath) window.blogRenderMath();
+        if (window.blogHighlight) window.blogHighlight();
+        if (window.blogCopyButtons) window.blogCopyButtons();
+        if (window.blogRenderMermaid) window.blogRenderMermaid();
+        if (window.blogMountAnims) window.blogMountAnims();
+        flagBrokenBold(preview);
+      });
+    }
+
+    function setMode(mode) {
+      if (mode === "rich" && !editor && !loadingEditor) return;
+      var markdown = getBody();
+      if (editingMode === "source" && mode !== "source" && editor && markdown !== editor.getMarkdown()) {
+        editor.setMarkdown(markdown);
       }
-      var nb = { src: text, html: "" };
-      blocks.push(nb);
-      closeBlock(nb, text);
+      if (mode === "source" && editingMode !== "source") resetSource(markdown);
+      editingMode = mode;
+      modeTicket++;
+      doc.hidden = mode !== "rich";
+      source.hidden = mode !== "source";
+      preview.hidden = mode !== "preview";
+      richButton.setAttribute("aria-pressed", String(mode === "rich"));
+      sourceButton.setAttribute("aria-pressed", String(mode === "source"));
+      previewButton.setAttribute("aria-pressed", String(mode === "preview"));
+      if (mode === "preview") drawPreview(markdown);
     }
 
-    doc.appendChild(el("p", { class: "ad-note", text: "문단을 나누는 중…" }));
-    splitAll(post.body || "");
+    function insertMarkdown(markdown) {
+      if (!doc.isConnected) return;
+      if (editingMode === "rich" && editor) {
+        editor.insertMarkdown(markdown);
+      } else {
+        if (editingMode !== "source") {
+          setMode("source");
+          source.setSelectionRange(source.value.length, source.value.length);
+        }
+        var start = source.selectionStart;
+        source.setRangeText("\n\n" + markdown + "\n\n", start, source.selectionEnd, "end");
+        source.focus();
+      }
+    }
+
+    var images = imageBox(insertMarkdown);
+    var bodyPane = el("section", { class: "ad-pane ad-pane-doc" }, [
+      el("div", { class: "ad-panehead" }, [
+        el("h2", { text: "본문" }), richButton, sourceButton, previewButton,
+        el("span", { class: "ad-spacer" }), images.node,
+      ]), editorNote, doc, source, preview,
+    ]);
+
+    setMode("rich");
+    import("/admin/static/editor/editor.js").then(function (module) {
+      if (!doc.isConnected) return;
+      editor = module.mountEditor(doc, { markdown: getBody(), clickArea: bodyPane, onPickImage: images.pick });
+      loadingEditor = false;
+      editorNote.textContent = "삽입 메뉴 / · 수식 $…$ · 링크 [텍스트](주소)";
+    }).catch(function () {
+      if (!doc.isConnected) return;
+      loadingEditor = false;
+      richButton.disabled = true;
+      editorNote.textContent = "편집기를 불러오지 못했습니다. 마크다운 원문을 편집할 수 있습니다.";
+      setMode("source");
+    });
+
+    editorCleanup = function () {
+      events.abort();
+      if (editor) editor.destroy();
+    };
 
     root.appendChild(el("div", { class: "ad-editbar" }, [
       el("a", {
@@ -2133,15 +2027,7 @@
       ]));
     }
 
-    root.appendChild(el("section", { class: "ad-pane ad-pane-doc" }, [
-      el("div", { class: "ad-panehead" }, [
-        el("h2", { text: "본문" }),
-        previewNote,
-        el("span", { class: "ad-spacer" }),
-        imageBox(insertMarkdown),
-      ]),
-      doc,
-    ]));
+    root.appendChild(bodyPane);
 
     var status = el("p", {
       class: "ad-status" + (note ? " ok" : ""), id: "ad-savestatus",
@@ -2166,7 +2052,13 @@
       if (stale(mine)) { window.removeEventListener("scroll", onScroll); return; }
       toTop.hidden = window.scrollY < 400;
     }
-    window.addEventListener("scroll", onScroll);
+    window.addEventListener("scroll", onScroll, { signal: events.signal });
+    document.addEventListener("keydown", function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && !document.querySelector("dialog[open]")) {
+        e.preventDefault();
+        save();
+      }
+    }, { signal: events.signal });
 
     function requestRevision() {
       var instruction = reviseInstruction.value.trim();
@@ -2245,6 +2137,7 @@
     }
 
     function save() {
+      if (saving) return;
       var payload = {
         slug: slugInput.value.trim(),
         title: titleInput.value.trim(),
@@ -2261,6 +2154,8 @@
         siblingOrder: order || [],
         originalCreatedAt: dateInput.value || "",
       };
+      saving = true;
+      bodyPane.inert = true;
       status.className = "ad-status";
       status.textContent = "저장하는 중…";
       var isNewPost = isNew || !post.slug;
@@ -2268,6 +2163,9 @@
         ? saveApi("POST", "/api/admin/posts", payload)
         : saveApi("PUT", "/api/admin/posts/" + encodeURIComponent(post.slug), payload);
       req.then(function (r) {
+        saving = false;
+        bodyPane.inert = false;
+        if (!doc.isConnected) return;
         if (!r.ok) {
           status.className = "ad-status ad-error";
           status.textContent = r.data.error || ("저장 실패 (HTTP " + r.status + ")");
@@ -2370,9 +2268,12 @@
   function imageBox(insert) {
     var input = el("input", { type: "file", accept: "image/*", id: "ad-image", class: "ad-file" });
     var note = el("span", { class: "ad-note" });
+    var afterPick = null;
 
     input.addEventListener("change", function () {
       var file = input.files && input.files[0];
+      var callback = afterPick;
+      afterPick = null;
       if (!file) return;
       note.className = "ad-note";
       note.textContent = "올리는 중… " + file.name;
@@ -2385,20 +2286,26 @@
           input.value = "";
           return;
         }
-        insert(r.data.markdown);
+        if (!callback || !callback(r.data.markdown)) insert(r.data.markdown);
         note.className = "ad-note";
         note.textContent = (r.data.existed ? "이미 있던 그림이다 · " : "올렸다 · ") +
           (r.data.width ? r.data.width + "×" + r.data.height + " · " : "") +
           Math.round(r.data.bytes / 1024) + "KB · 본문에 넣었다";
         input.value = "";
+      }).catch(function () {
+        note.className = "ad-note ad-error";
+        note.textContent = "연결이 끊겨 이미지를 올리지 못했습니다.";
+        input.value = "";
       });
     });
 
-    return el("div", { class: "ad-imagebox" }, [
-      el("label", { class: "ad-btn", for: "ad-image", text: "이미지 올리기" }),
-      input,
-      note,
-    ]);
+    return {
+      node: el("div", { class: "ad-imagebox" }, [
+        el("button", { type: "button", class: "ad-btn", text: "이미지 올리기", onclick: function () { afterPick = null; input.click(); } }),
+        input, note,
+      ]),
+      pick: function (callback) { afterPick = callback; input.click(); },
+    };
   }
 
   route();

@@ -1,0 +1,110 @@
+.rich-editor { min-width: 0; }
+.rich-editor [hidden] { display: none !important; }
+.rich-editor .actions { display: flex; gap: 8px; }
+.rich-editor .workspace { position: relative; }
+.rich-editor .ProseMirror {
+  min-height: 40vh;
+  padding-bottom: 25vh;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+  outline-offset: 4px;
+}
+.ProseMirror:focus-visible { outline: 1px solid var(--muted); }
+.ProseMirror > p:only-child:has(> br.ProseMirror-trailingBreak:only-child)::before {
+  content: '여기서 글을 시작하세요';
+  position: absolute;
+  color: var(--muted);
+  pointer-events: none;
+}
+.ProseMirror > * { margin-block: 0 8px; padding: 4px 6px; }
+.ProseMirror > h1, .ProseMirror > h2, .ProseMirror > h3 { line-height: 1.35; letter-spacing: -.035em; }
+.ProseMirror > h2 { font-size: 26px; }
+.ProseMirror blockquote { border-inline-start: 3px solid var(--ink); padding-inline-start: 16px; }
+.ProseMirror > ul, .ProseMirror > ol { padding-inline-start: 30px; }
+.ProseMirror pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  white-space: pre;
+  font: 16px/1.6 "IBM Plex Mono", ui-monospace, monospace;
+}
+.ProseMirror img { max-width: 100%; }
+.ProseMirror a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: .2em; }
+.ProseMirror table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+.ProseMirror th, .ProseMirror td { border: 1px solid var(--line); padding: 5px 9px; }
+.ProseMirror th { background: var(--panel); text-align: start; }
+.ProseMirror td p, .ProseMirror th p { margin: 0; }
+.ProseMirror td.selectedCell, .ProseMirror th.selectedCell { background: var(--selection); }
+.inline-math, .display-math { cursor: pointer; }
+.display-math { text-align: center; overflow-x: auto; }
+.video-block { border: 1px solid var(--line); background: var(--panel); }
+.video-block button, .video-block iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
+#insert-menu {
+  position: fixed;
+  z-index: 2;
+  width: min(250px, calc(100vw - 16px));
+  max-height: min(300px, 40vh);
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  font-size: 14px;
+}
+#insert-menu button { min-height: 44px; font: inherit; color: var(--ink); background: var(--paper); display: block; width: 100%; text-align: start; border: 0; }
+#insert-menu button:hover, #insert-menu button[aria-selected="true"] { background: var(--selection); }
+#insert-dialog {
+  width: min(420px, calc(100% - 24px));
+  padding: 20px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+#insert-dialog::backdrop { background: rgb(0 0 0 / .38); }
+#insert-dialog h2 { margin: 0 0 14px; }
+#insert-dialog label { display: block; margin-bottom: 10px; }
+#insert-dialog input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 8px;
+  color: inherit;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font: inherit;
+}
+#insert-dialog .actions { justify-content: end; }
+#insert-dialog button { min-height: 44px; padding: .25rem .7rem; border: 1px solid var(--line); color: var(--ink); background: var(--paper); font: inherit; cursor: pointer; }
+#insert-dialog button[type="submit"] { background: var(--accent); color: #121415; }
+#insert-error:empty { display: none; }
+.ProseMirror > .block-selected { background: var(--selection); outline: 1px solid var(--muted); }
+#block-tools {
+  position: absolute;
+  inset-inline-end: 100%;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  padding-inline-end: 2px;
+}
+#block-tools > button, #block-tools summary {
+  cursor: pointer; background: var(--paper); font-family: inherit;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  font-size: 22px;
+  list-style: none;
+}
+#block-tools summary::-webkit-details-marker { display: none; }
+#block-tools details { position: relative; }
+.block-menu { position: absolute; inset-inline-start: 0; min-width: max-content; background: var(--paper); }
+.block-menu button { min-height: 44px; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); cursor: pointer; display: block; width: 100%; text-align: start; }
+@media (max-width: 600px), (pointer: coarse) {
+  .rich-editor #block-tools > button { display: none; }
+  .rich-editor #block-tools summary { width: 44px; min-height: 44px; }
+  .rich-editor .ProseMirror { font-size: 16px; }
+}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문서 편집기 시제품</title>
+<link rel="stylesheet" href="vendor/prosemirror.css">
+<link rel="stylesheet" href="document.css">
+<link rel="stylesheet" href="editor.css">
+<script type="importmap">
+{
+  "imports": {
+    "prosemirror-model": "./vendor/prosemirror-model.js",
+    "prosemirror-state": "./vendor/prosemirror-state.js",
+    "prosemirror-transform": "./vendor/prosemirror-transform.js",
+    "prosemirror-view": "./vendor/prosemirror-view.js",
+    "prosemirror-commands": "./vendor/prosemirror-commands.js",
+    "prosemirror-history": "./vendor/prosemirror-history.js",
+    "prosemirror-keymap": "./vendor/prosemirror-keymap.js",
+    "prosemirror-inputrules": "./vendor/prosemirror-inputrules.js",
+    "prosemirror-markdown": "./vendor/prosemirror-markdown.js",
+    "prosemirror-tables": "./vendor/prosemirror-tables.js",
+    "orderedmap": "./vendor/orderedmap.js",
+    "rope-sequence": "./vendor/rope-sequence.js",
+    "w3c-keyname": "./vendor/w3c-keyname.js",
+    "markdown-it": "./markdown-it-module.js"
+  }
+}
+</script>
+<script type="module" src="document.js"></script>
+</head>
+<body>
+<header>
+  <strong>inchoi blog · 글쓰기 시제품</strong>
+  <div class="actions">
+    <button id="import" type="button" disabled>마크다운 열기</button>
+    <button id="copy" type="button" disabled>마크다운 복사</button>
+    <input id="file" type="file" accept=".md,.markdown,.txt,text/plain,text/markdown" hidden>
+  </div>
+</header>
+<main>
+  <h1>글쓰기</h1>
+  <p class="hint" id="editor-shortcuts"><kbd>/</kbd> 삽입 메뉴 · <kbd>$…$</kbd> 수식 · <kbd>[텍스트](URL)</kbd> 링크</p>
+  <div id="editor-host"></div>
+  <p id="status" role="status">편집기를 불러오는 중입니다.</p>
+  <div id="copy-fallback" hidden>
+    <label for="markdown">복사할 마크다운</label>
+    <textarea id="markdown" rows="7" readonly></textarea>
+  </div>
+</main>
+</body>
+</html>
