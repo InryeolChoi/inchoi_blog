@@ -6,8 +6,7 @@
 <title>문서 편집기 시제품</title>
 <link rel="stylesheet" href="vendor/prosemirror.css">
 <link rel="stylesheet" href="document.css">
-<script src="vendor/markdown-it.js"></script>
-<script src="vendor/katex.js"></script>
+<link rel="stylesheet" href="editor.css">
 <script type="importmap">
 {
   "imports": {
@@ -41,38 +40,13 @@
 </header>
 <main>
   <h1>글쓰기</h1>
-  <p class="hint" id="shortcuts"><kbd>/</kbd> 삽입 메뉴 · <kbd>$…$</kbd> 수식 · <kbd>[텍스트](URL)</kbd> 링크</p>
-  <div class="workspace">
-    <div id="block-tools" hidden>
-      <button type="button" class="quick-add" data-add-block aria-label="아래에 문단 추가">+</button>
-      <details>
-        <summary aria-label="블록 메뉴">⠿</summary>
-        <div class="block-menu">
-          <button type="button" data-add-block>아래에 문단 추가</button>
-          <button type="button" id="remove-block">블록 삭제</button>
-        </div>
-      </details>
-    </div>
-    <div id="editor"></div>
-  </div>
+  <p class="hint" id="editor-shortcuts"><kbd>/</kbd> 삽입 메뉴 · <kbd>$…$</kbd> 수식 · <kbd>[텍스트](URL)</kbd> 링크</p>
+  <div id="editor-host"></div>
   <p id="status" role="status">편집기를 불러오는 중입니다.</p>
   <div id="copy-fallback" hidden>
     <label for="markdown">복사할 마크다운</label>
     <textarea id="markdown" rows="7" readonly></textarea>
   </div>
 </main>
-<div id="insert-menu" role="listbox" aria-label="삽입 메뉴" hidden></div>
-<dialog id="insert-dialog" aria-labelledby="insert-title">
-  <form>
-    <h2 id="insert-title"></h2>
-    <label><span></span><input type="text" required autocomplete="off"></label>
-    <label><span></span><input type="text" autocomplete="off"></label>
-    <p id="insert-error" role="alert"></p>
-    <div class="actions">
-      <button type="button" data-cancel>취소</button>
-      <button type="submit">적용</button>
-    </div>
-  </form>
-</dialog>
 </body>
 </html>

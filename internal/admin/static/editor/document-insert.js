@@ -80,9 +80,12 @@ function readForm(command, value, description) {
   return schema.text(description || href, [schema.marks.link.create({ href })]);
 }
 
-export function insertionPlugin() {
-  const menu = document.querySelector('#insert-menu');
-  const dialog = document.querySelector('#insert-dialog');
+export function insertionPlugin(host, onPickImage) {
+  const menu = host.querySelector('#insert-menu');
+  const dialog = host.querySelector('#insert-dialog');
+  const items = onPickImage
+    ? [{ id: 'upload', label: '이미지 올리기', keys: 'image photo picture 사진 파일', pick: true }, ...commands]
+    : commands;
   const form = dialog.querySelector('form');
   const fields = Array.from(form.querySelectorAll('label'));
   const error = dialog.querySelector('#insert-error');
@@ -141,7 +144,7 @@ export function insertionPlugin() {
     if (key === current?.key) { positionMenu(); return; }
     current = { ...range, key };
     active = 0;
-    matches = commands.filter(command => (command.label + ' ' + command.keys).includes(range.query));
+    matches = items.filter(command => (command.label + ' ' + command.keys).includes(range.query));
     menu.replaceChildren(...matches.map(command => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -182,7 +185,16 @@ export function insertionPlugin() {
     if (!current || !command) return;
     const range = current;
     dismissed = range.key;
-    if (command.form) openForm(command, range);
+    if (command.pick) {
+      const doc = editorView.state.doc;
+      hide();
+      onPickImage(markdown => {
+        const src = /^!\[\]\((\/img\/[a-f0-9]{64})\)$/.exec(markdown)?.[1];
+        if (!src || editorView.isDestroyed || !editorView.state.doc.eq(doc) || host.hidden) return false;
+        insertContent(editorView, range, command, schema.nodes.image.create({ src }));
+        return true;
+      });
+    } else if (command.form) openForm(command, range);
     else {
       hide();
       insertContent(editorView, range, command, command.build?.() || nodes[command.id]?.createAndFill());
@@ -221,7 +233,7 @@ export function insertionPlugin() {
   }
 
   menu.addEventListener('mousedown', event => event.preventDefault());
-  menu.addEventListener('click', event => choose(commandByID(event.target.closest('[data-command]')?.dataset.command)));
+  menu.addEventListener('click', event => choose(items.find(command => command.id === event.target.closest('[data-command]')?.dataset.command)));
   form.addEventListener('submit', event => {
     event.preventDefault();
     if (!pending || !pending.doc.eq(editorView.state.doc)) { dialog.close(); return; }

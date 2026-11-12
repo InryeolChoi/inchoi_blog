@@ -24,6 +24,28 @@
      같은 블록을 그대로 가져온 것이라 갈라질 수 없다. */}}
 <style>{{.SiteCSS}}</style>
 <link rel="stylesheet" href="/admin/static/admin.css">
+<link rel="stylesheet" href="/admin/static/editor/vendor/prosemirror.css">
+<link rel="stylesheet" href="/admin/static/editor/editor.css">
+<script type="importmap">
+{
+  "imports": {
+    "prosemirror-model": "/admin/static/editor/vendor/prosemirror-model.js",
+    "prosemirror-state": "/admin/static/editor/vendor/prosemirror-state.js",
+    "prosemirror-transform": "/admin/static/editor/vendor/prosemirror-transform.js",
+    "prosemirror-view": "/admin/static/editor/vendor/prosemirror-view.js",
+    "prosemirror-commands": "/admin/static/editor/vendor/prosemirror-commands.js",
+    "prosemirror-history": "/admin/static/editor/vendor/prosemirror-history.js",
+    "prosemirror-keymap": "/admin/static/editor/vendor/prosemirror-keymap.js",
+    "prosemirror-inputrules": "/admin/static/editor/vendor/prosemirror-inputrules.js",
+    "prosemirror-markdown": "/admin/static/editor/vendor/prosemirror-markdown.js",
+    "prosemirror-tables": "/admin/static/editor/vendor/prosemirror-tables.js",
+    "orderedmap": "/admin/static/editor/vendor/orderedmap.js",
+    "rope-sequence": "/admin/static/editor/vendor/rope-sequence.js",
+    "w3c-keyname": "/admin/static/editor/vendor/w3c-keyname.js",
+    "markdown-it": "/admin/static/editor/markdown-it-module.js"
+  }
+}
+</script>
 
 {{/* 미리보기에도 수식과 코드 색이 나와야 실제 화면과 같다. 태그는 layout.html이
      정본이고 web.PreviewAssetTags()로 받아온다 — 주소만 베끼고 SRI 해시가

@@ -4,6 +4,9 @@ import { InputRule } from 'prosemirror-inputrules';
 import { MarkdownParser, MarkdownSerializer, defaultMarkdownParser, defaultMarkdownSerializer } from 'prosemirror-markdown';
 import { tableNodes } from 'prosemirror-tables';
 import MarkdownIt from 'markdown-it';
+import './vendor/katex.js';
+
+const katex = window.katex;
 
 export function linkURL(input, externalOnly = false) {
   const value = input.trim();
@@ -43,7 +46,7 @@ function mathDOM(node, displayMode) {
   dom.dataset.tex = node.attrs.tex;
   dom.contentEditable = 'false';
   dom.title = '수식 편집';
-  window.katex.render(node.attrs.tex, dom, {
+  katex.render(node.attrs.tex, dom, {
     displayMode, output: 'mathml', trust: false, throwOnError: false, maxExpand: 1000, maxSize: 20,
   });
   return dom;
@@ -84,7 +87,9 @@ specs = specs.update('image', {
   attrs: { ...image.attrs, show: { default: false } },
   toDOM(node) {
     const { src, alt, show } = node.attrs;
-    if (show && linkURL(src, true)) return ['img', { src, alt, referrerpolicy: 'no-referrer' }];
+    if (/^\/img\/[a-f0-9]{64}$/.test(src) || (show && linkURL(src, true))) {
+      return ['img', { src, alt, referrerpolicy: 'no-referrer' }];
+    }
     return ['span', { contenteditable: 'false' }, '[이미지] ' + (alt || '')];
   },
 });

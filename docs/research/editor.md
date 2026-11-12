@@ -38,8 +38,8 @@ ProseMirror는 문서와 선택 범위를 같은 상태에서 관리한다. 기�
 
 ## ProseMirror 시제품 실행
 
-저장소 루트에서 `python3 -m http.server 18766 --bind 127.0.0.1 --directory internal/admin/prototype`를 실행하고 `http://127.0.0.1:18766/document.html`을 연다. 공식 패키지의 배포 파일을 고정 버전으로 보관해 브라우저에서 ES 모듈로 읽는다. 패키지 버전과 라이선스는 [vendor/LICENSES.txt](../../internal/admin/prototype/vendor/LICENSES.txt)에 있다. `prosemirror-markdown`은 시제품의 마크다운 읽기와 내보내기에 쓰고, `markdown-it`의 블록 위치는 수정하지 않은 원문 구간을 보존하는 데 쓴다.
+저장소 루트에서 `python3 -m http.server 18766 --bind 127.0.0.1 --directory internal/admin/static/editor`를 실행하고 `http://127.0.0.1:18766/document.html`을 연다. 공식 패키지의 배포 파일을 고정 버전으로 보관해 브라우저에서 ES 모듈로 읽는다. 패키지 버전과 라이선스는 [vendor/LICENSES.txt](../../internal/admin/static/editor/vendor/LICENSES.txt)에 있다. `prosemirror-markdown`은 시제품의 마크다운 읽기와 내보내기에 쓰고, `markdown-it`의 블록 위치는 수정하지 않은 원문 구간을 보존하는 데 쓴다.
 
-제목과 코드 전환, 문단 나누기, 빈 블록 삭제, 블록 여러 개 선택·삭제와 실행 취소를 Chromium과 WebKit에서 확인했다. 로컬 이관 DB의 공개 아카이브 글 사본 세 건을 열고 그대로 내보낸 결과와, 수식·표·HTML·코드가 포함된 검증용 문서에서 문단 하나를 수정한 결과도 원문과 비교했다. HTML과 미지원 확장은 원문 블록으로 보존한다. 운영 편집기 연결과 실제 macOS 한글 조합 검증은 후속 단계다.
+제목과 코드 전환, 문단 나누기, 빈 블록 삭제, 블록 여러 개 선택·삭제와 실행 취소를 Chromium과 WebKit에서 확인했다. 로컬 이관 DB의 공개 아카이브 글 사본 세 건을 열고 그대로 내보낸 결과와, 수식·표·HTML·코드가 포함된 검증용 문서에서 문단 하나를 수정한 결과도 원문과 비교했다. HTML과 미지원 확장은 원문 블록으로 보존한다. Admin 편집 화면의 동작은 [아키텍처 문서](../architecture.md#section-39)에 기록한다. 실제 macOS 한글 조합은 기기에서 확인한다.
 
 `$…$`는 문장 안의 수식으로 바뀌고, `[텍스트](URL)`은 링크가 된다. `/` 메뉴는 사진 URL, 표, 링크, 유튜브, 수식, 제목, 목록, 인용, 코드, 구분선을 삽입한다. KaTeX는 수식의 MathML 표시를, `prosemirror-tables`는 표의 셀 편집과 이동을 담당한다. 유튜브 블록은 공개 렌더러가 처리하는 독립 문단 링크로 내보내고, 시제품에서는 재생 버튼을 누를 때 플레이어를 불러온다.
