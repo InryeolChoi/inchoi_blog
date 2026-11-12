@@ -748,55 +748,6 @@
   // 홈 문구는 2026-09-09에 제 화면으로 나갔다(`/admin/home`). 서버에 저장하는
   // 것이 이 화면의 성격과 달랐고, 무엇보다 **구석에 있어서 있는 줄을 몰랐다.**
 
-  // ------------------------------------------------------- 안 닫힌 굵게 표시
-  //
-  // **CommonMark 규칙상 굵게 안 되는 `**…**`를 미리보기에서 짚어 준다.**
-  // 한글 곁은 emphasis.go가 풀어 주지만, `**"quoted"**text`처럼 영어 글자가
-  // 바로 붙으면 그대로 `**`가 남는다. 그 자리 바로 위에 희미한 말풍선으로
-  // 고치는 법(`<strong>…</strong>`)을 적는다 — 렌더러 규칙을 넓히지 않고 사람이
-  // 한 군데만 고치게 한다. 공개 화면에는 붙지 않는다(admin 미리보기만).
-  //
-  // 렌더된 결과에서 **글자 노드만** 본다. 코드·수식 안의 `**`는 진짜 `**`다.
-  var brokenBold = /\*\*([^\s*](?:[^*\n]*[^\s*])?)\*\*/g;
-  var brokenBoldSkip = { CODE: 1, PRE: 1, SCRIPT: 1, STYLE: 1, TEXTAREA: 1 };
-
-  function flagBrokenBold(root) {
-    var found = [];
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode: function (n) {
-        if (n.nodeValue.indexOf("**") < 0) return NodeFilter.FILTER_REJECT;
-        for (var p = n.parentNode; p && p !== root; p = p.parentNode) {
-          if (brokenBoldSkip[p.nodeName] ||
-              (p.classList && (p.classList.contains("katex") || p.classList.contains("ad-boldfix")))) {
-            return NodeFilter.FILTER_REJECT;
-          }
-        }
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-    while (walker.nextNode()) found.push(walker.currentNode);
-
-    found.forEach(function (node) {
-      var text = node.nodeValue;
-      var frag = document.createDocumentFragment();
-      var last = 0;
-      var m;
-      brokenBold.lastIndex = 0;
-      while ((m = brokenBold.exec(text))) {
-        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
-        frag.appendChild(el("span", { class: "ad-boldfix", tabindex: "0" }, [
-          document.createTextNode(m[0]),
-          el("span", { class: "ad-boldfix-tip", role: "note",
-            text: "굵게 안 됐다. <strong>" + m[1] + "</strong> 로 쓰면 된다" }),
-        ]));
-        last = m.index + m[0].length;
-      }
-      if (last === 0) return;
-      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
-      node.parentNode.replaceChild(frag, node);
-    });
-  }
-
   // ------------------------------------------------------- AI 초안 생성 설정
   //
   // 글감함의 "초안 생성"이 무엇으로 돌아가는지를 한 자리에 모은다 — 어떤
@@ -1845,111 +1796,59 @@
     }
 
     var editor = null;
-    var editingMode = "rich";
-    var loadingEditor = true;
     var saving = false;
     var doc = el("div", { class: "ad-doc" });
     var source = el("textarea", { class: "ad-body", "aria-label": "마크다운 원문", spellcheck: "false", hidden: "" });
-    var preview = el("article", { class: "ad-preview-body", "aria-label": "미리보기", hidden: "" });
-    var editorNote = el("p", { class: "ad-editor-hint", id: "editor-shortcuts", text: "편집기를 불러오는 중…" });
-    var richButton = el("button", { type: "button", class: "ad-btn", text: "편집", onclick: function () { setMode("rich"); } });
-    var sourceButton = el("button", { type: "button", class: "ad-btn", text: "원문", onclick: function () { setMode("source"); } });
-    var previewButton = el("button", { type: "button", class: "ad-btn", text: "미리보기", onclick: function () { setMode("preview"); } });
-    var sourceMarkdown = post.body || "";
+    var editorNote = el("p", { class: "ad-editor-status", role: "status", text: "편집기를 불러오는 중…" });
+    var sourceMarkdown;
     var sourceInitialValue;
-    var modeTicket = 0;
     var events = new AbortController();
-    resetSource(sourceMarkdown);
-
-    function resetSource(markdown) {
-      sourceMarkdown = markdown;
-      source.value = markdown;
-      sourceInitialValue = source.value;
-    }
+    setBody(post.body || "");
 
     function getBody() {
-      if (editingMode !== "source" && editor) return editor.getMarkdown();
+      if (editor) return editor.getMarkdown();
       return source.value === sourceInitialValue ? sourceMarkdown : source.value;
     }
 
     function setBody(markdown) {
-      resetSource(markdown);
-      if (editor) editor.setMarkdown(markdown);
-      if (editingMode === "preview") drawPreview(markdown);
-    }
-
-    function drawPreview(markdown) {
-      var request = ++modeTicket;
-      preview.textContent = "미리보기를 불러오는 중…";
-      saveApi("POST", "/api/admin/preview", { markdown: markdown }).then(function (r) {
-        if (!doc.isConnected || editingMode !== "preview" || request !== modeTicket) return;
-        if (!r.ok) {
-          preview.textContent = r.status ? r.data.error || "미리보기를 불러오지 못했다" : "미리보기 서버에 연결하지 못했다";
-          return;
-        }
-        preview.innerHTML = r.data.html;
-        if (window.blogRenderMath) window.blogRenderMath();
-        if (window.blogHighlight) window.blogHighlight();
-        if (window.blogCopyButtons) window.blogCopyButtons();
-        if (window.blogRenderMermaid) window.blogRenderMermaid();
-        if (window.blogMountAnims) window.blogMountAnims();
-        flagBrokenBold(preview);
-      });
-    }
-
-    function setMode(mode) {
-      if (mode === "rich" && !editor && !loadingEditor) return;
-      var markdown = getBody();
-      if (editingMode === "source" && mode !== "source" && editor && markdown !== editor.getMarkdown()) {
+      if (editor) {
         editor.setMarkdown(markdown);
+      } else {
+        sourceMarkdown = markdown;
+        source.value = markdown;
+        sourceInitialValue = source.value;
       }
-      if (mode === "source" && editingMode !== "source") resetSource(markdown);
-      editingMode = mode;
-      modeTicket++;
-      doc.hidden = mode !== "rich";
-      source.hidden = mode !== "source";
-      preview.hidden = mode !== "preview";
-      richButton.setAttribute("aria-pressed", String(mode === "rich"));
-      sourceButton.setAttribute("aria-pressed", String(mode === "source"));
-      previewButton.setAttribute("aria-pressed", String(mode === "preview"));
-      if (mode === "preview") drawPreview(markdown);
     }
 
     function insertMarkdown(markdown) {
       if (!doc.isConnected) return;
-      if (editingMode === "rich" && editor) {
+      if (editor) {
         editor.insertMarkdown(markdown);
       } else {
-        if (editingMode !== "source") {
-          setMode("source");
-          source.setSelectionRange(source.value.length, source.value.length);
-        }
-        var start = source.selectionStart;
-        source.setRangeText("\n\n" + markdown + "\n\n", start, source.selectionEnd, "end");
-        source.focus();
+        var start = source.hidden ? source.value.length : source.selectionStart;
+        var end = source.hidden ? start : source.selectionEnd;
+        source.setRangeText("\n\n" + markdown + "\n\n", start, end, "end");
+        if (!source.hidden) source.focus();
       }
     }
 
     var images = imageBox(insertMarkdown);
-    var bodyPane = el("section", { class: "ad-pane ad-pane-doc" }, [
+    var bodyPane = el("section", { class: "ad-pane-doc" }, [
       el("div", { class: "ad-panehead" }, [
-        el("h2", { text: "본문" }), richButton, sourceButton, previewButton,
+        el("h2", { text: "본문" }),
         el("span", { class: "ad-spacer" }), images.node,
-      ]), editorNote, doc, source, preview,
+      ]), editorNote, doc, source,
     ]);
 
-    setMode("rich");
     import("/admin/static/editor/editor.js").then(function (module) {
       if (!doc.isConnected) return;
       editor = module.mountEditor(doc, { markdown: getBody(), clickArea: bodyPane, onPickImage: images.pick });
-      loadingEditor = false;
-      editorNote.textContent = "삽입 메뉴 / · 수식 $…$ · 링크 [텍스트](주소)";
+      editorNote.remove();
     }).catch(function () {
       if (!doc.isConnected) return;
-      loadingEditor = false;
-      richButton.disabled = true;
       editorNote.textContent = "편집기를 불러오지 못했습니다. 마크다운 원문을 편집할 수 있습니다.";
-      setMode("source");
+      doc.hidden = true;
+      source.hidden = false;
     });
 
     editorCleanup = function () {

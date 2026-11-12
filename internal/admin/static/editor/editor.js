@@ -200,7 +200,7 @@ const rules = inputRules({ rules: [
   wrappingInputRule(/^[-*+] $/, bullet_list),
   wrappingInputRule(/^(\d+)\. $/, ordered_list, match => ({ order: Number(match[1]) })),
 ] });
-export function mountEditor(host, { markdown = '', onPickImage, clickArea } = {}) {
+export function mountEditor(host, { markdown = '', onPickImage, clickArea, descriptionId } = {}) {
   host.classList.add('rich-editor');
   host.innerHTML = `
   <div class="workspace">
@@ -251,7 +251,10 @@ export function mountEditor(host, { markdown = '', onPickImage, clickArea } = {}
   const view = new EditorView(editor, {
     state: EditorState.create({ doc: originalDocument.doc, plugins }),
     nodeViews: { video: videoView },
-    attributes: { role: 'textbox', 'aria-controls': 'insert-menu', 'aria-label': '본문', 'aria-multiline': 'true', 'aria-describedby': 'editor-shortcuts' },
+    attributes: {
+      role: 'textbox', 'aria-controls': 'insert-menu', 'aria-label': '본문', 'aria-multiline': 'true',
+      ...(descriptionId ? { 'aria-describedby': descriptionId } : {}),
+    },
     dispatchTransaction(tr) {
       if (tr.docChanged) hoveredBlock = null;
       this.updateState(this.state.apply(tr));

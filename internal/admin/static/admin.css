@@ -128,10 +128,6 @@ body.admin > * { max-width: none; }
 .ad-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; align-items: start; }
 @media (max-width: 60rem) { .ad-split { grid-template-columns: 1fr; } }
 
-.ad-pane {
-  border: 2px solid var(--ink); border-radius: 0;
-  background: var(--bg); padding: 1rem; min-width: 0;
-}
 .ad-panehead { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .6rem; }
 .ad-panehead h2 { margin: 0; font-size: .95rem; }
 
@@ -192,30 +188,6 @@ body.admin > * { max-width: none; }
    공개 페이지가 pre/table/.math-display에 거는 것과 같은 처리다. */
 .ad-preview-body { min-width: 0; overflow-wrap: anywhere; }
 .ad-preview-body > :first-child { margin-top: 0; }
-
-/* 굵게 안 닫힌 `**…**`를 짚는 희미한 말풍선(admin.js flagBrokenBold). 글 바로 위에
-   뜬다. 평소엔 흐리고, 올리거나 포커스하면 또렷해진다. 클릭을 가로채지 않는다. */
-.ad-boldfix {
-  position: relative;
-  text-decoration: underline dotted; text-decoration-color: var(--ink-dim);
-  text-underline-offset: .2em;
-}
-.ad-boldfix-tip {
-  position: absolute; left: 0; bottom: 100%; margin-bottom: .45rem; z-index: 2;
-  width: max-content; max-width: min(22rem, calc(100vw - 2rem));
-  padding: .25rem .5rem;
-  font: .72rem/1.4 var(--mono); font-weight: 400; white-space: normal;
-  color: var(--ink); background: var(--surface);
-  border: 1px solid var(--ink); border-radius: 0;
-  opacity: .45; pointer-events: none;
-}
-.ad-boldfix-tip::after {
-  content: ""; position: absolute; left: .8rem; top: 100%;
-  border: .35rem solid transparent; border-top-color: var(--ink);
-}
-.ad-boldfix:hover .ad-boldfix-tip,
-.ad-boldfix:focus .ad-boldfix-tip { opacity: 1; }
-.ad-boldfix:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }
 
 /* ------------------------------------------------------------ 버튼과 알림 */
 
@@ -593,10 +565,10 @@ body.admin > .ad-ai-review, .ad-ai-review {
   }
 }
 
-/* Admin 글 편집에서 블록 도구를 둘 왼쪽 여백. */
+.ad-pane-doc { margin-block-start: 1.25rem; min-width: 0; }
 .ad-pane-doc .ad-panehead { align-items: center; flex-wrap: wrap; }
-.ad-pane-doc .ad-btn[aria-pressed="true"] { border-color: var(--ink); background: var(--surface); }
-.ad-editor-hint { color: var(--ink-dim); font-size: .85rem; margin: 0 0 .7rem; }
+.ad-editor-status { color: var(--ink-dim); font-size: .85rem; margin: 0 0 .7rem; }
+.ad-pane-doc .ad-imagebox { margin-bottom: 0; }
 .ad-pane-doc .ad-imagebox .ad-note:empty { display: none; }
 .ad-doc {
   --paper: var(--bg);
@@ -607,6 +579,7 @@ body.admin > .ad-ai-review, .ad-ai-review {
   min-width: 0;
   margin-top: .4rem;
 }
+/* 블록 추가 버튼과 메뉴를 위한 왼쪽 여백. */
 .ad-doc .workspace { margin-inline-start: 86px; }
 .ad-doc .ProseMirror { padding-bottom: 10vh; }
 @media (max-width: 600px), (pointer: coarse) {

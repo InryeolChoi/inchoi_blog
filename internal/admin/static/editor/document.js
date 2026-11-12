@@ -1,6 +1,6 @@
 import { mountEditor } from './editor.js';
 
-const editor = mountEditor(document.querySelector('#editor-host'));
+const editor = mountEditor(document.querySelector('#editor-host'), { descriptionId: 'editor-shortcuts' });
 const status = document.querySelector('#status');
 let lastImported = '';
 
